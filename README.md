@@ -308,6 +308,12 @@ Para que los eventos se transmitan al backend y se visualicen en el panel, el en
 python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv
 ```
 
+**Con un archivo de video** (por ejemplo, una grabacion del corredor guardada fuera del repositorio), poner su ruta en `source` y agregar la hora real de inicio de la grabacion. Asi los intervalos siguen el tiempo del video y no el de la PC (con GPU el video se procesa mas rapido que su duracion) y coinciden con un conteo manual del mismo video:
+
+```powershell
+python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv --inicio-video 2026-10-31T07:00:00-04:00
+```
+
 **Comportamiento durante la ejecucion:**
 1. Lee los fotogramas secuencialmente en RAM sin generar archivos temporales de video ni imagenes.
 2. Aplica deteccion YOLO26 y seguimiento persistente con ByteTrack (mantiene identificadores de trayectorias hasta 120 s).

@@ -3,6 +3,7 @@
 Muestra la fuente en vivo en una ventana (solo RAM). No guarda cuadros, capturas ni video.
 Uso:
     python tools/cristhian/marcar_lineas.py --source 0 --acceso N
+    python tools/cristhian/marcar_lineas.py --source "C:/ruta/video.mp4" --acceso N   (el video se repite)
 Clics: dos por carril (inicio a y fin b). Teclas: r = reiniciar, q = terminar e imprimir YAML.
 Después copiar el bloque impreso a deteccion/config/carriles_<nombre>.yaml y revisar el sentido.
 """
@@ -34,8 +35,10 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--source', default='0')
     p.add_argument('--acceso', default='N', help='ID del acceso, igual que en el inventario')
+    p.add_argument('--alto', type=int, default=800, help='alto máximo de la ventana en píxeles')
     args = p.parse_args()
     source = int(args.source) if args.source.isdigit() else args.source
+    es_archivo = isinstance(source, str)
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         raise SystemExit('No se pudo abrir la fuente. Probar antes con comprobar_camara.py')
@@ -51,9 +54,15 @@ def main():
     try:
         while True:
             ok, frame = cap.read()
+            if not ok and es_archivo:                       # video terminado: volver al inicio
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ok, frame = cap.read()
             if not ok:
                 break
-            h, w = frame.shape[:2]
+            escala = min(1.0, args.alto / frame.shape[0])   # videos verticales o 4K caben en pantalla
+            if escala < 1.0:
+                frame = cv2.resize(frame, None, fx=escala, fy=escala)
+            h, w = frame.shape[:2]                           # los clics se miden sobre la ventana mostrada
             for x, y in puntos:
                 cv2.circle(frame, (x, y), 5, (0, 255, 255), -1)
             for i in range(0, len(puntos) - 1, 2):
