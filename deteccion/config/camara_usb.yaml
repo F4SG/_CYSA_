@@ -1,0 +1,30 @@
+configuracion_verificada: true
+interseccion: DEMO_INT_01
+source: 0
+show: true
+model: yolo26n.pt
+device: cpu
+prueba: true
+intervalo_s: 10
+confidence: 0.25
+class_map:
+  2: auto
+  5: micro
+  3: moto
+lanes:
+- acceso: N
+  carril: N_0
+  a:
+  - 0.05
+  - 0.6
+  b:
+  - 0.95
+  - 0.6
+  direction: negative_to_positive
+auto_carriles: true
+calibracion_s: 12
+camera_width: 1920
+camera_height: 1080
+camera_fps: 30
+camera_backend: auto
+camera_name: REEMPLAZAR_POR_NOMBRE_DE_LA_WEBCAM

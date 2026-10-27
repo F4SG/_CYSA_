@@ -48,3 +48,17 @@ def test_intervalos_con_tiempo_del_video():
 def test_inicio_video_requiere_zona():
     with pytest.raises(ValueError):
         CameraSource(CONFIG, datetime(2026, 10, 31, 7, 0))
+
+
+def test_archivo_sin_cuadros_no_publica_ceros():
+    assert eventos(0,30,datetime.fromisoformat('2026-10-27T12:00:00-04:00'))==[]
+
+
+def test_parada_cooperativa_antes_del_primer_cuadro(tmp_path):
+    stop=tmp_path/'detener';stop.touch()
+    config=dict(CONFIG,stop_file=str(stop))
+    source=CameraSource(config,datetime.fromisoformat('2026-10-27T12:00:00-04:00'))
+    cap=FakeCap(30,30)
+    counter=LineCounter([Lane('N','N_0',(.1,.5),(.4,.5))])
+    assert list(source._loop(cap,FakeModel(),counter,{2:'auto'},30,SimpleNamespace(CAP_PROP_FPS=5)))==[]
+    assert cap.left==30

@@ -1,39 +1,59 @@
-# Detección y privacidad
-## Fuente y preparación
-Solo Cristhian dispone de webcam. `source: 0` la selecciona; URL de cámara IP o ruta externa autorizada se configuran en YAML.
-La webcam es provisional y no equivale a la cámara IP del inventario del piloto. Confirmar escena vehicular y equipo con GPU.
-`configuracion_verificada: false` impide ejecutar líneas inventadas por accidente. Copiar la plantilla, completar
-intersección y cada línea/carril, comprobar el sentido de cruce y luego establecer true.
-Las coordenadas de línea son normalizadas a [0,1], origen en esquina superior izquierda. Se usa el punto inferior central
-sacado del bounding box. El signo se calcula respecto al segmento dirigido a→b; probar `negative_to_positive` o el opuesto.
-No hay captura de imagen para calibrar líneas; se puede observar una vista en vivo externa autorizada sin grabarla.
+# Detección, selección de cámara y privacidad
 
-## Modelo y conteo
-YOLO26 preentrenado (`yolo26n.pt`), Ultralytics fijado en requirements. No entrenamiento.
-Los pesos se obtienen de Ultralytics al primer uso o se preaprovisionan antes de entrar al corredor sin Internet.
-COCO: car=2→auto, motorcycle=3→moto, bus=5→micro como aproximación. Un bus detectado no garantiza que sea
-un micro local; los micros que el modelo confunda con otra clase requieren medición y documentar limitaciones.
-No se cuenta truck como auto por defecto. No se infiere emergencia.
-ByteTrack persistente conserva IDs. Se cuenta solo cruce de segmento finito en sentido configurado,
-una vez por ID y línea; el registro de cruces no se reinicia al publicar cada intervalo. IDs ausentes >120 s se purgan.
-Cambios de ID, oclusiones y líneas superpuestas pueden causar errores: la validación manual es obligatoria.
-CPU está configurada únicamente como opción de arranque; `device: 0` solicita GPU cuando esté disponible.
-Si una inferencia provoca una ventana >30.5 s, el detector se detiene para no enviar un intervalo fuera del contrato.
+La guía de operación vigente está en la [sección F del README](../../README.md#f-cómo-funciona-la-detección-y-cómo-reproducir-las-pruebas).
+Los documentos de iteraciones anteriores describen la base Sprint 1; no sustituyen los comandos actuales.
 
-## Datos producidos
-Cada intervalo emite auto/micro/moto por cada carril configurado, incluidos ceros de intervalos observados.
-Al EOF emite solo el tramo observado, no un intervalo completo ficticio. Si se interrumpe con Ctrl+C el último tramo
-puede no publicarse; excluir ventanas incompletas de la calibración. Reinicios del proceso reinician IDs del tracker.
-CSV agregado conserva UUID para recuperar publicaciones fallidas sin fabricar IDs nuevos. El archivo puede tener
-conteos pendientes de enviar si el broker falla: revisar y reintentar con el mismo evento, sin contarlos dos veces.
-No se persiste una cola de cuadros. Un archivo de video se procesa en su tiempo de ejecución, no como reloj de tráfico
-original; para inferir tasas reales usar captura en vivo o acordar un reproductor a velocidad original y documentar ventanas.
-El detector por defecto usa reloj de pared UTC; no mezclarlo con timestamps del archivo sin sincronización explícita.
+## Fuentes y captura
 
-## Privacidad
-Se leen cuadros en RAM y se descartan. model.track se llama con save/save_txt/save_crop/save_frames/show=false.
-No se invocan VideoWriter, imwrite ni guardado de recortes. El tracker puede retener estado temporal en RAM mientras corre.
-Solo CSV con números/identificadores y mensajes agregados salen del detector. No registrar URLs con credenciales ni cuadros.
-Inventario, mensajes y SQL no contienen columnas de imagen, video o placa; contratos rechazan campos desconocidos.
-Revisión de código no demuestra por sí sola ausencia de archivos: inspeccionar filesystem, logs, MQTT y BD al ejecutar.
-Una captura para evidencia debe mostrar datos numéricos o tablas, nunca el cuadro de cámara.
+Se admiten cámaras por índice, nombre de dispositivo y archivos/URL externos. En Windows,
+`camera_name` tiene prioridad sobre el índice y se resuelve con el mismo backend de OpenCV.
+Una coincidencia ausente o ambigua detiene el arranque, sin recurrir a otra cámara.
+La configuración del Galaxy S10+ usa su nombre de cámara virtual; la plantilla USB exige completar el nombre.
+Para un archivo o URL se debe eliminar `camera_name`. Los archivos no reciben propiedades de captura de la webcam.
+
+La resolución/FPS solicitados son propuestas al controlador. Ancho y alto reales se leen de los cuadros;
+ni resolución pedida ni FPS declarado equivalen a rendimiento de inferencia o calidad óptica demostrada.
+No se aplica escalado para aparentar Full HD. En la sesión hubo una captura 1920×1080 identificada después
+como la laptop: no se atribuye esa resolución al S10+.
+
+## Modelo, trayectorias y geometría
+
+YOLO26n preentrenado, sin entrenamiento adicional, con ByteTrack persistente.
+COCO: 2→auto, 3→moto, 5→micro; bus→micro es una aproximación local no validada.
+El punto de referencia es el centro inferior del recuadro. Solo cuenta un cruce del segmento finito,
+en el sentido válido y dentro del polígono del carril asignado. El flujo evita sumar un ID ya contado en otro carril.
+La memoria de trayectorias persiste entre intervalos y se poda tras 120 s sin observación.
+Reasignaciones de ID, oclusiones y reinicios pueden causar duplicados o pérdidas y requieren contraste manual.
+
+El modo automático agrupa trayectorias y espera evidencia estable después de un tiempo mínimo de observación.
+No cuenta durante esa calibración. No es segmentación de marcas viales ni demuestra carriles vacíos;
+se congela la geometría al activarse. Recalibrar al mover la cámara. Los polígonos manuales se pueden
+marcar sobre un cuadro retenido únicamente en RAM, con la misma fuente y resolución del detector.
+
+## Tiempo, publicación y parada
+
+Intervalos configurables de 1 a 30 s, máximo contractual 30,5 s. En vivo se usa UTC de la PC.
+Para un archivo, `--inicio-video` con zona habilita cuadros/FPS como reloj original;
+no interpretar el tiempo de procesamiento como tiempo de tráfico. No publicar ceros si no hubo cuadros.
+Al EOF o parada cooperativa se publica el último tramo efectivamente observado si cabe en el contrato.
+Ctrl+C puede interrumpir antes de emitir el último tramo; excluir ventanas incompletas de la calibración.
+
+CSV conserva UUID antes de MQTT TLS/QoS 1 y permite reenviar eventos con los mismos identificadores.
+Un CSV no acredita PUBACK ni persistencia en BD. El consumer valida y aplica idempotencia.
+El gestor local puede iniciar sin ventana, consultar estado y solicitar parada mediante un marcador;
+no fuerza la terminación de procesos ajenos ni administra lanzadores antiguos de fuera del repositorio.
+
+## Privacidad y alcance de validación
+
+Los cuadros se leen y procesan en RAM. YOLO usa save/save_txt/save_crop/save_frames/show=false;
+la vista de CYSA se dibuja aparte en memoria. No se invocan imwrite ni VideoWriter para persistir cuadros.
+Solo se guardan CSV agregados, configuración de zonas, logs y control de proceso.
+No almacenar imágenes, videos, placas, credenciales ni URLs con contraseñas en el repositorio.
+
+Una prueba filmando una pantalla es de laboratorio, no una medición de calle. La validación con el
+video externo de unos 20 s produjo cuatro carriles estimados y cuatro cruces tras calibración, sin
+acreditar el número total de carriles ni un porcentaje de precisión. La meta de error ≤10 % requiere
+conteos manuales alineados y cobertura completa.
+
+El escáner de privacidad solo cubre las carpetas indicadas: complementar con revisión de MQTT, SQL,
+logs y destinos de ejecución. Los informes históricos siguen siendo evidencia de su fecha y alcance.

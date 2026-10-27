@@ -1,6 +1,7 @@
 ﻿# CYSA — Sistema de Monitoreo Semaforico (Sprint 1)
 
-> Gestion Semaforica - Sprint 1
+> Gestión Semafórica — Sprint 1 y pruebas de detección de laboratorio del 27/10/2026.
+> La detección con webcam y Samsung S10+ es una prueba; la validación de precisión en campo sigue pendiente.
 > Sistema de conteo vehicular, monitoreo de estados, inventario de activos e infraestructura segura.
 
 ## A. Descripcion general
@@ -71,7 +72,7 @@ repo_s1/
 ├── infra/             # Docker Compose + Dockerfiles (Franco)
 ├── data/              # Plantillas y datos por integrante
 ├── tools/             # Herramientas de prueba y operacion
-├── tests/             # Suite pytest 34 casos
+├── tests/             # Suite de pruebas del sistema y detector
 ├── docs/              # Documentacion por integrante
 ├── .gitignore
 ├── .dockerignore
@@ -205,161 +206,245 @@ docker compose --env-file infra/.env -f infra/compose.yaml restart api
 
 ---
 
-## F. Flujo de deteccion con Webcam (Guia paso a paso para Cristhian)
+## F. Cómo funciona la detección y cómo reproducir las pruebas
 
-Esta seccion documenta el procedimiento paso a paso para que Cristhian (o cualquier integrante del equipo) configure, pruebe y opere la webcam fisica en el flujo de deteccion vehicular YOLO26, publicando aforos agregados en tiempo real hacia el broker MQTT y la base de datos central sin comprometer la privacidad.
+### F.1. Flujo completo
 
-### 1. Requisitos previos de hardware y librerias
+```mermaid
+flowchart LR
+    USB[Webcam USB] --> CAP[OpenCV: cuadros en RAM]
+    S10[Samsung S10+ + Enlace a Windows] --> VC[Cámara virtual de Windows]
+    VC --> CAP
+    VIDEO[Archivo externo de video] --> CAP
+    CAP --> YOLO[YOLO26n: detección de vehículos]
+    YOLO --> TRACK[ByteTrack: ID por trayectoria]
+    TRACK --> LANES[Carriles automáticos o polígonos manuales]
+    LANES --> LINE[Cruce de línea dentro del carril]
+    LINE --> CSV[Respaldo CSV con UUID]
+    LINE --> MQTT[MQTT TLS / QoS 1]
+    MQTT --> CONSUMER[Consumer: validación e idempotencia]
+    CONSUMER --> DB[TimescaleDB]
+    DB --> API[API FastAPI con autenticación]
+    API --> PANEL[Panel web: conteos, estados e inventario]
+```
 
-- **Hardware**: Camara web integrada o externa USB (o en su defecto stream RTSP / DroidCam). Para arranque rapido basta CPU; para rendimiento optimo en tiempo real se recomienda GPU NVIDIA CUDA (`device: 0`).
-- **Entorno virtual activo**:
-  ```powershell
-  Set-Location "$env:USERPROFILE\Documents\CYSA_S1\repo_s1"
-  .venv\Scripts\Activate.ps1
-  pip install -r deteccion/requirements.txt
-  ```
-- **Configurar PYTHONPATH**:
-  ```powershell
-  $env:PYTHONPATH = @("$PWD/shared", "$PWD/deteccion") -join ';'
-  ```
+La cámara y YOLO se ejecutan con Python en Windows, fuera de Docker. Docker aloja los servicios del backend. El detector requiere las credenciales MQTT generadas en `infra/runtime/clientes/deteccion.env`; no basta con encender la cámara. El panel consulta los datos agregados, no transmite video.
 
-### 2. Comprobar la disponibilidad de la camara
+Se usan las clases COCO `car → auto`, `motorcycle → moto` y `bus → micro`. El último mapeo es una aproximación: no reconoce por sí solo todos los tipos locales de transporte. Los camiones no están incluidos por defecto.
 
-Verificar que OpenCV reconozca la camara antes de lanzar el modelo, garantizando que ningun fotograma se almacene en disco:
+Cada vehículo se sigue mediante un ID. El punto de referencia es el centro inferior de su recuadro. **Ver un vehículo no incrementa el aforo**: su trayectoria debe cruzar el segmento finito de conteo dentro del polígono de un carril y en el sentido indicado. El flujo de ejecución asigna un carril y evita contar el mismo ID en un segundo carril. Los IDs de cruce se conservan entre intervalos, pero caducan tras 120 s sin observación; reinicios, oclusiones o cambios de ID pueden generar errores.
+
+Cada intervalo produce un evento por carril y clase, incluidos ceros cuando hubo observación. Se respalda el evento en CSV y después se publica con TLS/QoS 1. Un CSV puede contener eventos pendientes de publicar si se cae MQTT. El tiempo máximo de un intervalo es 30,5 s; si se excede, el detector se detiene. El CSV contiene datos agregados, no cuadros, placas ni recortes.
+
+### F.2. Preparación común y selección de la cámara correcta
+
+Ejecutar desde la raíz del repositorio, con Docker Desktop abierto:
 
 ```powershell
-# Probar webcam por defecto (indice 0)
-python tools/cristhian/comprobar_camara.py --source 0
+$py = "$PWD\.venv\Scripts\python.exe"
+$env:PYTHONPATH = "$PWD\shared;$PWD\deteccion"
+& $py -m pip install -r deteccion/requirements.txt
 
-# Si se cuenta con camara secundaria o externa USB, probar con indice 1:
-python tools/cristhian/comprobar_camara.py --source 1
+docker compose --env-file infra/.env -f infra/compose.yaml up -d
+Invoke-RestMethod http://localhost:8088/health
+
+& $py tools/cristhian/listar_camaras.py --backend msmf
 ```
 
-*Salida esperada:*
-```text
-Fuente disponible: 640 x 480. Cuadro descartado; no acredita escena de trafico ni precision.
-```
-*(El script captura un unico frame en RAM, valida la resolucion y lo destruye de inmediato).*
+Si es la primera instalación, completar antes la sección D para generar certificados, credenciales y realm. En las pruebas se usó una PC con cámara integrada, una webcam USB y posteriormente un Galaxy S10+. **Desconectar la webcam no elimina la cámara integrada**: el índice `0` llegó a seleccionar la laptop. Los índices cambian; resolución, orden de conexión e índice no demuestran la identidad.
 
-### 3. Crear el archivo de calibracion de carriles (YAML)
+`camera_name` selecciona por nombre exacto o por un fragmento único de la lista. Tiene prioridad sobre `source` numérico. Si no encuentra una única coincidencia, falla y muestra las cámaras disponibles, sin usar una sustituta. `msmf` corresponde a Media Foundation y admite la cámara virtual de Windows; el índice enumerado se abre con ese mismo backend. La enumeración requiere `cv2-enumerate-cameras` en Windows.
 
-Copiar la plantilla de configuracion:
-```powershell
-Copy-Item deteccion/config/carriles_plantilla.yaml deteccion/config/carriles_cristhian.yaml
-```
-
-Para obtener las coordenadas de cada carril sin guardar imagenes, marcar las lineas con clics sobre la vista en vivo (dos clics por carril, `q` para terminar); el script imprime el bloque `lanes:` listo para pegar e indica el sentido que cuenta `negative_to_positive`:
-```powershell
-python tools/cristhian/marcar_lineas.py --source 0 --acceso N
-```
-
-Editar `deteccion/config/carriles_cristhian.yaml` con los datos del escenario:
+Ejemplo actual de laboratorio en `deteccion/config/carriles_cristhian.yaml`:
 
 ```yaml
-# OBLIGATORIO: Cambiar a true (si permanece en false, run.py se niega a iniciar)
-configuracion_verificada: true
-
-# Identificador de la interseccion (p. ej. DEMO_INT_01 o la asignada en inventario)
-interseccion: DEMO_INT_01
-
-# Indice de la camara verificado en el paso anterior (0, 1) o URL del stream
-source: 0
-
-# Modelo YOLO (descarga automatica de yolo26n.pt si no existe localmente)
-model: yolo26n.pt
-
-# Dispositivo de procesamiento: 'cpu' para laptop o '0' para GPU NVIDIA
-device: cpu
-
-# Bandera de prueba: true para laboratorio/sprint; false para mediciones reales en campo
+source: 1                         # camera_name tiene prioridad sobre este índice
+camera_name: Galaxy S10+ (Windows Virtual Camera)
+camera_backend: msmf
+camera_width: 1920
+camera_height: 1080
+camera_fps: 30
+show: true
 prueba: true
-
-# Intervalo de agregacion en segundos (valor entre 1 y 30)
-intervalo_s: 30
-
-# Umbral de confianza minima para deteccion
-confidence: 0.3
-
-# Mapeo de clases del dataset COCO a tipos vehiculares CYSA
-class_map:
-  2: auto
-  5: micro
-  3: moto
-
-# Lineas virtuales de conteo (coordenadas normalizadas 0.0 a 1.0, origen superior-izq)
-# a: [x, y] inicio del segmento | b: [x, y] fin del segmento
-# direction: 'negative_to_positive', 'positive_to_negative' o 'both'
-lanes:
-  - acceso: N
-    carril: N_0
-    a: [0.1, 0.6]
-    b: [0.8, 0.6]
-    direction: negative_to_positive
+interseccion: DEMO_INT_01
+auto_carriles: true
+calibracion_s: 12
+intervalo_s: 10
 ```
 
-> **Regla de orientacion:** La direccion de cruce se evalua mediante el producto vectorial respecto al segmento dirigido de `a` hacia `b`. Si los vehiculos circulan en sentido contrario al conteo, cambiar a `direction: positive_to_negative` o usar `both` si el carril es bidireccional.
+La resolución y los FPS son **solicitudes al controlador**, no garantías. La ventana y la consola muestran el ancho y alto de los cuadros recibidos. El FPS informado por el controlador tampoco equivale a la velocidad de inferencia. No se amplían artificialmente los cuadros para fingir Full HD. El modelo realiza su propio preprocesamiento; aumentar la captura no implica inferencia a 1920×1080 ni mayor precisión demostrada.
 
-### 4. Ejecutar el flujo de deteccion y publicacion en tiempo real
+### F.3. Prueba con webcam USB
 
-Para que los eventos se transmitan al backend y se visualicen en el panel, el entorno debe tener cargadas las credenciales MQTT TLS. Las credenciales del cliente `deteccion` (usuario, contrasena y CA) las genera `preparar_local.py` en `infra/runtime/clientes/deteccion.env`; `infra/.env` no las contiene. Se cargan con `cargar_env.py`:
+1. Conectar la webcam, listar dispositivos y localizar su nombre exacto.
+2. Copiar `deteccion/config/camara_usb.yaml` a un archivo propio y reemplazar `camera_name: REEMPLAZAR_POR_NOMBRE_DE_LA_WEBCAM` por ese nombre. No elegir por índice sin comprobar la imagen.
+3. Cerrar otras aplicaciones que usen esa cámara y probar video en directo:
 
 ```powershell
-# Ejecutar cargando las credenciales MQTT del cliente deteccion
-python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv
+& $py tools/cristhian/probar_camara_hd.py --name "NOMBRE_EXACTO_DE_LA_WEBCAM" --width 1280 --height 720 --backend msmf
 ```
 
-**Con un archivo de video** (por ejemplo, una grabacion del corredor guardada fuera del repositorio), poner su ruta en `source` y agregar la hora real de inicio de la grabacion. Asi los intervalos siguen el tiempo del video y no el de la PC (con GPU el video se procesa mas rapido que su duracion) y coinciden con un conteo manual del mismo video:
+4. Confirmar la imagen y el tamaño real recibido. Pulsar **Q** para liberar la cámara.
+5. Iniciar el detector con el archivo de esa webcam:
 
 ```powershell
-python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv --inicio-video 2026-10-31T07:00:00-04:00
+& $py tools/cristhian/detector.py iniciar --config deteccion/config/camara_usb.yaml --salida resultados/conteos_usb.csv
 ```
 
-**Comportamiento durante la ejecucion:**
-1. Lee los fotogramas secuencialmente en RAM sin generar archivos temporales de video ni imagenes.
-2. Aplica deteccion YOLO26 y seguimiento persistente con ByteTrack (mantiene identificadores de trayectorias hasta 120 s).
-3. Incrementa el aforo cuando la base inferior del vehiculo cruza el segmento del carril configurado.
-4. Al cumplirse la ventana (ej. cada 30 segundos), emite el evento estructurado `Conteo` con UUID unico.
-5. Publica via MQTT con TLS cifrado al topic `corredor/{interseccion}/{acceso}/conteos` (puerto 8883, QoS 1).
-6. Registra el respaldo incremental en `resultados/conteos_cristhian.csv`.
-7. Si el procesamiento por fotograma es demasiado lento (>30.5 s por intervalo), el sistema se detiene automaticamente para evitar violar los contratos temporales.
+En la prueba de laboratorio se apuntó la cámara hacia una pantalla con un video de tráfico descargado, conservado fuera del repositorio. Eso comprueba el flujo óptico de cámara → modelo → conteos; no representa una medición en calle. El ángulo, los reflejos, el enfoque y el patrón de píxeles de la pantalla afectan el resultado.
 
-Para finalizar la captura con la camara, presionar `Ctrl + C`.
+### F.4. Prueba con Samsung Galaxy S10+ como cámara
 
-### 5. Verificacion estricta de privacidad (Cero imagenes en disco)
+Requisitos de la función nativa de Microsoft: Windows 11 o posterior, Android 10 o posterior y Enlace a Windows 1.24022.0 o posterior. Mantener el PC y el teléfono conectados a la misma red Wi-Fi durante la prueba.
 
-El sistema CYSA prohibe el guardado de fotografias, videos o placas en almacenamiento secundario. Cristhian puede auditar el cumplimiento en cualquier momento ejecutando:
+1. Instalar o actualizar **Enlace a Windows** en el S10+.
+2. En el PC: **Configuración → Bluetooth y dispositivos → Dispositivos móviles → Agregar dispositivo → Android**. Completar la vinculación y los códigos en el teléfono.
+3. Entrar en **Galaxy S10+** y activar **Usar como cámara conectada**. Aceptar en el celular los permisos que correspondan. Emparejar solo por Bluetooth no basta.
+4. En **Bluetooth y dispositivos → Cámaras** comprobar que aparece **Galaxy S10+ (Windows Virtual Camera)**. Su vista previa debe mostrar la cámara del teléfono.
+5. Elegir la cámara trasera, mantener el teléfono fijo y cerrar la vista previa de Windows antes de abrir CYSA.
+6. Probar la captura por nombre:
 
 ```powershell
-python tools/cristhian/comprobar_privacidad.py --carpeta resultados --carpeta deteccion --out resultados/privacidad.json
-```
-*Salida esperada:*
-```text
-No se encontraron imágenes/videos en las carpetas indicadas; completar revisión SQL y MQTT.
+& $py tools/cristhian/probar_camara_hd.py --name "Galaxy S10+ (Windows Virtual Camera)" --width 1920 --height 1080 --fps 30 --backend msmf
 ```
 
-### 6. Recuperacion y reenvio de eventos pendientes
+Esperar unos segundos al iniciar. La prueba mantiene el flujo abierto, a diferencia de una comprobación de un solo cuadro que puede capturar negro durante el arranque. **Q** o **Esc** cierra la prueba y libera la cámara.
 
-Si la red o el broker MQTT se desconectaron durante la captura de la camara, los conteos permanecen respaldados en el archivo CSV local. Cristhian puede reenviarlos al restablecerse la conexion sin temor a duplicados (la base de datos descarta duplicados por `mensaje_id`):
+Durante la sesión se observó la vista en vivo del S10+ en Windows. Las comprobaciones iniciales por índice entregaron 640×480 y 1280×720, pero esos tamaños no identifican qué dispositivo respondió. También hubo un arranque que informó 1920×1080 y luego se identificó visualmente como la cámara de la laptop: ese registro no acredita Full HD del S10+. La selección por nombre se añadió después para corregir esta ambigüedad; hay que verificar la resolución real del S10+ al volver a ejecutar.
+
+Si se ve borroso, comparar con la aplicación Cámara del teléfono: limpiar la lente, comprobar enfoque, distancia e iluminación y confirmar que se usa la trasera. Si solo se degrada en el PC, revisar resolución recibida y enlace inalámbrico. No prometer 4K, todos los megapíxeles ni la misma calidad de la app nativa por usar una cámara virtual.
+
+El iPhone 15 Pro también se vinculó durante la sesión, pero no se utilizó como fuente validada del detector. La opción nativa de cámara conectada documentada por Microsoft corresponde a Android.
+
+Fuentes de configuración: [cámara móvil en Windows](https://support.microsoft.com/en-us/windows/apps/phonelink/use-your-mobile-device-s-camera), [enfoque y calidad de cámara Samsung](https://www.samsung.com/us/support/troubleshoot/TSG10004888/), [enumeración de cámaras y backends](https://github.com/lukehugh/cv2_enumerate_cameras).
+
+### F.5. Iniciar, detener y reiniciar con el sistema corriendo
+
+Los siguientes comandos están dentro del repositorio. No requieren scripts guardados en una carpeta de Codex ni rutas de usuario particulares. El gestor carga las credenciales locales sin imprimirlas y fija su directorio de trabajo en la raíz del repositorio.
+
+**Con vista previa, carriles y contadores** (`show: true` en YAML):
 
 ```powershell
-python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python tools/cristhian/reenviar_conteos.py resultados/conteos_cristhian.csv
+& $py tools/cristhian/detector.py iniciar
 ```
 
-### 7. Calibracion de precision vehicular (RF-03)
+También sigue funcionando la ejecución directa:
 
-Para evaluar el margen de error entre el conteo por camara y una muestra tomada manualmente:
+```powershell
+& $py tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_s10.csv
+```
 
-1. Registrar los aforos manuales en una copia de `data/cristhian/plantillas/conteo_manual.csv`, en ventanas que coincidan con intervalos completos del detector (por ejemplo 5 min = 10 intervalos de 30 s).
-2. Unir el conteo manual con el CSV del detector (suma los intervalos de 30 s de cada ventana y rechaza ventanas sin cobertura completa):
-   ```powershell
-   python tools/cristhian/preparar_calibracion.py resultados/conteo_manual.csv resultados/conteos_cristhian.csv resultados/calibracion.csv
-   ```
-3. Ejecutar la herramienta de evaluacion:
-   ```powershell
-   python tools/cristhian/calibrar.py resultados/calibracion.csv resultados/calibracion_evaluada.csv
-   ```
-4. El reporte desglosara el porcentaje de discrepancia por carril y categoria vehicular, validando la meta de tolerancia `<= 10%`.
+**En segundo plano, sin ventana de video**:
 
+```powershell
+& $py tools/cristhian/detector.py iniciar --segundo-plano
+& $py tools/cristhian/detector.py estado
+```
+
+El gestor crea una configuración de ejecución con `show: false` sin modificar el archivo original. Guarda PID/fecha de creación, log y marcadores de control en `resultados/detector/`, excluido de Git. Impide iniciar otro proceso gestionado si el anterior sigue activo. Una confirmación de cámara abierta no acredita todavía la calibración ni recepción de conteos en el panel: revisar los mensajes siguientes del registro.
+
+**Detener el proceso gestionado en segundo plano y reiniciar**:
+
+```powershell
+& $py tools/cristhian/detector.py detener
+& $py tools/cristhian/detector.py iniciar --segundo-plano
+```
+
+La parada es cooperativa: termina la operación actual y conserva los CSV. Si una lectura, inferencia o publicación está bloqueada, la orden puede quedar pendiente; no fuerza el cierre. Para procesos iniciados en primer plano usar **Q**, **Esc** o **Ctrl+C**. El gestor no administra procesos antiguos iniciados con scripts de fuera del repositorio: detenerlos antes de migrar, para no capturar la cámara dos veces.
+
+En modo sin ventana **no aparece vista previa**. Para volver a verla, detener el proceso gestionado e iniciar sin `--segundo-plano`, con `show: true`.
+
+### F.6. Carriles automáticos, asignación y límites
+
+Con `auto_carriles: true`, el detector observa trayectorias antes de contar:
+
+1. Filtra recorridos con suficientes observaciones y desplazamiento, descartando vehículos quietos.
+2. Estima el eje dominante del tráfico y agrupa recorridos cercanos, separando sentidos opuestos.
+3. Propone polígonos por carril, segmentos de conteo y dirección de cruce.
+4. Espera al menos `calibracion_s` y tres estimaciones consecutivas estables antes de activarlos.
+5. Asigna a cada vehículo el carril cuyo polígono contiene su punto inferior central; muestra ID, clase y carril con el mismo color que la zona.
+6. Cuenta únicamente el cruce válido. Los vehículos sin carril asignado no suman. Durante calibración se muestran en gris, sin publicar ceros ficticios.
+
+La ventana muestra polígonos, líneas, flechas y totales acumulados de esa ejecución. El CSV y MQTT se emiten por intervalos; por eso una cifra acumulada de pantalla puede diferir de una fila individual del panel. **R** reinicia la calibración y los totales de pantalla, conservando el CSV previo. Los carriles se mantienen fijos después de calibrar; si cambia el encuadre hay que recalibrar o reiniciar.
+
+Es una heurística de trayectorias para cámara fija, no un modelo entrenado para segmentar las marcas viales. Requiere al menos dos IDs de trayectoria por grupo, no garantiza reconocer carriles vacíos, y puede dividir o unir mal recorridos con curvas, cambios de carril, oclusiones o escenas cruzadas. La evidencia de IDs distintos tampoco demuestra vehículos físicos distintos si el tracker pierde uno. Para mediciones formales revisar manualmente la geometría y contrastar conteos.
+
+En una ejecución de validación con el archivo de tráfico de unos 20 s, el método estimó cuatro carriles con suficiente evidencia y produjo cuatro cruces después de calibrar. Eso verifica ejecución, no demuestra el número total de carriles de la vía ni una precisión de conteo. Los vehículos vistos durante calibración no se agregan retroactivamente.
+
+### F.7. Carriles manuales y línea de conteo
+
+```powershell
+& $py tools/cristhian/delimitar_carriles.py --config deteccion/config/carriles_cristhian.yaml
+```
+
+Con el detector cerrado, el marcador abre la misma cámara, backend y resolución configurados y conserva un cuadro solo en RAM. Por carril: **cuatro clics en las esquinas siguiendo el contorno**, después **dos clics en los extremos de una línea transversal dentro del polígono**. Debe ser un cuadrilátero convexo sin aristas cruzadas.
+
+- **N** agrega ese carril para marcar otro.
+- **U** deshace puntos.
+- **S** guarda los carriles en el YAML y desactiva el modo automático.
+- **Q/Esc** cancela sin modificar la configuración.
+
+El marcador usa `both` por defecto. Se puede iniciar con `--direction negative_to_positive` o `positive_to_negative`. Para una línea horizontal dirigida de izquierda a derecha, el primer sentido cuenta hacia abajo y el segundo hacia arriba. Las coordenadas son normalizadas de 0 a 1, con origen arriba a la izquierda. `tools/cristhian/marcar_lineas.py` sigue disponible para configuraciones antiguas de solo segmentos, sin polígonos.
+
+### F.8. Procesar un archivo directamente
+
+Esto elimina el paso óptico de filmar una pantalla y sirve para comparar contra conteo manual. En una copia del YAML, eliminar `camera_name`, poner en `source` la ruta del archivo externo y elegir reloj de video:
+
+```yaml
+source: 'C:/videos/trafico.mp4'
+```
+
+```powershell
+& $py tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/video_local.yaml --salida-conteos resultados/conteos_video.csv --inicio-video 2026-10-27T12:00:00-04:00
+```
+
+Usar la hora real de inicio de la grabación y su zona horaria; el valor anterior es un ejemplo. Con `--inicio-video`, los intervalos siguen cuadros/FPS y no la velocidad de procesamiento. Sin esa opción usa reloj real, que no debe interpretarse como tiempo original de una grabación. Las propiedades de resolución/FPS de captura no se aplican al archivo.
+
+### F.9. Verificación, panel, recuperación y precisión
+
+1. En consola o log confirmar `Camara seleccionada`, `Resolucion recibida`, `Carriles automaticos activos` si corresponde y luego `Conteo publicado`.
+2. Comprobar `resultados/conteos_s10.csv` y los UUID. En el modo automático el archivo puede estar vacío mientras calibra.
+3. Abrir http://localhost:8088, iniciar sesión, seleccionar `DEMO_INT_01` y el rango horario correcto. Activar actualización automática o recargar. Los datos de laboratorio conservan `prueba: true`.
+4. Si hay CSV pero no panel, revisar el consumer, MQTT y el filtro de fechas. `/health` comprueba la API, no acredita el camino completo cámara → BD.
+
+```powershell
+docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consumer
+& $py tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python tools/cristhian/reenviar_conteos.py resultados/conteos_s10.csv
+```
+
+Para precisión, registrar el conteo manual con ventanas alineadas y cobertura completa y ejecutar:
+
+```powershell
+& $py tools/cristhian/preparar_calibracion.py resultados/conteo_manual.csv resultados/conteos_s10.csv resultados/calibracion.csv
+& $py tools/cristhian/calibrar.py resultados/calibracion.csv resultados/calibracion_evaluada.csv
+```
+
+La meta de error ≤10 % requiere datos manuales; no se considera validada por abrir la cámara, ver recuadros o pasar las pruebas de software.
+
+### F.10. Problemas observados y solución
+
+| Síntoma | Explicación o comprobación |
+|---|---|
+| Ventana parpadea al detectar | YOLO se invocaba por cuadro con `show: true` y cerraba su ventana al terminar cada llamada. CYSA ahora dibuja en una ventana persistente y usa `show: false` dentro de YOLO. |
+| Se abre la cámara de la laptop | Un índice cambió o se asumió incorrectamente. Usar `listar_camaras.py` y `camera_name`, no adivinar entre 0 y 1. |
+| Vista negra al primer cuadro | Esperar el inicio del flujo en `probar_camara_hd.py`; comprobar S10+ desbloqueado, permiso en el teléfono, conexión y otras aplicaciones. |
+| Imagen borrosa | Comparar enfoque y cámara trasera con la app nativa y leer la resolución real, sin asumir Full HD por lo solicitado. |
+| No aparece ventana | `show: false` o `--segundo-plano` la desactiva. Volver a iniciar con vista después de detener el fondo. |
+| Hay recuadros pero conteo cero | El vehículo no cruzó la línea en el sentido válido, quedó fuera de la zona o todavía calibra. |
+| Calibración no termina | Faltan trayectorias estables; dejar correr tráfico, fijar la cámara o usar geometría manual. |
+| Arranque falla desde una sesión restringida | La cámara puede funcionar en Windows y estar inaccesible para el proceso restringido. Ejecutar con el Python local desde la sesión del usuario; no interpretar esto como falla física del S10+. |
+| No aparece el S10+ por nombre | Revisar vinculación y cámara conectada; el detector falla sin seleccionar la laptop como sustituta. |
+
+### F.11. Pruebas de software y privacidad
+
+```powershell
+& $py tools/franco/probar.py
+& $py tools/cristhian/comprobar_privacidad.py --carpeta resultados --carpeta deteccion --out resultados/privacidad.json
+```
+
+Las pruebas cubren cruces y polígonos, IDs entre intervalos, asignación, estimación de carriles, reloj de video, selección de dispositivo por nombre, ausencia/ambigüedad del S10+, negociación de captura y control de segundo plano. El resultado de la actualización está en `reports/cristhian/pruebas_camaras_2026_10_27.md`. No requieren cámara física ni acreditan precisión óptica o en calle.
+
+El detector no guarda imágenes ni videos. Los archivos multimedia de entrada se conservan fuera del repositorio; CSV, logs, estado de proceso, credenciales, certificados, pesos y respaldos locales no se suben a Git. El escáner de privacidad revisa únicamente las carpetas indicadas, no toda la PC ni MQTT/SQL. La revisión completa exige comprobar también esos destinos.
 
 ---
 
@@ -408,4 +493,4 @@ Para evaluar el margen de error entre el conteo por camara y una muestra tomada 
 Proyecto academico Sprint 1
 CYSA Sistema de Gestion Semaforica
 Integrantes: Franco (F4SG), Cristhian, Leonardo
-Fecha de verificacion local: 26 de octubre de 2026
+Base Sprint 1 verificada: 26 de octubre de 2026. Actualización de pruebas de cámara y documentación: 27 de octubre de 2026.

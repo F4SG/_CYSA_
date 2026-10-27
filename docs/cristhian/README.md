@@ -1,3 +1,5 @@
+> Actualización 27/10/2026: para ejecutar el repositorio actual consultar la [guía principal](../../README.md#f-cómo-funciona-la-detección-y-cómo-reproducir-las-pruebas) y [detección y privacidad](deteccion_y_privacidad.md). El texto siguiente conserva el contexto del paquete histórico de Sprint 1.
+
 # Cristhian Sprint 1 completo de iteraciones 1 a 8
 Responsabilidad: detección, inventario y privacidad. Release s1-it1a8-v1.
 Este ZIP es acumulativo y sustituye al anterior de iteraciones 1 a 4. No mezclar releases.
