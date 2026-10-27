@@ -1,5 +1,5 @@
 """Login OIDC en navegador. Token solo en memoria y en el entorno del comando hijo."""
-import argparse,base64,hashlib,json,os,secrets,subprocess,time,urllib.parse,urllib.request,webbrowser
+import argparse,sys,base64,hashlib,json,os,secrets,subprocess,time,urllib.parse,urllib.request,webbrowser
 from http.server import BaseHTTPRequestHandler,HTTPServer
 import jwt
 
@@ -49,6 +49,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--issuer',default='http://localhost:8080/realms/cysa');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args()
     cmd=a.command[1:] if a.command[:1]==['--'] else a.command
     if not cmd:p.error('Indicar comando después de --')
+    if cmd[0] in ['python','python3']:cmd=[sys.executable]+cmd[1:]  # en Windows evita el Python del sistema
     token=login(a.issuer);env=os.environ.copy();env['CYSA_TOKEN']=token
     try:raise SystemExit(subprocess.call(cmd,env=env))
     finally:token='';env.pop('CYSA_TOKEN',None)
