@@ -248,6 +248,11 @@ Copiar la plantilla de configuracion:
 Copy-Item deteccion/config/carriles_plantilla.yaml deteccion/config/carriles_cristhian.yaml
 ```
 
+Para obtener las coordenadas de cada carril sin guardar imagenes, marcar las lineas con clics sobre la vista en vivo (dos clics por carril, `q` para terminar); el script imprime el bloque `lanes:` listo para pegar e indica el sentido que cuenta `negative_to_positive`:
+```powershell
+python tools/cristhian/marcar_lineas.py --source 0 --acceso N
+```
+
 Editar `deteccion/config/carriles_cristhian.yaml` con los datos del escenario:
 
 ```yaml
@@ -296,11 +301,11 @@ lanes:
 
 ### 4. Ejecutar el flujo de deteccion y publicacion en tiempo real
 
-Para que los eventos se transmitan al backend y se visualicen en el panel, el entorno debe tener cargadas las credenciales MQTT TLS. Se puede lanzar comodamente usando `cargar_env.py`:
+Para que los eventos se transmitan al backend y se visualicen en el panel, el entorno debe tener cargadas las credenciales MQTT TLS. Las credenciales del cliente `deteccion` (usuario, contrasena y CA) las genera `preparar_local.py` en `infra/runtime/clientes/deteccion.env`; `infra/.env` no las contiene. Se cargan con `cargar_env.py`:
 
 ```powershell
-# Ejecutar cargando automaticamente las credenciales de infra/.env
-python tools/franco/cargar_env.py infra/.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv
+# Ejecutar cargando las credenciales MQTT del cliente deteccion
+python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python -m cysa_detector.run --config deteccion/config/carriles_cristhian.yaml --salida-conteos resultados/conteos_cristhian.csv
 ```
 
 **Comportamiento durante la ejecucion:**
@@ -319,11 +324,11 @@ Para finalizar la captura con la camara, presionar `Ctrl + C`.
 El sistema CYSA prohibe el guardado de fotografias, videos o placas en almacenamiento secundario. Cristhian puede auditar el cumplimiento en cualquier momento ejecutando:
 
 ```powershell
-python tools/cristhian/comprobar_privacidad.py
+python tools/cristhian/comprobar_privacidad.py --carpeta resultados --carpeta deteccion --out resultados/privacidad.json
 ```
 *Salida esperada:*
 ```text
-0 archivos multimedia encontrados en resultados y logs. Cumplimiento verificado.
+No se encontraron imágenes/videos en las carpetas indicadas; completar revisión SQL y MQTT.
 ```
 
 ### 6. Recuperacion y reenvio de eventos pendientes
@@ -331,19 +336,23 @@ python tools/cristhian/comprobar_privacidad.py
 Si la red o el broker MQTT se desconectaron durante la captura de la camara, los conteos permanecen respaldados en el archivo CSV local. Cristhian puede reenviarlos al restablecerse la conexion sin temor a duplicados (la base de datos descarta duplicados por `mensaje_id`):
 
 ```powershell
-python tools/franco/cargar_env.py infra/.env -- python tools/cristhian/reenviar_conteos.py resultados/conteos_cristhian.csv
+python tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python tools/cristhian/reenviar_conteos.py resultados/conteos_cristhian.csv
 ```
 
 ### 7. Calibracion de precision vehicular (RF-03)
 
 Para evaluar el margen de error entre el conteo por camara y una muestra tomada manualmente:
 
-1. Registrar en un CSV los aforos observados manualmente para las mismas ventanas de tiempo.
-2. Ejecutar la herramienta de evaluacion:
+1. Registrar los aforos manuales en una copia de `data/cristhian/plantillas/conteo_manual.csv`, en ventanas que coincidan con intervalos completos del detector (por ejemplo 5 min = 10 intervalos de 30 s).
+2. Unir el conteo manual con el CSV del detector (suma los intervalos de 30 s de cada ventana y rechaza ventanas sin cobertura completa):
    ```powershell
-   python tools/cristhian/calibrar.py data/cristhian/calibracion_plantilla.csv resultados/calibracion_evaluada.csv
+   python tools/cristhian/preparar_calibracion.py resultados/conteo_manual.csv resultados/conteos_cristhian.csv resultados/calibracion.csv
    ```
-3. El reporte desglosara el porcentaje de discrepancia por carril y categoria vehicular, validando la meta de tolerancia `<= 10%`.
+3. Ejecutar la herramienta de evaluacion:
+   ```powershell
+   python tools/cristhian/calibrar.py resultados/calibracion.csv resultados/calibracion_evaluada.csv
+   ```
+4. El reporte desglosara el porcentaje de discrepancia por carril y categoria vehicular, validando la meta de tolerancia `<= 10%`.
 
 
 ---
