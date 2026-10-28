@@ -1,0 +1,23 @@
+# Plantilla para la CALIBRACION formal de RF-03 (conteo manual vs automatico, meta <= 10 %).
+# Copiar a calibracion_<interseccion>.yaml y marcar los carriles con:
+#   tools/cristhian/delimitar_carriles.py --config deteccion/config/calibracion_<interseccion>.yaml
+# Diferencias con camara_usb.yaml:
+#   - carriles FIJOS dibujados a mano (auto_carriles: false): los IDs N_0, N_1... no cambian entre
+#     corridas, asi coinciden con el conteo manual, el inventario y SUMO.
+#   - intervalo de 30 s, el del contrato y del plan del sprint.
+#   - GPU (device: 0) para no superar el limite de 30,5 s por intervalo.
+configuracion_verificada: false   # delimitar_carriles.py lo pone en true al guardar los carriles
+interseccion: REEMPLAZAR_POR_ID_DEL_INVENTARIO
+source: 'C:/videos/REEMPLAZAR.mp4'  # o el indice / nombre de la camara
+model: yolo26n.pt
+device: 0
+prueba: true                      # false solo para mediciones reales del corredor
+intervalo_s: 30
+confidence: 0.3
+show: false
+auto_carriles: false
+class_map:
+  2: auto
+  5: micro
+  3: moto
+lanes: []

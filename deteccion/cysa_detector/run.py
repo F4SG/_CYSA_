@@ -107,14 +107,21 @@ class CameraSource(FuenteDeteccion):
                 raise RuntimeError('Procesamiento demasiado lento: reducir resolucion/modelo o usar GPU')
             labels=[]
             for xyxy,tid,cls,point in detections:
-                lane=auto.assign(tid,point) if automatic and ready else next((l for l in counter.lanes if l.contains(point)),None)
+                if automatic and ready:lane=auto.assign(tid,point)
+                else:
+                    # Solo una zona dibujada (polygon) asigna un vehículo a un carril. Un segmento sin zona
+                    # "contiene" cualquier punto, así que no sirve para asignar: con él, el primer carril
+                    # se quedaba con todos los vehículos y los demás contaban siempre 0.
+                    lane=next((l for l in counter.lanes if l.polygon and l.contains(point)),None)
                 if ready:
                     before=counter.snapshot()
-                    key=(lane.acceso,lane.carril) if lane else ('','')
+                    if lane:key=(lane.acceso,lane.carril)
+                    elif automatic or any(l.polygon for l in counter.lanes):key=('','')  # fuera de toda zona
+                    else:key=None  # solo segmentos: decide el cruce de cada línea
                     counter.observe(tid,mapping.get(cls),point,now_tick,lane_key=key)
                     for k,value in counter.snapshot().items():
                         totals[k]=totals.get(k,0)+value-before.get(k,0)
-                if lane or not ready:labels.append((xyxy,tid,cls,lane))
+                if lane or not ready or not any(l.polygon for l in counter.lanes):labels.append((xyxy,tid,cls,lane))
             counter.prune(now_tick)
             stop=False;recalibrate=False
             if show:
@@ -126,7 +133,7 @@ class CameraSource(FuenteDeteccion):
                 for xyxy,tid,cls,lane in labels:
                     x1,y1,x2,y2=[int(v) for v in xyxy]
                     color=lane_colors.get(lane.carril,(180,180,180)) if lane else (180,180,180)
-                    name=lane.carril if lane else 'Calibrando'
+                    name=lane.carril if lane else ('Calibrando' if not ready else 'detectado')
                     cv2.rectangle(preview,(x1,y1),(x2,y2),color,2)
                     cv2.putText(preview,f'{mapping.get(cls,"vehiculo")} #{tid} | {name}',
                                 (x1,max(16,y1-5)),cv2.FONT_HERSHEY_SIMPLEX,.5,color,2)
