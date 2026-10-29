@@ -1,4 +1,4 @@
-﻿# CYSA — Sistema de Monitoreo Semaforico (Sprint 1)
+# CYSA — Sistema de Monitoreo Semaforico (Sprint 1)
 
 > Gestión Semafórica — Sprint 1 y pruebas de detección de laboratorio del 27/10/2026.
 > La detección con webcam y Samsung S10+ es una prueba; la validación de precisión en campo sigue pendiente.
@@ -27,7 +27,7 @@
 | Proxy web | Nginx | 1.28.0-alpine |
 | Orquestacion | Docker Compose v2 | v5.6.1 |
 | Simulacion vehicular | Eclipse SUMO | 1.27.0 |
-| Deteccion (S2) | Ultralytics YOLO26n, OpenCV | 8.4.63 / 4.11.0.86 |
+| Deteccion (S1, RF-03) | Ultralytics YOLO26n, OpenCV | 8.4.63 / 4.11.0.86 |
 | Autenticacion JWT | PyJWT + cryptography | 2.10.1 / 50.0.2 |
 | Tests | pytest | 8.3.5 |
 
@@ -49,6 +49,8 @@
 ### Redes Docker
 - `operacional` (internal: true): DB <-> Mosquitto <-> Consumer <-> API
 - `panel`: API <-> Keycloak <-> Nginx (accesible desde localhost)
+- `borde`: solo Mosquitto, para publicar `127.0.0.1:8883` al detector (una red interna no puede publicar puertos)
+- La API es el unico servicio en `operacional` y `panel`; la base y el consumidor no estan en la red del panel.
 
 ### Puertos expuestos en localhost
 
@@ -65,7 +67,7 @@ repo_s1/
 ├── backend/           # API REST FastAPI (Franco)
 ├── shared/            # Contratos compartidos Pydantic (Franco)
 ├── inventario/        # Modulo de inventario (Cristhian)
-├── deteccion/         # Detector vehicular YOLO (Cristhian) - S2
+├── deteccion/         # Detector vehicular YOLO (Cristhian) - S1, RF-03
 ├── simulacion/        # SUMO + exportacion (Leonardo)
 ├── panel/             # Interfaz web HTML/JS/CSS (Leonardo)
 ├── identidad/         # Configuracion Keycloak + Nginx (Franco)
@@ -86,7 +88,7 @@ repo_s1/
 | Integrante | Responsabilidad | Modulos |
 |---|---|---|
 | Franco (F4SG) | Infraestructura, contratos, backend API, MQTT/TLS, Keycloak | backend/, shared/, infra/, identidad/, tools/franco/, tests/franco/, docs/franco/ |
-| Cristhian | Inventario, deteccion YOLO (S2), privacidad | inventario/, deteccion/, tools/cristhian/, tests/cristhian/, docs/cristhian/ |
+| Cristhian | Inventario, deteccion YOLO (RF-03, S1), privacidad | inventario/, deteccion/, tools/cristhian/, tests/cristhian/, docs/cristhian/ |
 | Leonardo | Panel web, SUMO, reglas semaforicas | panel/, simulacion/, tests/leonardo/, docs/leonardo/ |
 
 ---
@@ -412,6 +414,8 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 & $py tools/franco/cargar_env.py infra/runtime/clientes/deteccion.env -- python tools/cristhian/reenviar_conteos.py resultados/conteos_s10.csv
 ```
 
+Para la calibración formal de RF-03 usar `deteccion/config/calibracion_plantilla.yaml` (copiarla y marcar los carriles con `delimitar_carriles.py`): carriles fijos en vez de automáticos, para que los IDs de carril no cambien entre corridas y coincidan con el conteo manual, el inventario y SUMO; intervalo de 30 s; GPU. Las líneas sin zona de `marcar_lineas.py` también cuentan cada carril por separado.
+
 Para precisión, registrar el conteo manual con ventanas alineadas y cobertura completa y ejecutar:
 
 ```powershell
@@ -483,7 +487,7 @@ El detector no guarda imágenes ni videos. Los archivos multimedia de entrada se
 | R14 | Simulacion SUMO base con red sintetica | OK | simulacion/sumo_base.py | python simulacion/sumo_base.py --demo |
 | R15 | Respaldo y restauracion verificados | OK | tools/franco/respaldo.py, restaurar_copia.py | respaldos/s1_ensayo_01.dump |
 | R16 | Sin imagenes/videos en disco privacidad | OK | tools/cristhian/comprobar_privacidad.py | 0 archivos multimedia en resultados/ |
-| R17 | Conteo real con camara fisica | PENDIENTE | deteccion/cysa_detector/ | Piloto en campo S2 |
+| R17 | Conteo real con camara (RF-03, Sprint 1): error <= 10 % frente a conteo manual | PENDIENTE | deteccion/cysa_detector/, deteccion/config/calibracion_plantilla.yaml | Video del corredor + calibrar.py antes del 06/11 |
 | R18 | Aprobacion docente del Sprint | PENDIENTE | Reunion de cierre requerida | Acta formal pendiente |
 
 ---
