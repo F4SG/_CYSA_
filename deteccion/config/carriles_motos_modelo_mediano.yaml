@@ -1,0 +1,38 @@
+configuracion_verificada: true
+interseccion: DEMO_INT_01
+source: 1
+show: true
+model: deteccion/modelos/yolo26m.pt
+device: cpu
+prueba: true
+intervalo_s: 30
+confidence: 0.25
+class_map:
+  2: auto
+  5: micro
+  3: moto
+lanes:
+- acceso: N
+  carril: N_0
+  a:
+  - 0.05
+  - 0.6
+  b:
+  - 0.95
+  - 0.6
+  direction: negative_to_positive
+auto_carriles: true
+calibracion_s: 12
+camera_width: 1920
+camera_height: 1080
+camera_fps: 30
+camera_backend: msmf
+camera_name: Galaxy S10+ (Windows Virtual Camera)
+imgsz: 960
+track_confidence: 0.1
+class_confidence:
+  3: 0.15
+end2end: false
+agnostic_nms: true
+iou: 0.5
+show_outside_lanes: true

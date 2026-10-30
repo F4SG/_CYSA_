@@ -28,7 +28,7 @@ class Model:
     def track(self, frame, **k):
         objs = TRAYECTORIAS[self.n]; self.n += 1
         boxes = SimpleNamespace(xyxy=T([[x * 100 - 5, y * 100 - 10, x * 100 + 5, y * 100] for _, x, y in objs]),
-                                id=T([i for i, _, _ in objs]), cls=T([2 for _ in objs]))
+                                id=T([i for i, _, _ in objs]), cls=T([2 for _ in objs]), conf=T([.9 for _ in objs]))
         return [SimpleNamespace(boxes=boxes)]
 
 

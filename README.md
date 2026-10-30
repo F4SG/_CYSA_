@@ -356,6 +356,50 @@ La parada es cooperativa: termina la operación actual y conserva los CSV. Si un
 
 En modo sin ventana **no aparece vista previa**. Para volver a verla, detener el proceso gestionado e iniciar sin `--segundo-plano`, con `show: true`.
 
+### F.5.1. Perfil actual del S10+ y visor vertical (30/10/2026)
+
+El perfil `carriles_cristhian.yaml` usa **YOLO26s preentrenado, ByteTrack y tres zonas
+fijas de la vía inferior** del encuadre de laboratorio. Esas coordenadas no son universales:
+si se mueve el teléfono o cambia el video, revisar y volver a calibrar. Se mantiene
+`prueba: true`; no se activa control real de semáforos.
+
+La ventana abre en formato vertical con ancho menor a media pantalla. Presenta el video
+completo arriba y debajo resolución, FPS, tiempo de IA y acumulados de auto/micro/moto
+por carril. **L** muestra/oculta carriles, **D** los datos, **E** abre el editor y **Q/Esc**
+termina. Los botones hacen lo mismo. La edición requiere iniciar con el gestor:
+
+```powershell
+Set-Location "$env:USERPROFILE\Documents\CYSA_S1\repo_s1"
+.\.venv\Scripts\python.exe tools/cristhian/detector.py iniciar
+```
+
+En el editor: **ESPACIO** fija/reanuda, cuatro clics marcan esquina lejana izquierda,
+lejana derecha, cercana derecha y cercana izquierda; **1–8** cambia carriles, **U** deshace,
+**+/−** mueve la línea, **S** guarda y **Q** cancela. Guardar o cancelar vuelve al detector;
+se conservan CSV y backend, y los acumulados de la nueva ejecución parten desde cero.
+También se puede abrir directamente `tools/cristhian/calibrar_via.py --iniciar`.
+
+El recorte `crop_to_lanes` se aplica solo a la inferencia a 512; restaura coordenadas antes
+de asignar carril y contar. Requiere polígonos fijos; para usar carriles automáticos se debe
+desactivarlo. `capture_latest` y `async_inference` separan captura, ventana e inferencia
+sin acumular una cola de video; solo conservan un pendiente reciente. Los recuadros viejos
+se ocultan después de 180 ms, sin eliminar conteos. FPS del visor y FPS de detección son
+medidas diferentes. La solicitud de captura es 1280×720 a 30 FPS, sujeta al controlador.
+MQTT publica en orden fuera del hilo de video, con cola acotada y CSV escrito previamente.
+
+Los pesos `.pt` están excluidos de Git. En otro equipo se necesita el modelo en
+`deteccion/modelos/yolo26s.pt`; Ultralytics puede descargarlo al iniciar si hay conexión.
+La primera ejecución puede tardar por descarga y calentamiento. La configuración alternativa
+`carriles_motos_modelo_mediano.yaml` es experimental y más pesada; no es el perfil predeterminado.
+
+Se verificó software y rendimiento con cuadros externos en RAM, sin guardar imágenes.
+La prueba controlada del visor pasó de unos 14 a 30 FPS; esto **no acredita** la latencia del
+S10+ real ni el error de conteo RF-03 ≤10 %. La conexión del teléfono y el conteo manual de
+motos siguen pendientes de validación. Para el piloto formal se mantiene la referencia de
+cámara IP/GPU del formato del proyecto. Ver [visor y controles](docs/cristhian/visor_completo.md),
+[mejora de motos y límites](docs/cristhian/mejora_motos_roi.md) y
+[referencia del proyecto](docs/cristhian/referencia_proyecto_y_prueba_vivo.md).
+
 ### F.6. Carriles automáticos, asignación y límites
 
 Con `auto_carriles: true`, el detector observa trayectorias antes de contar:

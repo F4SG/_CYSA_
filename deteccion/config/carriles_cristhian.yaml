@@ -2,7 +2,7 @@ configuracion_verificada: true
 interseccion: DEMO_INT_01
 source: 1
 show: true
-model: yolo26n.pt
+model: deteccion/modelos/yolo26s.pt
 device: cpu
 prueba: true
 intervalo_s: 30
@@ -14,17 +14,74 @@ class_map:
 lanes:
 - acceso: N
   carril: N_0
+  polygon:
+  - - 0.3736000061035156
+    - 0.49644380807876587
+  - - 0.3936886553544011
+    - 0.4754035518983498
+  - - 0.5718040082625994
+    - 0.8194362373565901
+  - - 0.5296000242233279
+    - 0.8847795128822326
   a:
-  - 0.05
-  - 0.6
+  - 0.43277829900211134
+  - 0.6437581761078266
   b:
-  - 0.95
-  - 0.6
+  - 0.4622220562472307
+  - 0.607776924366126
   direction: negative_to_positive
-auto_carriles: true
+- acceso: N
+  carril: N_1
+  polygon:
+  - - 0.3936886553544011
+    - 0.4754035518983498
+  - - 0.4131455434888693
+    - 0.455024983597902
+  - - 0.6108931418676643
+    - 0.7589155996642416
+  - - 0.5718040082625994
+    - 0.8194362373565901
+  a:
+  - 0.4622220562472307
+  - 0.607776924366126
+  b:
+  - 0.4902535555852348
+  - 0.5735214988108422
+  direction: negative_to_positive
+- acceso: N
+  carril: N_2
+  polygon:
+  - - 0.4131455434888693
+    - 0.455024983597902
+  - - 0.4320000112056733
+    - 0.43527737259864807
+  - - 0.6471999883651735
+    - 0.7027027010917661
+  - - 0.6108931418676643
+    - 0.7589155996642416
+  a:
+  - 0.4902535555852348
+  - 0.5735214988108422
+  b:
+  - 0.516972024873058
+  - 0.540870639696813
+  direction: negative_to_positive
+auto_carriles: false
 calibracion_s: 12
-camera_width: 1920
-camera_height: 1080
+camera_width: 1280
+camera_height: 720
 camera_fps: 30
 camera_backend: msmf
 camera_name: Galaxy S10+ (Windows Virtual Camera)
+imgsz: 512
+track_confidence: 0.1
+class_confidence:
+  3: 0.15
+end2end: false
+agnostic_nms: true
+iou: 0.5
+show_outside_lanes: false
+capture_latest: true
+crop_to_lanes: true
+roi_padding: 0.15
+async_inference: true

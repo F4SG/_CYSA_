@@ -25,7 +25,10 @@ def select_named_camera(cameras, name):
 
 
 def open_source(cv2,source,config):
-    if isinstance(source,int):
+    if not isinstance(config.get('capture_latest',False),bool):
+        raise ValueError('capture_latest debe ser booleano')
+    live=isinstance(source,int)
+    if live:
         backends={'auto':cv2.CAP_ANY,'msmf':cv2.CAP_MSMF,'dshow':cv2.CAP_DSHOW}
         backend=config.get('camera_backend','auto')
         if backend not in backends:raise ValueError('camera_backend debe ser auto, msmf o dshow')
@@ -53,4 +56,7 @@ def open_source(cv2,source,config):
         for prop,value in properties:cap.set(prop,value)
     except Exception:
         cap.release();raise
+    if live and config.get('capture_latest',False):
+        from .live_capture import LatestCapture
+        return LatestCapture(cap)
     return cap

@@ -8,10 +8,14 @@ from cysa.mqtt import Publisher
 from .counter import Lane,LineCounter
 from .auto_lanes import AutoLanes
 from .camera import open_source
+from .inference import detection_settings
+from .roi import crop_for_lanes,restore_box
+from .delivery import QueuedPublisher
 
 class CameraSource(FuenteDeteccion):
     def __init__(self,config,inicio_video=None):
         self.config=config
+        self.edit_requested=False
         # inicio_video: hora real en que empezó la grabación. Activa el reloj del video (cuadro/fps)
         # en vez del reloj de la PC, para que los intervalos coincidan con un conteo manual del mismo video.
         if inicio_video is not None and (inicio_video.tzinfo is None or inicio_video.utcoffset() is None):
@@ -30,18 +34,28 @@ class CameraSource(FuenteDeteccion):
             raise ValueError('El reloj de video solo aplica a archivos; la webcam usa la hora real')
         # stream/video externo se lee sin copiarlo; únicamente fuente secuencial, jamás paquetes de imágenes.
         cap=open_source(cv2,source,c)
+        inference=None
         try:
             lanes=[Lane(x['acceso'],x['carril'],tuple(x['a']),tuple(x['b']),x['direction'],tuple(tuple(p) for p in x.get('polygon',[]))) for x in c.get('lanes',[])]
             if c.get('auto_carriles'):lanes=[]
             counter=LineCounter(lanes)
             model=YOLO(c.get('model','yolo26n.pt'))
             mapping={int(k):v for k,v in c['class_map'].items()}
-            yield from self._loop(cap,model,counter,mapping,seconds,cv2)
+            if c.get('async_inference',False):
+                if not isinstance(source,int) or not c.get('capture_latest',False):
+                    raise ValueError('async_inference requiere camara y capture_latest')
+                from .live_inference import LiveInference
+                options,_=detection_settings(c,mapping)
+                inference=LiveInference(model,options)
+            yield from self._loop(cap,model,counter,mapping,seconds,cv2,inference)
         finally:
+            # Primero soltar la cámara/ventana; esperar después al único trabajo de IA.
             cap.release()
             if c.get('show',False):cv2.destroyAllWindows()
-    def _loop(self,cap,model,counter,mapping,seconds,cv2):
+            if inference is not None:inference.close()
+    def _loop(self,cap,model,counter,mapping,seconds,cv2,inference=None):
         c=self.config;video=self.inicio_video is not None
+        track_options,class_thresholds=detection_settings(c,mapping)
         if video:
             fps=cap.get(cv2.CAP_PROP_FPS)
             if not fps or fps<=0:raise RuntimeError('El video no informa FPS; no se puede usar su reloj')
@@ -53,7 +67,11 @@ class CameraSource(FuenteDeteccion):
             wall=lambda t:datetime.now(timezone.utc)
         show=bool(c.get('show',False))
         window='CYSA - Deteccion vehicular'
-        if show:cv2.namedWindow(window,cv2.WINDOW_NORMAL)
+        if show:
+            from .preview import PreviewControls
+            controls=PreviewControls()
+            cv2.namedWindow(window,cv2.WINDOW_NORMAL)
+            cv2.setMouseCallback(window,controls.click)
         totals={}
         automatic=bool(c.get('auto_carriles',False))
         auto=AutoLanes(c.get('acceso_auto','N'))
@@ -63,6 +81,8 @@ class CameraSource(FuenteDeteccion):
         if warmup<0:raise ValueError('calibracion_s no puede ser negativo')
         tick=clock(0);start=wall(tick);n=0
         calibration_start=tick
+        preview_started=time.monotonic()
+        cached_labels=[];labels_at=0
         def flush(end):
             counts=counter.snapshot()
             for lane in counter.lanes:
@@ -71,19 +91,38 @@ class CameraSource(FuenteDeteccion):
                       clase=clase,cantidad=counts.get((lane.acceso,lane.carril,clase),0),inicio=start,fin=end,prueba=c['prueba'])
         while True:
             if c.get("stop_file") and Path(c["stop_file"]).exists():break
-            ok,frame=cap.read()
-            if not ok:break
+            ok,frame=cap.poll(.015) if inference is not None else cap.read()
+            if not ok:
+                if inference is not None and not cap.finished:
+                    if show:
+                        controls.key(cv2.waitKey(1)&255,automatic)
+                        self.edit_requested=controls.edit
+                        if controls.stop or controls.edit or cv2.getWindowProperty(window,cv2.WND_PROP_VISIBLE)<1:break
+                    continue
+                break
             h,w=frame.shape[:2];n+=1
             if n==1:
                 print(f'Resolucion recibida: {w}x{h}. Solicitada: {c.get("camera_width","predeterminada")}x{c.get("camera_height","predeterminada")}.',flush=True)
-            results=model.track(frame,persist=True,tracker='bytetrack.yaml',classes=list(mapping),
-              conf=float(c.get('confidence',0.3)),device=c.get('device','cpu'),
-              save=False,save_txt=False,save_crop=False,save_frames=False,show=False,verbose=False)
+            inference_frame,offset=crop_for_lanes(frame,counter.lanes,c)
+            captured_at=getattr(cap,'delivered_at',None) or time.monotonic()
+            if inference is None:
+                results=model.track(inference_frame,**track_options)
+                result_at=captured_at
+            else:
+                completed=inference.take()
+                # Sustituye el único pendiente por el más reciente; no acumula cuadros.
+                inference.submit(inference_frame,offset,(h,w),captured_at)
+                results=None;result_at=captured_at
+                if completed is not None:
+                    results,offset,shape,result_at,_=completed
+                    if shape!=(h,w):results=None
             now_tick=clock(n)
             detections=[]
-            boxes=results[0].boxes
+            boxes=results[0].boxes if results is not None else None
             if boxes is not None and boxes.id is not None:
-                for xyxy,tid,cls in zip(boxes.xyxy.cpu().tolist(),boxes.id.int().cpu().tolist(),boxes.cls.int().cpu().tolist()):
+                for xyxy,tid,cls,score in zip(boxes.xyxy.cpu().tolist(),boxes.id.int().cpu().tolist(),boxes.cls.int().cpu().tolist(),boxes.conf.cpu().tolist()):
+                    if score<class_thresholds.get(cls,1.):continue
+                    xyxy=restore_box(xyxy,offset)
                     x1,y1,x2,y2=xyxy
                     point=((x1+x2)/(2*w),y2/h)
                     detections.append((xyxy,tid,cls,point))
@@ -121,7 +160,13 @@ class CameraSource(FuenteDeteccion):
                     counter.observe(tid,mapping.get(cls),point,now_tick,lane_key=key)
                     for k,value in counter.snapshot().items():
                         totals[k]=totals.get(k,0)+value-before.get(k,0)
-                if lane or not ready or not any(l.polygon for l in counter.lanes):labels.append((xyxy,tid,cls,lane))
+                if lane or not ready or not any(l.polygon for l in counter.lanes) or c.get('show_outside_lanes',False):labels.append((xyxy,tid,cls,lane))
+            if results is not None:
+                cached_labels=labels;labels_at=result_at
+            if inference is not None:
+                # También descartar visualmente un resultado recién terminado pero ya viejo.
+                # Su trayectoria ya se procesó arriba para contar; ocultar no borra conteos.
+                labels=cached_labels if time.monotonic()-labels_at<=.18 else []
             counter.prune(now_tick)
             stop=False;recalibrate=False
             if show:
@@ -133,7 +178,7 @@ class CameraSource(FuenteDeteccion):
                 for xyxy,tid,cls,lane in labels:
                     x1,y1,x2,y2=[int(v) for v in xyxy]
                     color=lane_colors.get(lane.carril,(180,180,180)) if lane else (180,180,180)
-                    name=lane.carril if lane else ('Calibrando' if not ready else 'detectado')
+                    name=lane.carril if lane else ('Calibrando' if not ready else 'Fuera de zona - no cuenta' if any(l.polygon for l in counter.lanes) else 'detectado')
                     cv2.rectangle(preview,(x1,y1),(x2,y2),color,2)
                     cv2.putText(preview,f'{mapping.get(cls,"vehiculo")} #{tid} | {name}',
                                 (x1,max(16,y1-5)),cv2.FONT_HERSHEY_SIMPLEX,.5,color,2)
@@ -142,7 +187,7 @@ class CameraSource(FuenteDeteccion):
                             f'CALIBRANDO {now_tick-calibration_start:.0f}s - esperando trayectorias estables')
                     cv2.rectangle(preview,(0,0),(w,35),(0,0,0),-1)
                     cv2.putText(preview,status,(8,24),cv2.FONT_HERSHEY_SIMPLEX,.55,(0,255,255),1)
-                for i,lane in enumerate(counter.lanes):
+                for i,lane in enumerate(counter.lanes if controls.show_lanes else []):
                     color=[(0,220,255),(0,255,100),(255,180,0),(255,100,200)][i%4]
                     pixel=lambda p:(int(p[0]*w),int(p[1]*h))
                     if lane.polygon:
@@ -158,13 +203,23 @@ class CameraSource(FuenteDeteccion):
                     total=sum(totals.get((lane.acceso,lane.carril,clase),0) for clase in ['auto','micro','moto'])
                     sense='+' if lane.direction=='negative_to_positive' else '-' if lane.direction=='positive_to_negative' else '+/-'
                     cv2.putText(preview,f'{lane.carril} ({sense}): {total}',pixel(lane.a),cv2.FONT_HERSHEY_SIMPLEX,.65,color,2)
-                quality=f'Captura real: {w}x{h}'
-                cv2.rectangle(preview,(0,h-28),(min(w,360),h),(0,0,0),-1)
-                cv2.putText(preview,quality,(8,h-8),cv2.FONT_HERSHEY_SIMPLEX,.55,(255,255,255),1)
+                fps=n/max(time.monotonic()-preview_started,.001)
+                quality=f'Captura: {w}x{h} | YOLO: {track_options["imgsz"]} | {fps:.1f} FPS'
+                if c.get('crop_to_lanes',False):quality+=' | ROI carriles'
+                if inference is not None and inference.elapsed_ms is not None:
+                    quality+=f' | IA: {inference.elapsed_ms:.0f}ms'
+                if getattr(cap,'delivered_at',None) is not None:
+                    quality+=f' | cuadro: {max(0,time.monotonic()-cap.delivered_at)*1000:.0f}ms'
+                preview=controls.render(preview,counter.lanes,totals,quality,
+                    c.get('camera_name',c.get('source',0)),automatic,ready,cv2)
+                if n==1:cv2.resizeWindow(window,preview.shape[1],preview.shape[0])
                 cv2.imshow(window,preview)
                 key=cv2.waitKey(1) & 0xFF
-                recalibrate=automatic and key==ord('r')
-                stop=key in (ord('q'),27) or cv2.getWindowProperty(window,cv2.WND_PROP_VISIBLE)<1
+                controls.key(key,automatic)
+                recalibrate=automatic and controls.recalibrate
+                controls.recalibrate=False
+                self.edit_requested=controls.edit
+                stop=controls.stop or controls.edit or cv2.getWindowProperty(window,cv2.WND_PROP_VISIBLE)<1
                 del preview
             del results,boxes,frame
             if ready and (now_tick-tick>=seconds or recalibrate) and now_tick>tick:
@@ -173,7 +228,7 @@ class CameraSource(FuenteDeteccion):
                 counter.reset_interval();start=end;tick=now_tick
             if recalibrate:
                 auto=AutoLanes(c.get('acceso_auto','N'));counter=LineCounter([])
-                ready=False;candidate=[];stable=0;last_attempt=None;totals={}
+                ready=False;candidate=[];stable=0;last_attempt=None;totals={};cached_labels=[]
                 calibration_start=now_tick;tick=now_tick;start=wall(tick)
                 print('Recalibrando: se reinician los totales de pantalla; CSV anterior conservado.',flush=True)
             if stop:break
@@ -200,7 +255,7 @@ def main():
     source=CameraSource(config,a.inicio_video)
     a.salida_conteos.parent.mkdir(parents=True,exist_ok=True)
     exists=a.salida_conteos.exists() and a.salida_conteos.stat().st_size>0
-    with a.salida_conteos.open('a',encoding='utf-8',newline='') as out,Publisher('cysa-deteccion') as pub:
+    with a.salida_conteos.open('a',encoding='utf-8',newline='') as out,Publisher('cysa-deteccion') as pub,QueuedPublisher(pub) as delivery:
         writer=None
         try:
             for event in source.eventos():
@@ -209,7 +264,10 @@ def main():
                     writer=csv.DictWriter(out,fieldnames=list(row))
                     if not exists:writer.writeheader()
                 # El CSV permite reintentar un evento con el mismo UUID si el broker no confirma.
-                writer.writerow(row);out.flush();pub.publish(event)
-                print(f'[{datetime.now().strftime("%H:%M:%S")}] Conteo publicado -> {event.clase}: {event.cantidad} ({event.acceso}/{event.carril})')
+                writer.writerow(row);out.flush();delivery.publish(event)
+                print(f'[{datetime.now().strftime("%H:%M:%S")}] Conteo registrado y encolado -> {event.clase}: {event.cantidad} ({event.acceso}/{event.carril})')
         except KeyboardInterrupt:pass
-if __name__=='__main__':main()
+    # La cámara y MQTT ya están cerrados antes de abrir el editor en el gestor.
+    if source.edit_requested:return 20
+    return 0
+if __name__=='__main__':raise SystemExit(main())

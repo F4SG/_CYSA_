@@ -60,13 +60,32 @@ def detector_command(config,output,stop=None):
     return command
 
 
+
+def foreground(config,output):
+    """El detector libera la cámara antes del editor; después recarga su YAML."""
+    import yaml
+    env=environment()
+    while True:
+        result=subprocess.call(detector_command(config,output),cwd=REPO,env=env)
+        if result!=20:return result
+        settings=yaml.safe_load(config.read_text(encoding='utf-8'))
+        count=max(1,min(8,len(settings.get('lanes',[])) or 3))
+        lanes=settings.get('lanes',[])
+        direction=lanes[0].get('direction','negative_to_positive') if lanes else 'negative_to_positive'
+        access=lanes[0].get('acceso','N') if lanes else 'N'
+        result=subprocess.call([sys.executable,str(REPO/'tools/cristhian/calibrar_via.py'),
+            '--config',str(config),'--carriles',str(count),'--acceso',access,'--direction',direction],cwd=REPO,env=env)
+        if result:return result
+        # Guardar y cancelar vuelven al detector; cancelar conserva el YAML anterior.
+
+
 def start(args):
     import yaml
     state=load_state()
     if running(state):raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
     config=args.config.resolve();output=args.salida.resolve()
     if not args.segundo_plano:
-        try:return subprocess.call(detector_command(config,output),cwd=REPO,env=environment())
+        try:return foreground(config,output)
         except KeyboardInterrupt:return 130
     RUNTIME.mkdir(parents=True,exist_ok=True)
     lock=RUNTIME/'inicio.lock'

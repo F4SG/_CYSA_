@@ -31,3 +31,28 @@ def test_comando_conserva_rutas_con_espacios(tmp_path):
     cmd=m.detector_command(config,output,stop)
     assert str(config) in cmd and str(output) in cmd
     assert cmd[-2:]==['--stop-file',str(stop)]
+
+
+def test_editar_abre_editor_y_reinicia_con_misma_config_y_salida(monkeypatch,tmp_path):
+    m=manager();config=tmp_path/'camara.yaml';output=tmp_path/'conteos.csv'
+    original='lanes:\n- acceso: N\n  direction: both\n'
+    config.write_text(original,encoding='utf-8')
+    monkeypatch.setattr(m,'environment',lambda:{})
+    calls=[];returns=iter([20,0,0])
+    def call(command,**kw):calls.append(command);return next(returns)
+    monkeypatch.setattr(m.subprocess,'call',call)
+    assert m.foreground(config,output)==0
+    assert len(calls)==3
+    assert calls[0]==calls[2]==m.detector_command(config,output)
+    assert calls[1][1].endswith('calibrar_via.py') and '--iniciar' not in calls[1]
+    assert calls[1][-1]=='both'
+    assert config.read_text(encoding='utf-8')==original
+
+
+def test_fallo_editor_no_inicia_detector_otra_vez(monkeypatch,tmp_path):
+    m=manager();config=tmp_path/'config.yaml';config.write_text('lanes: []',encoding='utf-8')
+    monkeypatch.setattr(m,'environment',lambda:{})
+    codes=iter([20,1]);calls=[]
+    def call(command,**kw):calls.append(command);return next(codes)
+    monkeypatch.setattr(m.subprocess,'call',call)
+    assert m.foreground(config,tmp_path/'salida.csv')==1 and len(calls)==2

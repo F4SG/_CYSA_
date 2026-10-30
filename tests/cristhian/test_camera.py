@@ -81,3 +81,18 @@ def test_video_no_acepta_seleccion_de_camara():
     cap=Cap();cv,calls=fake(cap)
     with pytest.raises(ValueError):open_source(cv,'video.mp4',{'camera_name':'Galaxy S10+'})
     assert not calls
+
+
+def test_archivo_secuencial_aunque_se_pida_captura_reciente():
+    cap=Cap();cv,calls=fake(cap)
+    assert open_source(cv,'video.mp4',{'capture_latest':True}) is cap
+    assert calls==[('video.mp4',)]
+
+
+def test_camara_puede_usar_buffer_de_un_cuadro(monkeypatch):
+    import cysa_detector.live_capture as live
+    wrapped=object();received=[]
+    monkeypatch.setattr(live,'LatestCapture',lambda cap:received.append(cap) or wrapped)
+    cap=Cap();cv,calls=fake(cap)
+    assert open_source(cv,0,{'capture_latest':True}) is wrapped
+    assert received==[cap]
