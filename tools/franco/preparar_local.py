@@ -57,13 +57,15 @@ def main():
         for client in realm['clients']:
             if client['clientId']=='cysa-panel':
                 client['redirectUris']=[a.public_panel+'/'];client['webOrigins']=[a.public_panel];client['attributes']['post.logout.redirect.uris']=a.public_panel+'/'
-        realm['users']=[{'username':n,'enabled':True,'emailVerified':True,'firstName':n,'lastName':'Prueba',
-          'email':n+'@example.invalid','realmRoles':[n],'requiredActions':[],
+        realm['users']=[{'username':n,'enabled':True,'emailVerified':True,'firstName':'Administración' if n=='administrador' else 'Operación','lastName':'CYSA',
+          'email':n+'@cysa.example','realmRoles':[n],'requiredActions':[],
           'credentials':[{'type':'password','value':passwords[n],'temporary':False}]} for n in ['operador','administrador']]
         (kc/'cysa-realm.json').write_text(json.dumps(realm,indent=2),encoding='utf-8')
         (clients/'usuarios-locales.json').write_text(json.dumps({n:passwords[n] for n in ['operador','administrador']},indent=2),encoding='utf-8')
         config={'apiBase':'/api','issuer':a.public_keycloak+'/realms/cysa','clientId':'cysa-panel','redirectUri':a.public_panel+'/'}
         (root/'panel/config.json').write_text(json.dumps(config,indent=2),encoding='utf-8')
+        from configurar_usuarios_local import prepare_identity_files
+        prepare_identity_files(root)
         print('Configuración local generada. Credenciales en infra/runtime/clientes; no compartir ni versionar runtime o .env.')
     finally:os.umask(old_umask)
 if __name__=='__main__':main()

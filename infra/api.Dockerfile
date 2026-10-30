@@ -1,7 +1,7 @@
 FROM python:3.12.10-slim
 WORKDIR /workspace
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt && useradd --uid 10001 --create-home cysa
+RUN python -m pip install --no-cache-dir --upgrade pip==26.2.2 && pip install --no-cache-dir -r /tmp/requirements.txt && useradd --uid 10001 --create-home cysa
 COPY shared /workspace/shared
 COPY backend /workspace/backend
 COPY inventario /workspace/inventario

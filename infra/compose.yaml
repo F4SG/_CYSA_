@@ -30,6 +30,7 @@ services:
     build:
       context: ..
       dockerfile: infra/api.Dockerfile
+    env_file: [./runtime/clientes/usuarios-api.env]
     environment: &database
       DB_HOST: db
       DB_NAME: cysa
@@ -61,8 +62,8 @@ services:
       mosquitto: {condition: service_started}
     restart: unless-stopped
   keycloak:
-    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.7.0}
-    command: [start-dev,--import-realm]
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.8.1}
+    command: [start-dev,--import-realm,--spi-theme--static-max-age=-1,--spi-theme--cache-themes=false,--spi-theme--cache-templates=false]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: bootstrap
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?Credencial local requerida}
@@ -71,10 +72,11 @@ services:
     ports: ['127.0.0.1:8080:8080']
     volumes:
       - ./runtime/keycloak:/opt/keycloak/data/import:ro
+      - ../identidad/themes/cysa:/opt/keycloak/themes/cysa:ro
       - kcdata:/opt/keycloak/data
     networks: [panel]
   panel:
-    image: ${NGINX_IMAGE:-nginx:1.28.0-alpine}
+    image: ${NGINX_IMAGE:-nginx:1.30.6-alpine}
     ports: ['127.0.0.1:8088:80']
     volumes:
       - ../panel:/usr/share/nginx/html:ro

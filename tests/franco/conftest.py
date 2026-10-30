@@ -24,11 +24,16 @@ class MemoryRepository:
     def replace_asset(self,asset_id,asset):
         if asset_id not in self.assets:return False
         self.assets[asset_id]=asset.model_dump();return True
+class MemoryIdentity:
+    """Identidad sustituida explícitamente en tests; nunca se usa en la aplicación."""
+    def verify(self,claims,allowed):pass
+@pytest.fixture
+def identity_directory():return MemoryIdentity()
 @pytest.fixture
 def repository():return MemoryRepository()
 @pytest.fixture
-def client(repository):
-    app=create_app(repository)
+def client(repository,identity_directory):
+    app=create_app(repository,identity_directory)
     with TestClient(app) as client:yield client
 @pytest.fixture
 def operator(client):

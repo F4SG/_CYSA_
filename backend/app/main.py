@@ -1,18 +1,32 @@
 from datetime import datetime,timedelta,timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI,Depends,HTTPException,Query
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import JSONResponse
 from cysa.contracts import Timed
 from app.auth import read_access,admin_access
 from app.repository import Repository
+from app.users import KeycloakUsers,build_users_router
 from cysa_inventory.router import build_router
 
-def create_app(repository=None):
+def create_app(repository=None,user_directory=None):
     repo=repository or Repository()
     @asynccontextmanager
     async def lifespan(app):
         repo.ready()
         yield
     app=FastAPI(title='CYSA S1 — solo monitoreo',version='1.1.0',lifespan=lifespan)
+    directory=user_directory or KeycloakUsers()
+    app.state.identity=directory
+    @app.exception_handler(RequestValidationError)
+    async def validation(request,error):
+        if request.url.path.startswith('/api/usuarios'):
+            # No devolver contraseñas ni el cuerpo de alta en errores de validación.
+            return JSONResponse(status_code=422,content={'detail':[
+                {key:value for key,value in item.items() if key in ('loc','msg','type')}
+                for item in error.errors()]})
+        return await request_validation_exception_handler(request,error)
     @app.get('/health',include_in_schema=False)
     def health():return {'status':'ok','activacion_planes':False}
     @app.get('/api/conteos',dependencies=[Depends(read_access)])
@@ -27,5 +41,6 @@ def create_app(repository=None):
     @app.get('/api/estados',dependencies=[Depends(read_access)])
     def states():return {'items':repo.states()}
     app.include_router(build_router(repo,read_access,admin_access))
+    app.include_router(build_users_router(directory))
     return app
 app=create_app()

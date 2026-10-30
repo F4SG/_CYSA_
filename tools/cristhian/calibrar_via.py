@@ -1,5 +1,5 @@
 """Calibración de una sola vía por cuatro esquinas, sin guardar cuadros."""
-import argparse,math,sys,time
+import argparse,math,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'deteccion'))

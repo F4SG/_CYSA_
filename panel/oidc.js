@@ -1,12 +1,17 @@
 // Authorization Code + PKCE S256. Tokens únicamente en memoria; no usar localStorage.
-let cfg,tokens=null,expires=0;
+let cfg,tokens=null,expires=0,refreshing=null,sessionVersion=0;
 const encode=bytes=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');
 const random=()=>encode(crypto.getRandomValues(new Uint8Array(32)));
 const decode=token=>JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(token.split('.')[1].replaceAll('-','+').replaceAll('_','/')),c=>c.charCodeAt(0))));
 async function tokenRequest(body){
+ const version=sessionVersion;
  const r=await fetch(cfg.issuer+'/protocol/openid-connect/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
- if(!r.ok)throw new Error('Keycloak rechazó la sesión ('+r.status+'). Ingresa nuevamente.');
- tokens=await r.json();expires=Date.now()+tokens.expires_in*1000;return tokens;
+ if(version!==sessionVersion)throw new Error('La sesión ha finalizado');
+ if(!r.ok){tokens=null;expires=0;throw new Error('La sesión no pudo renovarse. Ingresa nuevamente.');}
+ const next=await r.json();
+ if(version!==sessionVersion)throw new Error('La sesión ha finalizado');
+ if(typeof next.access_token!=='string'||!Number.isFinite(next.expires_in)||next.expires_in<=0){tokens=null;expires=0;throw new Error('Respuesta de sesión inválida');}
+ tokens=next;expires=Date.now()+tokens.expires_in*1000;return tokens;
 }
 export async function init(config){
  cfg=config;
@@ -32,8 +37,19 @@ export async function login(){
 }
 export async function accessToken(){
  if(!tokens)throw new Error('Se requiere login');
- if(Date.now()>expires-30000)await tokenRequest({grant_type:'refresh_token',client_id:cfg.clientId,refresh_token:tokens.refresh_token});
+ if(Date.now()>expires-30000){
+  if(!refreshing){
+   if(!tokens.refresh_token){tokens=null;throw new Error('Ingresa nuevamente para continuar');}
+   refreshing=tokenRequest({grant_type:'refresh_token',client_id:cfg.clientId,refresh_token:tokens.refresh_token})
+    .catch(error=>{tokens=null;expires=0;throw error;}).finally(()=>{refreshing=null;});
+  }
+  await refreshing;
+ }
+ if(!tokens)throw new Error('La sesión ha finalizado');
  return tokens.access_token;
 }
 export function identity(){const c=decode(tokens.access_token);return (c.preferred_username||c.sub)+' · '+(c.realm_access?.roles||[]).filter(r=>['operador','administrador'].includes(r)).join(', ');}
-export function logout(){const hint=tokens?.id_token;tokens=null;expires=0;const q=new URLSearchParams({client_id:cfg.clientId,post_logout_redirect_uri:cfg.redirectUri});if(hint)q.set('id_token_hint',hint);location.assign(cfg.issuer+'/protocol/openid-connect/logout?'+q);}
+export function logout(){sessionVersion++;const hint=tokens?.id_token;tokens=null;expires=0;const q=new URLSearchParams({client_id:cfg.clientId,post_logout_redirect_uri:cfg.redirectUri});if(hint)q.set('id_token_hint',hint);location.assign(cfg.issuer+'/protocol/openid-connect/logout?'+q);}
+
+export function hasRole(role){return Boolean(tokens&&(decode(tokens.access_token).realm_access?.roles||[]).includes(role));}
+export function subject(){return tokens?decode(tokens.access_token).sub:null;}

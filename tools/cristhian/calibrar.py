@@ -2,7 +2,6 @@
 import argparse,csv
 from pathlib import Path
 from datetime import datetime
-from collections import defaultdict
 
 def evaluate(rows):
     output=[];seen=set()

@@ -1,7 +1,7 @@
 import os
 import jwt
 from jwt import PyJWKClient
-from fastapi import Depends,HTTPException
+from fastapi import Depends,HTTPException,Request
 from fastapi.security import HTTPAuthorizationCredentials,HTTPBearer
 bearer=HTTPBearer(auto_error=False)
 _jwks=None
@@ -21,9 +21,13 @@ def principal(credentials:HTTPAuthorizationCredentials|None=Depends(bearer)):
         raise HTTPException(401,'Token inválido',headers={'WWW-Authenticate':'Bearer'}) from None
 
 def require_roles(*allowed):
-    def dependency(claims=Depends(principal)):
-        roles=claims.get('realm_access',{}).get('roles',[])
-        if not isinstance(roles,list) or not set(roles).intersection(allowed):raise HTTPException(403,'Rol sin permiso')
+    def dependency(request:Request,claims=Depends(principal)):
+        access=claims.get('realm_access',{})
+        roles=access.get('roles',[]) if isinstance(access,dict) else []
+        if not isinstance(roles,list) or not all(isinstance(role,str) for role in roles) or not set(roles).intersection(allowed):
+            raise HTTPException(403,'Rol sin permiso')
+        # Se verifica el estado vigente incluso si faltan secretos: falla cerrado con 503.
+        request.app.state.identity.verify(claims,allowed)
         return claims
     return dependency
 read_access=require_roles('operador','administrador')

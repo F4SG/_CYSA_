@@ -1,4 +1,4 @@
-import argparse,json,platform,socket,subprocess,sys
+import argparse,json,platform,socket,subprocess
 from pathlib import Path
 
 def main():

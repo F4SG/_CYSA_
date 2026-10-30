@@ -1,7 +1,7 @@
 {
   "realm": "cysa",
   "enabled": true,
-  "displayName": "CYSA S1",
+  "displayName": "CYSA",
   "registrationAllowed": false,
   "resetPasswordAllowed": false,
   "accessTokenLifespan": 300,
@@ -100,5 +100,20 @@
       ]
     }
   ],
-  "users": []
+  "users": [],
+  "loginTheme": "cysa",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "es"
+  ],
+  "defaultLocale": "es",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 30,
+  "maxFailureWaitSeconds": 300,
+  "maxDeltaTimeSeconds": 600,
+  "minimumQuickLoginWaitSeconds": 2,
+  "quickLoginCheckMilliSeconds": 1000,
+  "passwordPolicy": "length(12) and maxLength(128)"
 }

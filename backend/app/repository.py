@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 import psycopg
 from psycopg.rows import dict_row
 from cysa.contracts import Conteo,Estado

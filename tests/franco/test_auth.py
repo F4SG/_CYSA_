@@ -7,7 +7,7 @@ import app.auth as auth
 from app.main import create_app
 
 @pytest.fixture
-def jwt_client(repository,monkeypatch):
+def jwt_client(repository,identity_directory,monkeypatch):
     key=rsa.generate_private_key(public_exponent=65537,key_size=2048)
     monkeypatch.setenv('OIDC_ISSUER','https://id.example.invalid/realms/cysa')
     monkeypatch.setenv('OIDC_AUDIENCE','cysa-api')
@@ -19,7 +19,7 @@ def jwt_client(repository,monkeypatch):
         claims={'sub':'synthetic-user','iat':now,'exp':now+timedelta(minutes=5),'iss':'https://id.example.invalid/realms/cysa',
          'aud':'cysa-api','realm_access':{'roles':['operador']}}
         claims.update(changes);return jwt.encode(claims,key,algorithm='RS256')
-    with TestClient(create_app(repository)) as c:yield c,token
+    with TestClient(create_app(repository,identity_directory)) as c:yield c,token
 
 def test_token_firmado_valido(jwt_client):
     c,token=jwt_client

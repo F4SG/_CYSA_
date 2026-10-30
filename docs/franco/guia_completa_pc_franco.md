@@ -51,7 +51,7 @@ Descarga únicamente desde los enlaces oficiales siguientes. Abre los instalador
 | 5 | Paquetes y SUMO | Fijados en requirements | [SUMO 1.27.0](https://pypi.org/project/eclipse-sumo/1.27.0/) |
 | 6 | Detección opcional | Ultralytics 8.4.63 y build PyTorch apropiada | [Ultralytics](https://docs.ultralytics.com/quickstart/) |
 
-Las versiones de los servicios Docker están en infra/.env.example. Se mantiene la combinación de laboratorio de los paquetes base: TimescaleDB 2.19.3 con PostgreSQL 17, Mosquitto 2.0.21, Keycloak 26.7.0 y Nginx 1.28.0. Son referencias por probar, no una certificación del conjunto.
+Las versiones de los servicios Docker están en infra/.env.example. Se mantiene la combinación de laboratorio de los paquetes base: TimescaleDB 2.19.3 con PostgreSQL 17, Mosquitto 2.0.21, Keycloak 26.8.1 y Nginx 1.30.6. Son referencias por probar, no una certificación del conjunto.
 
 El Perfil del Excel menciona PostgreSQL 18.6 y Mosquitto 2.1.2. La desviación está documentada: antes de adaptar S0, confirmar sus versiones y repetir las pruebas. No cambiar imágenes y migraciones sin revisar compatibilidad.
 
