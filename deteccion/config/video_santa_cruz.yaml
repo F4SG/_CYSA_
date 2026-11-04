@@ -3,8 +3,8 @@
 # total 197 frente a 194 contados a mano (+1,5 %). El video no se incluye en el repositorio.
 #
 # Uso (con el stack Docker en marcha para que los conteos lleguen al panel):
-#   & $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --marcar --salida resultados/conteos_video.csv
-# --marcar abre primero el editor sobre el video; al guardar empieza a contar.
+#   & $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --fuente --salida resultados/conteos_video.csv
+# --fuente pregunta cámara o video y después abre el editor de carriles; al guardar empieza a contar.
 configuracion_verificada: false        # se vuelve true al guardar carriles con el editor
 interseccion: DEMO_INT_01
 source: 'REEMPLAZAR/ruta/al/video.mp4'

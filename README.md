@@ -313,6 +313,17 @@ no debe tocar otros flujos. La evidencia de video se midió con una línea de 2 
 & $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --marcar --salida resultados/conteos_video.csv
 ```
 
+Con `--fuente` se elige también la fuente al iniciar: sin valor muestra un menú (**1** cámara, con la
+lista de cámaras por nombre; **2** video, con una ventana para elegir el archivo). También acepta un
+valor directo: `--fuente 0`, `--fuente "camara:USB Cam"` o `--fuente "C:\Video\calle.mp4"`.
+El perfil no se modifica: se crea `resultados/detector/sesion_<perfil>.yaml` con la fuente y sus opciones
+(video: `ritmo_real` y sin captura asíncrona; cámara: `camera_name`). Si la fuente cambió, primero se
+marcan los carriles; si es la misma de la sesión anterior, se reutilizan.
+
+```powershell
+& $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --fuente --salida resultados/conteos_video.csv
+```
+
 El conteo es en vivo: cada 30 s se publica un intervalo por carril y clase, y **Flujo vehicular**
 lo muestra en su siguiente actualización (cada 15 s). No hace falta terminar el video ni la cámara.
 

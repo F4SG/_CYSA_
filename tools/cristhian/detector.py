@@ -96,12 +96,118 @@ def foreground(config,output,mark=None):
         # Guardar y cancelar vuelven al detector; cancelar conserva el YAML anterior.
 
 
+VIDEO_EXT=('.mp4','.avi','.mov','.mkv','.m4v','.wmv')
+
+
+def parse_source(text):
+    """'0' -> cámara por índice, 'camara:Nombre' -> cámara por nombre, otra cosa -> archivo de video."""
+    text=text.strip().strip('"').strip("'")
+    if text.isdigit():return dict(tipo='camara',indice=int(text))
+    if text.lower().startswith(('camara:','cámara:')):
+        name=text.split(':',1)[1].strip()
+        if not name:raise ValueError('Falta el nombre de la cámara después de camara:')
+        return dict(tipo='camara',indice=0,nombre=name)
+    path=Path(text).expanduser()
+    if not path.is_file():raise ValueError(f'No existe el archivo de video: {text}')
+    return dict(tipo='video',valor=str(path.resolve()).replace('\\','/'))
+
+
+def list_camera_names(backend):
+    """[(índice, nombre)] de las cámaras visibles; vacío si no se pueden enumerar."""
+    try:
+        import cv2
+        sys.path.insert(0,str(REPO/'deteccion'))
+        from cysa_detector.camera import list_cameras
+        return [(c.index,c.name) for c in list_cameras(cv2,backend)]
+    except Exception as error:
+        print(f'No se pudieron listar las cámaras ({error}); se pedirá el índice.');return []
+
+
+def pick_video_file():
+    """Ventana para elegir el archivo; None si no hay entorno gráfico o se cancela."""
+    try:
+        import tkinter
+        from tkinter import filedialog
+        root=tkinter.Tk();root.withdraw();root.attributes('-topmost',True)
+        path=filedialog.askopenfilename(title='Video para contar',filetypes=[('Video','*'+' *'.join(VIDEO_EXT)),('Todos','*.*')])
+        root.destroy();return path or None
+    except Exception:return None
+
+
+def ask_source(settings,ask=input,cameras=None,pick_file=pick_video_file):
+    """Menú de consola: cámara (lista por nombre) o archivo de video."""
+    print('Fuente de detección:\n  1) Cámara\n  2) Archivo de video')
+    while True:
+        option=ask('Elegir 1 o 2: ').strip()
+        if option in ('1','2'):break
+    if option=='1':
+        cameras=list_camera_names(settings.get('camera_backend','msmf')) if cameras is None else cameras
+        if not cameras:return parse_source(ask('Índice de la cámara (0, 1...): '))
+        for n,(index,name) in enumerate(cameras,1):print(f'  {n}) {name} (índice {index})')
+        while True:
+            value=ask('Número de la cámara: ').strip()
+            if value.isdigit() and 1<=int(value)<=len(cameras):
+                index,name=cameras[int(value)-1]
+                same=[c for c in cameras if c[1].casefold()==name.casefold()]
+                return dict(tipo='camara',indice=index,nombre=name if len(same)==1 else None)
+    while True:
+        path=pick_file() or ask('Ruta del video (puede arrastrar el archivo aquí): ')
+        try:return parse_source(path)
+        except ValueError as error:print(error)
+
+
+def apply_source(settings,choice):
+    """Copia del YAML con la fuente elegida y las opciones que corresponden a ese tipo de fuente."""
+    s=dict(settings)
+    if choice['tipo']=='video':
+        s['source']=choice['valor'];s.pop('camera_name',None)
+        s['async_inference']=False;s['capture_latest']=False;s['ritmo_real']=True
+    else:
+        s['source']=choice['indice'];s['ritmo_real']=False
+        if choice.get('nombre'):s['camera_name']=choice['nombre']
+        else:s.pop('camera_name',None)
+    return s
+
+
+def session_config(config,choice):
+    """YAML de sesión en resultados/detector/ (no modifica el perfil original).
+
+    Devuelve (ruta, hay_que_marcar). Si la sesión anterior usó la misma fuente se conservan sus carriles;
+    si la fuente cambió, los carriles del perfil pueden no servir y hay que marcarlos.
+    """
+    import yaml
+    RUNTIME.mkdir(parents=True,exist_ok=True)
+    path=RUNTIME/f'sesion_{config.stem}.yaml'
+    base=yaml.safe_load(config.read_text(encoding='utf-8'))
+    settings=apply_source(base,choice)
+    previous=yaml.safe_load(path.read_text(encoding='utf-8')) if path.exists() else None
+    key=lambda c:(c.get('source'),c.get('camera_name'))
+    if previous and key(previous)==key(settings):
+        settings['lanes']=previous.get('lanes',settings.get('lanes'))
+        settings['configuracion_verificada']=previous.get('configuracion_verificada',False)
+        mark=False
+    else:
+        mark=key(settings)!=key(base) or not base.get('configuracion_verificada',False)
+        if mark:settings['configuracion_verificada']=False
+    path.write_text(yaml.safe_dump(settings,allow_unicode=True,sort_keys=False),encoding='utf-8')
+    return path,mark
+
+
 def start(args):
     import yaml
     state=load_state()
     if running(state):raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
     if args.marcar and args.segundo_plano:raise SystemExit('--marcar necesita ventana: no usarlo con --segundo-plano')
     config=args.config.resolve();output=args.salida.resolve()
+    if args.fuente is not None:
+        import yaml
+        settings=yaml.safe_load(config.read_text(encoding='utf-8'))
+        choice=ask_source(settings) if args.fuente=='preguntar' else parse_source(args.fuente)
+        config,need_mark=session_config(config,choice)
+        print(f'Configuración de esta sesión: {config}')
+        if need_mark and not args.marcar:
+            if args.segundo_plano:raise SystemExit('Fuente nueva: marca los carriles primero (sin --segundo-plano)')
+            print('Fuente nueva: primero hay que marcar los carriles.');args.marcar='zona'
     if not args.segundo_plano:
         try:return foreground(config,output,args.marcar)
         except KeyboardInterrupt:return 130
@@ -169,6 +275,8 @@ def main():
     a=sub.add_parser('iniciar');a.add_argument('--config',type=Path,default=REPO/'deteccion/config/carriles_cristhian.yaml')
     a.add_argument('--salida',type=Path,default=REPO/'resultados/conteos_s10.csv')
     a.add_argument('--segundo-plano',action='store_true')
+    a.add_argument('--fuente',nargs='?',const='preguntar',default=None,
+                   help='Elegir la fuente al iniciar: sin valor muestra un menú; o 0/1 (índice), "camara:Nombre" o la ruta de un video')
     a.add_argument('--marcar',nargs='?',const='zona',choices=['zona','linea'],default=None,
                    help='Marcar antes de contar: zona (4 esquinas de la via, por defecto) o linea (2 puntos por carril)')
     a=sub.add_parser('detener');a.add_argument('--espera',type=float,default=20)

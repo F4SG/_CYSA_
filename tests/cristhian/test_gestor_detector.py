@@ -87,3 +87,49 @@ def test_marcar_linea_usa_el_editor_de_dos_puntos(monkeypatch,tmp_path):
     monkeypatch.setattr(m.subprocess,'call',call)
     assert m.foreground(config,output,mark='linea')==0
     assert calls[0][1].endswith('marcar_lineas.py') and calls[0][-2:]==['--config',str(config)]
+
+
+def test_interpretar_fuente(tmp_path):
+    import pytest
+    m=manager();video=tmp_path/'calle.mp4';video.write_bytes(b'')
+    assert m.parse_source('1')==dict(tipo='camara',indice=1)
+    assert m.parse_source('camara:Galaxy S10+')==dict(tipo='camara',indice=0,nombre='Galaxy S10+')
+    assert m.parse_source(f'"{video}"')['tipo']=='video'
+    with pytest.raises(ValueError):m.parse_source(str(tmp_path/'no_existe.mp4'))
+
+
+def test_menu_elige_camara_por_nombre_y_video(tmp_path):
+    m=manager();video=tmp_path/'calle.mp4';video.write_bytes(b'')
+    respuestas=iter(['1','2'])
+    choice=m.ask_source({},ask=lambda _:next(respuestas),cameras=[(0,'Integrada'),(1,'USB Cam')])
+    assert choice==dict(tipo='camara',indice=1,nombre='USB Cam')
+    choice=m.ask_source({},ask=lambda _:'2',pick_file=lambda:str(video))
+    assert choice['tipo']=='video' and choice['valor'].endswith('calle.mp4')
+
+
+def test_fuente_video_crea_sesion_sin_tocar_el_perfil(monkeypatch,tmp_path):
+    import yaml
+    m=manager();monkeypatch.setattr(m,'RUNTIME',tmp_path/'detector')
+    perfil=tmp_path/'carriles.yaml'
+    original={'source':1,'camera_name':'Galaxy S10+','async_inference':True,'capture_latest':True,
+              'configuracion_verificada':True,'lanes':[{'acceso':'N','carril':'N_0'}]}
+    perfil.write_text(yaml.safe_dump(original),encoding='utf-8')
+    video=tmp_path/'calle.mp4';video.write_bytes(b'')
+    sesion,marcar=m.session_config(perfil,m.parse_source(str(video)))
+    s=yaml.safe_load(sesion.read_text(encoding='utf-8'))
+    assert marcar and s['configuracion_verificada'] is False and 'camera_name' not in s
+    assert s['async_inference'] is False and s['capture_latest'] is False and s['ritmo_real'] is True
+    assert yaml.safe_load(perfil.read_text(encoding='utf-8'))==original          # el perfil no cambia
+    s['lanes']=[{'acceso':'N','carril':'N_0','a':[0,0]}];s['configuracion_verificada']=True   # como si se hubiera marcado
+    sesion.write_text(yaml.safe_dump(s),encoding='utf-8')
+    sesion2,marcar2=m.session_config(perfil,m.parse_source(str(video)))         # misma fuente otra vez
+    assert not marcar2 and yaml.safe_load(sesion2.read_text(encoding='utf-8'))['lanes']==s['lanes']
+
+
+def test_misma_camara_del_perfil_no_obliga_a_marcar(monkeypatch,tmp_path):
+    import yaml
+    m=manager();monkeypatch.setattr(m,'RUNTIME',tmp_path/'detector')
+    perfil=tmp_path/'carriles.yaml'
+    perfil.write_text(yaml.safe_dump({'source':0,'camera_name':'USB Cam','configuracion_verificada':True}),encoding='utf-8')
+    _,marcar=m.session_config(perfil,dict(tipo='camara',indice=0,nombre='USB Cam'))
+    assert not marcar
