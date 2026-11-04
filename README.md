@@ -409,7 +409,8 @@ ni detección automática de marcas viales**. Si cambia el teléfono, la escena 
 | **R** | Recalibrar trayectorias solo en modo automático |
 
 En el editor, **ESPACIO** fija/reanuda. Marcar las esquinas **lejana izquierda → lejana derecha →
-cercana derecha → cercana izquierda**. **1–8** cambia cantidad, **U** deshace, **+/−** mueve la línea,
+cercana derecha → cercana izquierda**, siguiendo el borde. Lejana es por donde llegan los vehículos;
+si izquierda y derecha se invierten, el editor lo corrige y el sentido sigue siendo lejana → cercana. **1–8** cambia cantidad, **U** deshace, **+/−** mueve la línea,
 **S** guarda y **Q/Esc** cancela. También hay botones. La división por perspectiva propone anchos
 uniformes: comprobar que coincidan con los carriles reales.
 

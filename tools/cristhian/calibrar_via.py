@@ -16,6 +16,9 @@ def create_lanes(points,count,access='N',direction='both',line_at=.6):
     if not (all(t>1e-8 for t in turns) or all(t< -1e-8 for t in turns)):
         raise ValueError('Las esquinas deben seguir el contorno sin cruzarse')
     if not 0<line_at<1:raise ValueError('La linea debe quedar dentro de la via')
+    # Lo que define el sentido es lejana -> cercana. Si izquierda y derecha se marcaron al revés (contorno en
+    # sentido antihorario en pantalla), se intercambian para que negative_to_positive siga siendo lejana -> cercana.
+    if turns[0]<0:points=[points[1],points[0],points[3],points[2]]
     matrix=cv2.getPerspectiveTransform(np.array([[0,0],[1,0],[1,1],[0,1]],np.float32),np.asarray(points,np.float32))
     def project(x,y):
         p=matrix@np.array([x,y,1.])
@@ -72,8 +75,8 @@ class CalibrationView:
         top=video_height
         text(status,top+25,.56,(0,230,255))
         text(f'SOLO via inferior | {count} carriles',top+50)
-        text('Esquinas: lejana izq., lejana der.,',top+75)
-        text('cercana der., cercana izq. | U: deshacer',top+98)
+        text('Esquinas por el borde: 2 donde llegan',top+75)
+        text('los vehiculos y 2 donde salen | U: deshacer',top+98)
         text('+ / -: mover linea | 1-8: carriles',top+121)
         text(message[:max(20,int(width/8.5))],top+146,.46,(0,230,255))
         entries=[('Fijar / reanudar',ord(' ')),('Deshacer [U]',ord('u')),
@@ -114,7 +117,7 @@ def main():
         point=view.point(x,y)
         if point is not None and len(state.points)<4:state.points.append(point)
     cv2.setMouseCallback(window,click)
-    print('Via inferior: esquina lejana izquierda, lejana derecha, cercana derecha, cercana izquierda.',flush=True)
+    print('Via inferior, siguiendo el borde: las 2 esquinas por donde llegan los vehiculos y luego las 2 por donde salen.',flush=True)
     print('ESPACIO: fijar/reanudar imagen. Incluir solo asfalto de esa via. 1-8: cantidad; U: deshacer; +/-: mover linea; S: guardar; Q: cancelar.',flush=True)
     try:
         while True:

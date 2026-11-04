@@ -22,6 +22,10 @@ Pulsar Espacio de nuevo reanuda la vista y borra las marcas pendientes. Después
 3. Esquina cercana derecha.
 4. Esquina cercana izquierda.
 
+"Lejana" es el borde por donde llegan los vehículos y "cercana" por donde salen; las cuatro siguen el
+borde sin cruzarse. Si se marcan izquierda y derecha al revés, el editor las intercambia: el conteo
+sigue siendo de lejana a cercana (antes ese caso invertía el sentido y casi no contaba).
+
 Elegir un tramo de asfalto que contenga únicamente los carriles de la vía inferior. Excluir vereda,
 separador, puente y controles del reproductor. La herramienta proyecta divisiones de ancho uniforme
 en un rectángulo de referencia a través de una homografía. Esto es una propuesta geométrica,
