@@ -1,5 +1,5 @@
 import pytest
-from marcar_lineas import bloque_yaml, sentido_positivo
+from marcar_lineas import bloque_yaml, guardar, sentido_positivo
 from preparar_calibracion import unir
 from cysa_detector.counter import Lane, LineCounter
 
@@ -56,3 +56,15 @@ def test_limites_corridos_unos_milisegundos():
         filas.append(auto(t.isoformat(), fin.isoformat(), 1)); t = fin
     out = unir([manual(t0.isoformat(), (t0 + timedelta(minutes=5)).isoformat(), 10)], filas)
     assert out[0]['automatico'] == '10'
+
+
+def test_guardar_lineas_en_el_yaml(tmp_path):
+    import yaml
+    ruta = tmp_path / 'video.yaml'
+    ruta.write_text('source: video.mp4\ncrop_to_lanes: true\nconfiguracion_verificada: false\n', encoding='utf-8')
+    guardar(ruta, [((0.3, 0.715), (0.63, 0.545))], 'N')
+    c = yaml.safe_load(ruta.read_text(encoding='utf-8'))
+    assert c['configuracion_verificada'] is True and c['crop_to_lanes'] is False and c['source'] == 'video.mp4'
+    lane = c['lanes'][0]
+    Lane(lane['acceso'], lane['carril'], tuple(lane['a']), tuple(lane['b']), lane['direction'])
+    assert 'polygon' not in lane

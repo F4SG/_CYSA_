@@ -304,7 +304,10 @@ El detector corre en Windows. Iniciar Compose no abre la cámara. **Q/Esc** cier
 El gestor permite que Editar carriles libere la cámara, abra el editor y regrese con la configuración
 recargada. Iniciar directamente el módulo no ofrece ese ciclo automático de edición.
 Con `--marcar` el editor se abre **antes** de contar, sobre la misma fuente del YAML (cámara o video):
-al guardar empieza el conteo; cancelar conserva los carriles anteriores.
+al guardar empieza el conteo; cancelar conserva los carriles anteriores. `--marcar` (o `--marcar zona`)
+pide las 4 esquinas de la vía y crea carriles con zona y línea: cuenta por carril e ignora lo que pasa
+fuera de la vía. `--marcar linea` pide solo 2 puntos por carril (sin zona): más simple, pero la línea
+no debe tocar otros flujos. La evidencia de video se midió con una línea de 2 puntos.
 
 ```powershell
 & $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --marcar --salida resultados/conteos_video.csv

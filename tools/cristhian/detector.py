@@ -73,15 +73,20 @@ def edit_lanes(config,env):
         '--config',str(config),'--carriles',str(count),'--acceso',access,'--direction',direction],cwd=REPO,env=env)
 
 
-def foreground(config,output,mark=False):
+def mark_lines(config,env):
+    """Solo líneas de dos puntos (sin zonas) sobre la fuente del YAML."""
+    return subprocess.call([sys.executable,str(REPO/'tools/cristhian/marcar_lineas.py'),'--config',str(config)],cwd=REPO,env=env)
+
+
+def foreground(config,output,mark=None):
     """El detector libera la cámara antes del editor; después recarga su YAML.
 
-    mark=True abre primero el editor y recién después empieza a contar. Cancelar el editor conserva
-    los carriles anteriores; si no hay carriles guardados el detector no arranca.
+    mark='zona' abre primero el editor de vía (4 esquinas, carriles con zona y línea) y mark='linea'
+    el de líneas de dos puntos; recién después empieza a contar. Cancelar conserva los carriles anteriores.
     """
     env=environment()
     if mark:
-        result=edit_lanes(config,env)
+        result=mark_lines(config,env) if mark=='linea' else edit_lanes(config,env)
         if result:return result
     while True:
         result=subprocess.call(detector_command(config,output),cwd=REPO,env=env)
@@ -164,7 +169,8 @@ def main():
     a=sub.add_parser('iniciar');a.add_argument('--config',type=Path,default=REPO/'deteccion/config/carriles_cristhian.yaml')
     a.add_argument('--salida',type=Path,default=REPO/'resultados/conteos_s10.csv')
     a.add_argument('--segundo-plano',action='store_true')
-    a.add_argument('--marcar',action='store_true',help='Marcar carriles sobre la fuente antes de empezar a contar')
+    a.add_argument('--marcar',nargs='?',const='zona',choices=['zona','linea'],default=None,
+                   help='Marcar antes de contar: zona (4 esquinas de la via, por defecto) o linea (2 puntos por carril)')
     a=sub.add_parser('detener');a.add_argument('--espera',type=float,default=20)
     sub.add_parser('estado')
     a=sub.add_parser('_worker');a.add_argument('--config',type=Path,required=True);a.add_argument('--salida',type=Path,required=True)
