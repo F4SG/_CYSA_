@@ -62,3 +62,15 @@ def test_parada_cooperativa_antes_del_primer_cuadro(tmp_path):
     counter=LineCounter([Lane('N','N_0',(.1,.5),(.4,.5))])
     assert list(source._loop(cap,FakeModel(),counter,{2:'auto'},30,SimpleNamespace(CAP_PROP_FPS=5)))==[]
     assert cap.left==30
+
+
+def test_ritmo_real_reproduce_archivo_a_sus_fps(monkeypatch):
+    import cysa_detector.run as run
+    esperas = []
+    monkeypatch.setattr(run.time, 'sleep', esperas.append)
+    config = dict(CONFIG, source='video.mp4', ritmo_real=True)
+    src = CameraSource(config, datetime.fromisoformat('2026-10-31T07:00:00-04:00'))
+    counter = LineCounter([Lane('N', 'N_0', (0.1, 0.5), (0.4, 0.5))])
+    list(src._loop(FakeCap(10, 10), FakeModel(), counter, {2: 'auto'}, 30, SimpleNamespace(CAP_PROP_FPS=5)))
+    # sleep simulado: el reloj no avanza, así que cada espera es la distancia al cuadro n/fps
+    assert len(esperas) == 10 and esperas[-1] == pytest.approx(1.0, abs=0.05)

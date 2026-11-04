@@ -303,6 +303,15 @@ $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
 El detector corre en Windows. Iniciar Compose no abre la cámara. **Q/Esc** cierra la ejecución.
 El gestor permite que Editar carriles libere la cámara, abra el editor y regrese con la configuración
 recargada. Iniciar directamente el módulo no ofrece ese ciclo automático de edición.
+Con `--marcar` el editor se abre **antes** de contar, sobre la misma fuente del YAML (cámara o video):
+al guardar empieza el conteo; cancelar conserva los carriles anteriores.
+
+```powershell
+& $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --marcar --salida resultados/conteos_video.csv
+```
+
+El conteo es en vivo: cada 30 s se publica un intervalo por carril y clase, y **Flujo vehicular**
+lo muestra en su siguiente actualización (cada 15 s). No hace falta terminar el video ni la cámara.
 
 ### Detector sin ventana
 
@@ -376,6 +385,9 @@ Para contar usar **otro YAML** basado en `calibracion_plantilla.yaml`: definir r
 intersección, CPU/GPU y zonas del archivo; quitar `camera_name` y desactivar `async_inference`.
 `capture_latest` no se usa en archivos. No copiar las zonas del teléfono sin recalibrar.
 El editor puede abrirlo con `calibrar_via.py --config <archivo.yaml>`.
+`deteccion/config/video_santa_cruz.yaml` es un perfil probado con un video real (GPU, 960 px, ver
+[evidencia](docs/cristhian/evidencia_conteo_video.md)). `ritmo_real: true` reproduce el archivo a sus
+FPS para que el panel lo muestre como una cámara en vivo; sin esa opción se procesa tan rápido como permita la PC.
 Para comparar ventanas manuales ejecutar el módulo con `--inicio-video` y la hora real de inicio
 con zona horaria: usa cuadro/FPS como reloj. Sin esa opción usa el tiempo de procesamiento de la PC,
 que no equivale necesariamente al tiempo grabado. El módulo directo requiere entorno y credenciales MQTT.
@@ -424,6 +436,8 @@ YOLO26s sigue preentrenado: no se entrenó otro modelo. El perfil S10+ solicita 
 | `crop_to_lanes` / `roi_padding` | ROI interno de carriles fijos con margen 0,15 |
 | `capture_latest` | Un cuadro reciente pendiente de captura |
 | `async_inference` | Detección separada del video y controles |
+| `iou` | 0,7 en el perfil de video: con 0,5 el NMS entre clases descartaba motos pegadas a autos |
+| `conteo_reenlace_s` / `conteo_reenlace_distancia` | Opcional. Moto tapada justo en la línea que reaparece con otro ID: se cuenta una vez (1 s / 0,25 en el perfil de video) |
 
 El ROI aumenta el tamaño útil de vehículos pequeños. Restaura coordenadas al cuadro completo
 **antes** de asignar, contar y dibujar. El visor conserva toda la imagen.
@@ -583,6 +597,8 @@ y cobertura completa. Hay plantillas en `data/cristhian/plantillas/`.
 
 Con manual cero no hay base porcentual: se revisan falsos positivos. Medir auto, micro y moto por
 separado. **Micro** se apoya en la clase COCO bus; no garantiza clasificar todos los micros locales.
+Cada intervalo de 30 s se asigna a la ventana manual donde cae su punto medio. Medición con un video
+real de 10:49 min: total +1,5 %, auto 0 %, moto 3 %, micro 57 % ([evidencia](docs/cristhian/evidencia_conteo_video.md)).
 
 ### Problemas frecuentes
 
@@ -608,7 +624,7 @@ separado. **Micro** se apoya en la clase COCO bus; no garantiza clasificar todos
 | --- | --- |
 | Monitoreo, contratos, persistencia, inventario y roles | Implementados con pruebas locales de software/integración |
 | Webcam/S10+ | Flujo de laboratorio disponible; precisión y latencia de campo pendientes |
-| RF-03 ≤10 % | Falta medición representativa y revisión por clase/carril |
+| RF-03 ≤10 % | Un video real: total +1,5 % (micro fuera de meta). Falta repetir en otro video o en campo |
 | RF-12 | Gestión S1 implementada; MFA y pruebas continúan en S2/S3 |
 | RF-02, autorización, prioridades, emulador e integración final | Mantienen su planificación en los sprints siguientes |
 | Aprobación formal y despliegue | Requieren aceptación y validación; no se infieren de pytest |
@@ -625,6 +641,7 @@ separado. **Micro** se apoya en la clase COCO bus; no garantiza clasificar todos
 | Usuarios, 30/10 | API conectada a Keycloak, ambos roles, clave temporal, estado y autoprotección |
 | Interfaz, 30/10 | Acceso/panel unificados, español, temas persistentes, navegación adaptable y diálogos |
 | Revisión, 30/10 | Perfiles funcionales, permisos vigentes, protección de intentos, correcciones OIDC/claves, componentes actualizados y limpieza |
+| Conteo con video, 03/11 | Reenlace de motos tapadas, iou 0,7, camiones como auto, perfil de video, `--marcar`, `ritmo_real` y evidencia RF-03 |
 
 ### Guías detalladas
 
@@ -632,6 +649,7 @@ separado. **Micro** se apoya en la clase COCO bus; no garantiza clasificar todos
 - [Calibrar solo vía inferior](docs/cristhian/calibrar_solo_via_inferior.md).
 - [Mejora de motos y ROI](docs/cristhian/mejora_motos_roi.md).
 - [Visor, controles y edición](docs/cristhian/visor_completo.md).
+- [Evidencia de conteo con video real](docs/cristhian/evidencia_conteo_video.md).
 - [Gestión de usuarios](docs/franco/gestion_usuarios_local.md).
 - [Interfaz y temas](docs/franco/interfaz_cysa.md).
 - [Auditoría de seguridad](docs/franco/auditoria_seguridad_2026_10_30.md).

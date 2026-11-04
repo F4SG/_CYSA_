@@ -1,8 +1,8 @@
 """Une el conteo manual con el CSV agregado del detector y genera la entrada de calibrar.py.
 
 El conteo manual suele hacerse en ventanas largas (por ejemplo 5 min) y el detector publica cada 30 s.
-Para cada ventana manual se suman los intervalos automáticos del mismo carril y clase que caen
-COMPLETOS dentro de la ventana. Si esos intervalos no cubren toda la ventana, la fila se rechaza
+Para cada ventana manual se suman los intervalos automáticos del mismo carril y clase cuyo punto
+medio cae dentro de la ventana. Si esos intervalos no cubren toda la ventana, la fila se rechaza
 (no se comparan ventanas parciales o no sincronizadas).
 
 Uso:
@@ -33,9 +33,11 @@ def unir(manual, automatico):
         ini, fin = fecha(m['inicio']), fecha(m['fin'])
         if fin <= ini:
             raise ValueError(f'Fila {n}: fin debe ser posterior a inicio')
+        # Un intervalo pertenece a la ventana si su punto medio cae dentro. Los intervalos del detector
+        # duran 30 s más hasta un cuadro, así que sus límites se corren unos milisegundos por bloque.
         dentro = [a for a in automatico
                   if all(a[k] == m[k] for k in CLAVE)
-                  and fecha(a['inicio']) >= ini and fecha(a['fin']) <= fin]
+                  and ini <= fecha(a['inicio']) + (fecha(a['fin']) - fecha(a['inicio'])) / 2 < fin]
         cubierto = sum((fecha(a['fin']) - fecha(a['inicio'])).total_seconds() for a in dentro)
         ventana = (fin - ini).total_seconds()
         if cubierto < ventana - TOLERANCIA_S:

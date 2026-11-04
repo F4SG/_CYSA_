@@ -1,6 +1,7 @@
 """Geometría y conteo sin dependencias de cámara; no conserva imágenes."""
 from dataclasses import dataclass
 from collections import Counter
+import math
 @dataclass(frozen=True)
 class Lane:
     acceso:str
@@ -35,13 +36,24 @@ def on_segment(a,b,p,q):
     """El recorrido debe intersectar el segmento finito, no su prolongación."""
     return cross(p,q,a)*cross(p,q,b)<=0
 class LineCounter:
-    def __init__(self,lanes,ttl_s=120):
-        self.lanes=lanes;self.ttl=ttl_s;self.tracks={};self.counts=Counter()
+    """Cuenta un vehículo una vez por carril cuando su punto de apoyo cruza la línea en el sentido pedido.
+
+    relink_s / relink_dist (apagado por defecto): si un vehículo queda tapado justo al cruzar (por ejemplo una
+    moto pegada a un auto), el seguidor lo pierde antes de la línea y lo retoma después con otro ID, y ningún
+    ID cruza. Un ID nuevo de la misma clase que aparece del lado de destino, a menos de relink_dist de donde
+    desapareció otro del lado de origen hace como máximo relink_s segundos, se cuenta como ese cruce.
+    classes: clases que se cuentan (por defecto las del contrato S1).
+    """
+    def __init__(self,lanes,ttl_s=120,relink_s=0.0,relink_dist=0.0,classes=('auto','micro','moto')):
+        self.lanes=lanes;self.ttl=ttl_s;self.tracks={};self.counts=Counter();self.classes=tuple(classes)
+        self.relink_s=float(relink_s);self.relink_dist=float(relink_dist)
+        if not 0<=self.relink_s<=5 or not 0<=self.relink_dist<=1:raise ValueError('relink fuera de rango')
         if len({(l.acceso,l.carril) for l in lanes})!=len(lanes):raise ValueError('Carril repetido')
     def observe(self,track_id,clase,point,timestamp,lane_key=None):
-        if clase not in ['auto','micro','moto']:return
+        if clase not in self.classes:return
+        new=track_id not in self.tracks
         record=self.tracks.get(track_id,{'last':{},'counted':set(),'seen':timestamp})
-        record['seen']=timestamp
+        record['seen']=timestamp;record['clase']=clase
         for i,l in enumerate(self.lanes):
             side=cross(l.a,l.b,point)
             if abs(side)<1e-7:continue
@@ -55,9 +67,29 @@ class LineCounter:
                     intersection=(p[0]+t*(point[0]-p[0]),p[1]+t*(point[1]-p[1]))
                     if l.contains(intersection):
                         self.counts[(l.acceso,l.carril,clase)]+=1;record['counted'].add(i)
+            elif new and self.relink_s>0 and (lane_key is None or lane_key==(l.acceso,l.carril)):
+                lost=self._lost(i,l,side,point,clase,timestamp)
+                if lost is not None:
+                    self.counts[(l.acceso,l.carril,clase)]+=1;record['counted'].add(i);lost['counted'].add(i)
             record['last'][i]=(side,point)
         self.tracks[track_id]=record
+    def _lost(self,i,l,side,point,clase,timestamp):
+        """ID desaparecido del lado de origen cuyo hueco hasta `point` cruza la línea (o None)."""
+        best=None
+        for r in self.tracks.values():
+            if i in r['counted'] or r['clase']!=clase or not 0<timestamp-r['seen']<=self.relink_s or i not in r['last']:continue
+            old,p=r['last'][i]
+            direction='negative_to_positive' if old<0<side else 'positive_to_negative'
+            gap=math.dist(p,point)
+            if old*side<0 and l.direction in ['both',direction] and gap<=self.relink_dist and on_segment(l.a,l.b,p,point):
+                t=old/(old-side)
+                if l.contains((p[0]+t*(point[0]-p[0]),p[1]+t*(point[1]-p[1]))) and (best is None or gap<best[0]):best=(gap,r)
+        return best and best[1]
     def prune(self,timestamp):
         self.tracks={k:v for k,v in self.tracks.items() if timestamp-v['seen']<=self.ttl}
     def snapshot(self):return dict(self.counts)
     def reset_interval(self):self.counts.clear() # Conservar IDs para no duplicar al cambiar de intervalo.
+
+def counter_options(config):
+    """Lee del YAML las opciones del contador: conteo_reenlace_s y conteo_reenlace_distancia."""
+    return dict(relink_s=config.get('conteo_reenlace_s',0.0),relink_dist=config.get('conteo_reenlace_distancia',0.0))

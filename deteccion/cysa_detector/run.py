@@ -5,7 +5,7 @@ from uuid import uuid4
 from cysa.contracts import Conteo
 from cysa.interfaces import FuenteDeteccion
 from cysa.mqtt import Publisher
-from .counter import Lane,LineCounter
+from .counter import Lane,LineCounter,counter_options
 from .auto_lanes import AutoLanes
 from .camera import open_source
 from .inference import detection_settings
@@ -38,7 +38,7 @@ class CameraSource(FuenteDeteccion):
         try:
             lanes=[Lane(x['acceso'],x['carril'],tuple(x['a']),tuple(x['b']),x['direction'],tuple(tuple(p) for p in x.get('polygon',[]))) for x in c.get('lanes',[])]
             if c.get('auto_carriles'):lanes=[]
-            counter=LineCounter(lanes)
+            counter=LineCounter(lanes,**counter_options(c))
             model=YOLO(c.get('model','yolo26n.pt'))
             mapping={int(k):v for k,v in c['class_map'].items()}
             if c.get('async_inference',False):
@@ -66,6 +66,10 @@ class CameraSource(FuenteDeteccion):
             clock=lambda n:time.monotonic()
             wall=lambda t:datetime.now(timezone.utc)
         show=bool(c.get('show',False))
+        # ritmo_real: un archivo de video se reproduce a sus FPS y no tan rápido como permita la GPU,
+        # para demostrar el conteo en vivo en el panel igual que con una cámara.
+        pace=bool(c.get('ritmo_real',False)) and isinstance(c.get('source'),str) and inference is None
+        pace_fps=(cap.get(cv2.CAP_PROP_FPS) or 30.) if pace else None;pace_start=None
         window='CYSA - Deteccion vehicular'
         if show:
             from .preview import PreviewControls
@@ -101,6 +105,10 @@ class CameraSource(FuenteDeteccion):
                     continue
                 break
             h,w=frame.shape[:2];n+=1
+            if pace:
+                if pace_start is None:pace_start=time.monotonic()
+                wait=pace_start+n/pace_fps-time.monotonic()
+                if wait>0:time.sleep(wait)
             if n==1:
                 print(f'Resolucion recibida: {w}x{h}. Solicitada: {c.get("camera_width","predeterminada")}x{c.get("camera_height","predeterminada")}.',flush=True)
             inference_frame,offset=crop_for_lanes(frame,counter.lanes,c)
@@ -137,7 +145,7 @@ class CameraSource(FuenteDeteccion):
                     stable=stable+1 if proposal and matches else 1 if proposal else 0
                     candidate=proposal
                     if stable>=3:
-                        auto.lanes=proposal;counter=LineCounter(proposal);ready=True
+                        auto.lanes=proposal;counter=LineCounter(proposal,**counter_options(c));ready=True
                         self.calibrated_lanes=proposal
                         print(f'Carriles automaticos activos: {len(proposal)}. Conteo iniciado.',flush=True)
                 # No publicar ceros ni contar el tiempo usado para calibrar.
@@ -227,7 +235,7 @@ class CameraSource(FuenteDeteccion):
                 yield from flush(end)
                 counter.reset_interval();start=end;tick=now_tick
             if recalibrate:
-                auto=AutoLanes(c.get('acceso_auto','N'));counter=LineCounter([])
+                auto=AutoLanes(c.get('acceso_auto','N'));counter=LineCounter([],**counter_options(c))
                 ready=False;candidate=[];stable=0;last_attempt=None;totals={};cached_labels=[]
                 calibration_start=now_tick;tick=now_tick;start=wall(tick)
                 print('Recalibrando: se reinician los totales de pantalla; CSV anterior conservado.',flush=True)

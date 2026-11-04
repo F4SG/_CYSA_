@@ -44,3 +44,15 @@ def test_rechaza_ventana_sin_cobertura_completa():
     filas = [auto('2026-11-01T12:00:00Z', '2026-11-01T12:00:30Z', 3)]
     with pytest.raises(ValueError):
         unir([manual('2026-11-01T12:00:00Z', '2026-11-01T12:01:00Z', 3)], filas)
+
+
+def test_limites_corridos_unos_milisegundos():
+    # 10 intervalos de 30,033 s (30 s + 1 cuadro): el último termina después del límite de 5 min.
+    from datetime import datetime, timedelta
+    t0 = datetime.fromisoformat('2026-11-01T12:00:00+00:00')
+    filas, t = [], t0
+    for _ in range(11):
+        fin = t + timedelta(seconds=30.033)
+        filas.append(auto(t.isoformat(), fin.isoformat(), 1)); t = fin
+    out = unir([manual(t0.isoformat(), (t0 + timedelta(minutes=5)).isoformat(), 10)], filas)
+    assert out[0]['automatico'] == '10'

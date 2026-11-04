@@ -61,20 +61,32 @@ def detector_command(config,output,stop=None):
 
 
 
-def foreground(config,output):
-    """El detector libera la cámara antes del editor; después recarga su YAML."""
+def edit_lanes(config,env):
+    """Abre el editor de carriles sobre la misma fuente del YAML (cámara o primer cuadro del video)."""
     import yaml
+    settings=yaml.safe_load(config.read_text(encoding='utf-8'))
+    lanes=settings.get('lanes',[])
+    count=max(1,min(8,len(lanes) or 3))
+    direction=lanes[0].get('direction','negative_to_positive') if lanes else 'negative_to_positive'
+    access=lanes[0].get('acceso','N') if lanes else 'N'
+    return subprocess.call([sys.executable,str(REPO/'tools/cristhian/calibrar_via.py'),
+        '--config',str(config),'--carriles',str(count),'--acceso',access,'--direction',direction],cwd=REPO,env=env)
+
+
+def foreground(config,output,mark=False):
+    """El detector libera la cámara antes del editor; después recarga su YAML.
+
+    mark=True abre primero el editor y recién después empieza a contar. Cancelar el editor conserva
+    los carriles anteriores; si no hay carriles guardados el detector no arranca.
+    """
     env=environment()
+    if mark:
+        result=edit_lanes(config,env)
+        if result:return result
     while True:
         result=subprocess.call(detector_command(config,output),cwd=REPO,env=env)
         if result!=20:return result
-        settings=yaml.safe_load(config.read_text(encoding='utf-8'))
-        count=max(1,min(8,len(settings.get('lanes',[])) or 3))
-        lanes=settings.get('lanes',[])
-        direction=lanes[0].get('direction','negative_to_positive') if lanes else 'negative_to_positive'
-        access=lanes[0].get('acceso','N') if lanes else 'N'
-        result=subprocess.call([sys.executable,str(REPO/'tools/cristhian/calibrar_via.py'),
-            '--config',str(config),'--carriles',str(count),'--acceso',access,'--direction',direction],cwd=REPO,env=env)
+        result=edit_lanes(config,env)
         if result:return result
         # Guardar y cancelar vuelven al detector; cancelar conserva el YAML anterior.
 
@@ -83,9 +95,10 @@ def start(args):
     import yaml
     state=load_state()
     if running(state):raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
+    if args.marcar and args.segundo_plano:raise SystemExit('--marcar necesita ventana: no usarlo con --segundo-plano')
     config=args.config.resolve();output=args.salida.resolve()
     if not args.segundo_plano:
-        try:return foreground(config,output)
+        try:return foreground(config,output,args.marcar)
         except KeyboardInterrupt:return 130
     RUNTIME.mkdir(parents=True,exist_ok=True)
     lock=RUNTIME/'inicio.lock'
@@ -151,6 +164,7 @@ def main():
     a=sub.add_parser('iniciar');a.add_argument('--config',type=Path,default=REPO/'deteccion/config/carriles_cristhian.yaml')
     a.add_argument('--salida',type=Path,default=REPO/'resultados/conteos_s10.csv')
     a.add_argument('--segundo-plano',action='store_true')
+    a.add_argument('--marcar',action='store_true',help='Marcar carriles sobre la fuente antes de empezar a contar')
     a=sub.add_parser('detener');a.add_argument('--espera',type=float,default=20)
     sub.add_parser('estado')
     a=sub.add_parser('_worker');a.add_argument('--config',type=Path,required=True);a.add_argument('--salida',type=Path,required=True)

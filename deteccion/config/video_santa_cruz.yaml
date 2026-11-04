@@ -1,0 +1,39 @@
+# Perfil para un archivo de video de una calle de Santa Cruz (vía inferior, vehículos que bajan hacia la cámara).
+# Resultado medido con un video real de 10:49 min (ver docs/cristhian/evidencia_conteo_video.md):
+# total 197 frente a 194 contados a mano (+1,5 %). El video no se incluye en el repositorio.
+#
+# Uso (con el stack Docker en marcha para que los conteos lleguen al panel):
+#   & $py tools/cristhian/detector.py iniciar --config deteccion/config/video_santa_cruz.yaml --marcar --salida resultados/conteos_video.csv
+# --marcar abre primero el editor sobre el video; al guardar empieza a contar.
+configuracion_verificada: false        # se vuelve true al guardar carriles con el editor
+interseccion: DEMO_INT_01
+source: 'REEMPLAZAR/ruta/al/video.mp4'
+model: deteccion/modelos/yolo26s.pt   # mismo peso que el perfil del celular
+device: 0                              # GPU; en CPU 960 px no llega a tiempo real
+prueba: true
+intervalo_s: 30
+confidence: 0.3
+show: true
+auto_carriles: false
+ritmo_real: true                       # reproducir el archivo a sus FPS, como una cámara en vivo
+class_map:
+  2: auto
+  5: micro
+  3: moto
+  7: auto                              # S1: camiones dentro de auto; la clase camion llega en S2
+# Línea medida en la evidencia. El editor (--marcar) la reemplaza por zonas y líneas de la vía.
+lanes:
+  - acceso: N
+    carril: N_0
+    a: [0.30, 0.715]
+    b: [0.63, 0.545]
+    direction: negative_to_positive
+imgsz: 960
+track_confidence: 0.1
+class_confidence:
+  3: 0.15
+agnostic_nms: true
+end2end: false
+iou: 0.7                               # 0.5 descartaba motos superpuestas con autos
+conteo_reenlace_s: 1.0                 # moto tapada al cruzar que reaparece con otro ID
+conteo_reenlace_distancia: 0.25

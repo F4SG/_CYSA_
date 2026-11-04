@@ -56,3 +56,23 @@ def test_fallo_editor_no_inicia_detector_otra_vez(monkeypatch,tmp_path):
     def call(command,**kw):calls.append(command);return next(codes)
     monkeypatch.setattr(m.subprocess,'call',call)
     assert m.foreground(config,tmp_path/'salida.csv')==1 and len(calls)==2
+
+
+def test_marcar_abre_editor_antes_del_primer_conteo(monkeypatch,tmp_path):
+    m=manager();config=tmp_path/'video.yaml';output=tmp_path/'conteos.csv'
+    config.write_text('lanes: []\n',encoding='utf-8')
+    monkeypatch.setattr(m,'environment',lambda:{})
+    calls=[];returns=iter([0,0])
+    def call(command,**kw):calls.append(command);return next(returns)
+    monkeypatch.setattr(m.subprocess,'call',call)
+    assert m.foreground(config,output,mark=True)==0
+    assert calls[0][1].endswith('calibrar_via.py') and calls[1]==m.detector_command(config,output)
+
+
+def test_marcar_cancelado_con_error_no_inicia(monkeypatch,tmp_path):
+    m=manager();config=tmp_path/'video.yaml';config.write_text('lanes: []\n',encoding='utf-8')
+    monkeypatch.setattr(m,'environment',lambda:{})
+    calls=[]
+    def call(command,**kw):calls.append(command);return 2
+    monkeypatch.setattr(m.subprocess,'call',call)
+    assert m.foreground(config,tmp_path/'s.csv',mark=True)==2 and len(calls)==1
