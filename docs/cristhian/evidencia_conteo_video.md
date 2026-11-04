@@ -24,6 +24,9 @@ Fecha: 03/11/2026. Responsable: Cristhian. Perfil: `deteccion/config/video_santa
 
 Equipo de prueba: laptop con RTX 3070 Ti, YOLO26s a 960 px, Ultralytics 8.4.63.
 
+Con la vía marcada con el editor de **4 esquinas** (zona y línea, `--marcar zona`) en vez de la línea
+de 2 puntos, el mismo video dio auto 154, moto 32 y micro 8: **total 194 frente a 194 (0,0 %)**.
+
 ## Cómo se llegó al perfil
 
 Cada paso se probó con el mismo video y la misma línea; los números son del video completo.

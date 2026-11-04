@@ -53,3 +53,14 @@ def test_lejana_a_cercana_cuenta_aunque_se_inviertan_izquierda_y_derecha(points)
     for k,f in enumerate([.1,.3,.5,.7,.9]):
         counter.observe(1,'auto',tuple(np.array(lejana)+f*(np.array(cercana)-np.array(lejana))),k,key)
     assert counter.snapshot()=={('N','N_0','auto'):1}
+
+
+def test_flecha_apunta_hacia_donde_se_cuenta():
+    m=module();row=m.create_lanes(POINTS,1,direction='negative_to_positive')[0]
+    (sx,sy),(ex,ey)=m.direction_arrow(row)
+    lane=as_lanes([row])[0];counter=LineCounter([lane]);key=(lane.acceso,lane.carril)
+    counter.observe(1,'auto',(sx-(ex-sx),sy-(ey-sy)),0,key);counter.observe(1,'auto',(ex,ey),1,key)   # recorre la flecha
+    assert counter.snapshot()=={('N','N_0','auto'):1}
+    row['direction']='positive_to_negative'
+    (_,_),(ex2,ey2)=m.direction_arrow(row)
+    assert (ex2-sx)*(ex-sx)+(ey2-sy)*(ey-sy)<0

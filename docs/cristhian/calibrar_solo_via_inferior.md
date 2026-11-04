@@ -25,6 +25,8 @@ Pulsar Espacio de nuevo reanuda la vista y borra las marcas pendientes. Después
 "Lejana" es el borde por donde llegan los vehículos y "cercana" por donde salen; las cuatro siguen el
 borde sin cruzarse. Si se marcan izquierda y derecha al revés, el editor las intercambia: el conteo
 sigue siendo de lejana a cercana (antes ese caso invertía el sentido y casi no contaba).
+Antes de guardar, revisar la **flecha roja** en el centro de cada línea: debe apuntar hacia donde van
+los vehículos. **D** invierte el sentido.
 
 Elegir un tramo de asfalto que contenga únicamente los carriles de la vía inferior. Excluir vereda,
 separador, puente y controles del reproductor. La herramienta proyecta divisiones de ancho uniforme

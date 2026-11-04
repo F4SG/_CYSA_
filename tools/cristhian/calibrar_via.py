@@ -33,6 +33,15 @@ def create_lanes(points,count,access='N',direction='both',line_at=.6):
         lanes.append(dict(acceso=access,carril=lane.carril,polygon=[list(p) for p in polygon],a=list(a),b=list(b),direction=direction))
     return lanes
 
+def direction_arrow(lane,length=.06):
+    """Inicio y fin (normalizados) de una flecha en el centro de la línea que apunta hacia donde se cuenta."""
+    (ax,ay),(bx,by)=lane['a'],lane['b']
+    nx,ny=-(by-ay),bx-ax                      # normal hacia el lado positivo de cross(a,b,p)
+    norm=math.hypot(nx,ny) or 1.
+    sign={'negative_to_positive':1,'positive_to_negative':-1}.get(lane['direction'],0)
+    mx,my=(ax+bx)/2,(ay+by)/2
+    return (mx,my),(mx+sign*length*nx/norm,my+sign*length*ny/norm)
+
 def frame_ready(frame):
     """Descarta negro/uniforme de arranque; no acredita enfoque ni precisión."""
     import numpy as np
@@ -77,7 +86,7 @@ class CalibrationView:
         text(f'SOLO via inferior | {count} carriles',top+50)
         text('Esquinas por el borde: 2 donde llegan',top+75)
         text('los vehiculos y 2 donde salen | U: deshacer',top+98)
-        text('+ / -: mover linea | 1-8: carriles',top+121)
+        text('+/-: mover linea | 1-8: carriles | D: sentido',top+121)
         text(message[:max(20,int(width/8.5))],top+146,.46,(0,230,255))
         entries=[('Fijar / reanudar',ord(' ')),('Deshacer [U]',ord('u')),
                  ('Carril -1',ord(str(max(1,count-1)))),('Carril +1',ord(str(min(8,count+1)))),
@@ -106,6 +115,7 @@ def main():
     cap=open_source(cv2,config.get('source',1),config)
     window='CYSA - Calibrar SOLO via inferior'
     state=PreviewState();view=CalibrationView();count=args.carriles;line_at=.6;message='';saved=False;displayed=False
+    direction=args.direction
     cv2.namedWindow(window,cv2.WINDOW_NORMAL)
     def click(event,x,y,*unused):
         nonlocal message
@@ -118,7 +128,7 @@ def main():
         if point is not None and len(state.points)<4:state.points.append(point)
     cv2.setMouseCallback(window,click)
     print('Via inferior, siguiendo el borde: las 2 esquinas por donde llegan los vehiculos y luego las 2 por donde salen.',flush=True)
-    print('ESPACIO: fijar/reanudar imagen. Incluir solo asfalto de esa via. 1-8: cantidad; U: deshacer; +/-: mover linea; S: guardar; Q: cancelar.',flush=True)
+    print('ESPACIO: fijar/reanudar imagen. Incluir solo asfalto de esa via. 1-8: cantidad; U: deshacer; +/-: mover linea; D: invertir sentido (flecha roja); S: guardar; Q: cancelar.',flush=True)
     try:
         while True:
             # Mantener la captura abierta y drenada incluso al marcar sobre la imagen fija.
@@ -134,15 +144,17 @@ def main():
                 cv2.circle(preview,pixel(point),6,(0,255,255),-1)
                 cv2.putText(preview,str(i+1),pixel(point),cv2.FONT_HERSHEY_SIMPLEX,.7,(255,255,255),2)
             if len(points)==4:
-                try:lanes=create_lanes(points,count,args.acceso,direction=args.direction,line_at=line_at)
+                try:lanes=create_lanes(points,count,args.acceso,direction=direction,line_at=line_at)
                 except ValueError as error:message=str(error)
                 for i,lane in enumerate(lanes):
                     color=[(0,255,255),(0,255,100),(255,180,0),(255,100,200)][i%4]
                     cv2.polylines(preview,[np.array([pixel(pt) for pt in lane['polygon']],np.int32)],True,color,2)
                     cv2.line(preview,pixel(lane['a']),pixel(lane['b']),color,3)
                     cv2.putText(preview,lane['carril'],pixel(lane['a']),cv2.FONT_HERSHEY_SIMPLEX,.65,color,2)
+                    start,end=direction_arrow(lane)
+                    if start!=end:cv2.arrowedLine(preview,pixel(start),pixel(end),(0,0,255),4,tipLength=.4)
             status='IMAGEN FIJA: marca las 4 esquinas' if state.frozen else 'EN VIVO: ESPACIO para fijar' if state.ready else 'Esperando imagen del S10+'
-            preview=view.render(preview,status,count,message or f'Esquinas marcadas: {len(points)}/4',cv2)
+            preview=view.render(preview,status,count,message or (f'Esquinas marcadas: {len(points)}/4' if len(points)<4 else 'Revisa la flecha roja: D la invierte'),cv2)
             if not displayed:
                 cv2.resizeWindow(window,preview.shape[1],preview.shape[0]);displayed=True
             cv2.imshow(window,preview);key=cv2.waitKey(20)&255
@@ -155,6 +167,9 @@ def main():
             if key==ord('u') and points:points.pop();message=''
             if key in (ord('+'),ord('=')):line_at=min(.9,line_at+.05)
             if key==ord('-'):line_at=max(.1,line_at-.05)
+            if key==ord('d'):
+                direction={'negative_to_positive':'positive_to_negative','positive_to_negative':'negative_to_positive'}.get(direction,'negative_to_positive')
+                message='Flecha roja = sentido que se cuenta'
             if key==ord('s'):
                 if not state.frozen or not lanes:message='Fija una imagen valida y marca las cuatro esquinas';continue
                 config.update(lanes=lanes,auto_carriles=False,configuracion_verificada=True,show=True,show_outside_lanes=False)
