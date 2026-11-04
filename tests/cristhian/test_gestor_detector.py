@@ -133,3 +133,10 @@ def test_misma_camara_del_perfil_no_obliga_a_marcar(monkeypatch,tmp_path):
     perfil.write_text(yaml.safe_dump({'source':0,'camera_name':'USB Cam','configuracion_verificada':True}),encoding='utf-8')
     _,marcar=m.session_config(perfil,dict(tipo='camara',indice=0,nombre='USB Cam'))
     assert not marcar
+
+
+def test_acceso_directo_elige_fuente_y_marca_antes_de_contar():
+    raiz=Path(__file__).resolve().parents[2]
+    ps1=(raiz/'iniciar_conteo.ps1').read_text(encoding='ascii')
+    assert 'tools/cristhian/detector.py iniciar' in ps1 and '--fuente' in ps1 and '--marcar' in ps1
+    assert 'iniciar_conteo.ps1' in (raiz/'iniciar_conteo.bat').read_text(encoding='ascii')

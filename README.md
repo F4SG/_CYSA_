@@ -293,6 +293,17 @@ docker compose --env-file infra/.env -f infra/compose.yaml stop
 `stop` mantiene contenedores; `down` los elimina pero conserva volúmenes salvo indicación contraria.
 **`down -v` borra los volúmenes:** no usarlo para solucionar fallos de acceso o actualización.
 
+### Conteo paso a paso (recomendado)
+
+Doble clic en **`iniciar_conteo.bat`** (o `.\iniciar_conteo.ps1` en PowerShell desde la carpeta del repo):
+
+1. Elegir la fuente: **1** cámara (lista por nombre) o **2** archivo de video (ventana para elegirlo).
+2. Marcar la vía: 4 esquinas, revisar la **flecha roja** (D la invierte) y guardar con **S**.
+3. Contar: la ventana muestra los totales y el panel recibe los intervalos cada 30 s. **Q** termina.
+
+Usa el perfil `deteccion/config/video_santa_cruz.yaml` (GPU, 960 px). Para CPU: `-Perfil deteccion/config/carriles_cristhian.yaml`;
+para marcar solo 2 puntos por carril: `-Linea`. Los conteos quedan también en `resultados/conteos_<fecha>.csv`.
+
 ### Detector con vista previa
 
 ```powershell
