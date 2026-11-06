@@ -41,7 +41,7 @@ Si `docker info` falla, abre Docker Desktop y espera a que termine de iniciar. D
 ### Descargar y crear el entorno
 
 ```powershell
-git clone https://github.com/F4SG/-CYSA-.git CYSA
+git clone https://github.com/F4SG/_CYSA_.git CYSA
 Set-Location CYSA
 py -3.12 -m venv .venv
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path

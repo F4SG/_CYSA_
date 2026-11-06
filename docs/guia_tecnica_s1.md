@@ -215,8 +215,8 @@ las pruebas JavaScript, no para servir el panel. Para la validación formal revi
 ### Instalación nueva
 
 ```powershell
-git clone https://github.com/F4SG/-CYSA-.git
-Set-Location ./-CYSA-
+git clone https://github.com/F4SG/_CYSA_.git CYSA
+Set-Location CYSA
 py -3.12 -m venv .venv
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
 & $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r tests/requirements.txt
