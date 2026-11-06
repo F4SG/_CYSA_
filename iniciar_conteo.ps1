@@ -10,12 +10,12 @@ $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
 Set-Location $repo
 $py = if ($Python) { $Python } else { Join-Path $repo '.venv\Scripts\python.exe' }
-if (-not (Test-Path $py)) { throw "No se encontro $py. Crear el entorno virtual como indica el README (seccion 6)." }
+if (-not (Test-Path $py)) { throw "No se encontro $py. Crear el entorno virtual como indica el README (seccion 2)." }
 if (-not (Test-Path (Join-Path $repo 'infra\runtime\clientes\deteccion.env'))) {
   throw 'Faltan las credenciales locales (infra\runtime\clientes\deteccion.env). Ejecutar primero la instalacion del README.'
 }
 try { Invoke-RestMethod -TimeoutSec 3 http://localhost:8088/health | Out-Null }
-catch { Write-Host 'Aviso: el panel no responde en http://localhost:8088. Iniciar Docker (README seccion 7) para ver los conteos.' -ForegroundColor Yellow }
+catch { Write-Host 'Aviso: el panel no responde en http://localhost:8088. Iniciar Docker (README seccion 6) para ver los conteos.' -ForegroundColor Yellow }
 if (-not $Salida) { $Salida = 'resultados/conteos_' + (Get-Date -Format 'yyyyMMdd_HHmm') + '.csv' }
 $modo = if ($Linea) { 'linea' } else { 'zona' }
 Write-Host '1) Elegir la fuente  2) Marcar los carriles (flecha roja = sentido, D invierte, S guarda)  3) Contar (Q termina)' -ForegroundColor Cyan
