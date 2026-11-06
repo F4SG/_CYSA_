@@ -268,4 +268,4 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 
 Esta configuración es de laboratorio local. La validación en campo, MFA, auditoría integral y activación de planes corresponden a etapas posteriores.
 
-Equipo: **Franco, Cristhian y Leonardo**.
+Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
