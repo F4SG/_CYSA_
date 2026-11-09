@@ -1,4 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
+import csv
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sys
@@ -8,12 +11,13 @@ from uuid import uuid4
 import pytest
 import yaml
 
-from casos_estudio import escenario_sumo
-from casos_estudio.entorno import FabricaLaboratorio, preparar_entorno
-from casos_estudio.escenario_sumo import EscenarioSUMOBuilder
-from casos_estudio.fuentes import CreadorCamara, CreadorVideo, FuenteCamara, FuenteVideo
-from cysa.contracts import Conteo, PlanBorrador
-from cysa_detector import run
+from simulacion import sumo_base as escenario_sumo
+from simulacion.sumo_base import EscenarioSUMOBuilder
+from cysa.contracts import Conteo, Estado, PlanBorrador
+from cysa_detector import entorno, run
+from cysa_detector.coordinacion import CoordinadorDetector
+from cysa_detector.entorno import FabricaLaboratorio, FabricaSombra, preparar_entorno
+from cysa_detector.run import CreadorCamara, CreadorVideo, FuenteCamara, FuenteVideo
 from cysa_detector.counter import Lane, LineCounter
 from tools.cristhian import detector
 
@@ -177,3 +181,117 @@ def test_alternativa_a_singleton_aisla_conteos_de_dos_camaras():
     b.observe(7, 'auto', (.5, .3), 1)
     b.observe(7, 'auto', (.5, .7), 2)
     assert b.snapshot() == {('N', 'N_0', 'auto'): 1}
+
+
+def test_cli_detector_usa_creadores_y_anexa_sin_duplicar_cabecera(monkeypatch, tmp_path, conteo):
+    fuentes = []
+    publicados = []
+
+    def emitir(self):
+        fuentes.append((type(self), self.inicio_video))
+        yield conteo.model_copy(update={'mensaje_id': uuid4()})
+
+    class Publicador:
+        def __init__(self, _):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def publish(self, evento):
+            publicados.append(evento)
+
+    monkeypatch.setattr(run.CameraSource, 'eventos', emitir)
+    monkeypatch.setattr(run, 'Publisher', Publicador)
+    perfil = tmp_path / 'perfil.yaml'
+    salida = tmp_path / 'conteos.csv'
+    inicio = datetime(2026, 10, 26, 12, tzinfo=timezone.utc)
+    for source, opciones in ((0, []), ('video.mp4', ['--inicio-video', inicio.isoformat()])):
+        perfil.write_text(yaml.safe_dump(dict(source=source, configuracion_verificada=True)), encoding='utf-8')
+        monkeypatch.setattr(sys, 'argv', ['run', '--config', str(perfil),
+                            '--salida-conteos', str(salida), *opciones])
+        assert run.main() == 0
+
+    with salida.open(encoding='utf-8', newline='') as stream:
+        filas = list(csv.DictReader(stream))
+    assert fuentes == [(FuenteCamara, None), (FuenteVideo, inicio)]
+    assert [fila['mensaje_id'] for fila in filas] == [str(evento.mensaje_id) for evento in publicados]
+
+
+def test_singleton_excluye_otra_sesion_y_se_libera_al_fallar(tmp_path):
+    coordinador = CoordinadorDetector()
+    assert CoordinadorDetector() is coordinador
+    destino = tmp_path / 'no-debe-crearse.csv'
+
+    def segundo_detector():
+        with pytest.raises(RuntimeError, match='sesión de detector activa'):
+            run.guardar_conteos(None, destino)
+
+    with pytest.raises(ValueError, match='falló la sesión'):
+        with coordinador.sesion(), ThreadPoolExecutor(max_workers=1) as hilo:
+            hilo.submit(segundo_detector).result(timeout=3)
+            raise ValueError('falló la sesión')
+
+    assert not destino.exists()
+    with coordinador.sesion():
+        pass
+
+
+def test_cli_entornos_compone_familias_y_valida_la_marca(monkeypatch, tmp_path, conteo):
+    salida = tmp_path / 'laboratorio.jsonl'
+    datos = REPO / 'data/franco/ejemplos'
+    monkeypatch.setattr(sys, 'argv', ['entorno', 'laboratorio', '--conteo', str(datos / 'conteo_DEMO.json'),
+                        '--plan', str(datos / 'plan_borrador_DEMO.json'), '--salida', str(salida)])
+    assert entorno.main() == 0
+    estado_lab, conteo_lab = [json.loads(linea) for linea in salida.read_text(encoding='utf-8').splitlines()]
+    assert estado_lab['datos']['plan_activo'] == 'DEMO_FIJO'
+    assert conteo_lab['datos']['prueba'] is True
+
+    def eventos(self):
+        assert isinstance(self, FuenteVideo)
+        yield conteo
+
+    monkeypatch.setattr(run.CameraSource, 'eventos', eventos)
+    estado = Estado.model_validate_json((datos / 'estado_DEMO.json').read_bytes())
+    config = dict(source='video.mp4', interseccion=estado.interseccion,
+                  configuracion_verificada=True, prueba=True)
+    fabrica = FabricaSombra(config, estado)
+    _, controlador = preparar_entorno(fabrica)
+    with pytest.raises(NotImplementedError, match='Activación deshabilitada'):
+        controlador.enviar_plan(PlanBorrador.model_validate_json((datos / 'plan_borrador_DEMO.json').read_bytes()))
+
+    perfil = tmp_path / 'perfil.yaml'
+    perfil.write_text(yaml.safe_dump(config), encoding='utf-8')
+    salida = tmp_path / 'sombra.jsonl'
+    argv = ['entorno', 'sombra', '--config', str(perfil), '--estado', str(datos / 'estado_DEMO.json'),
+            '--salida', str(salida)]
+    monkeypatch.setattr(sys, 'argv', argv)
+    assert entorno.main() == 0
+    estado_sombra, conteo_sombra = [json.loads(linea) for linea in salida.read_text(encoding='utf-8').splitlines()]
+    assert estado_sombra['datos'] == estado.model_dump(mode='json')
+    assert conteo_sombra['datos'] == conteo.model_dump(mode='json')
+
+    perfil.write_text(yaml.safe_dump(dict(config, prueba=False)), encoding='utf-8')
+    sin_crear = tmp_path / 'mezcla.jsonl'
+    monkeypatch.setattr(sys, 'argv', [*argv[:-1], str(sin_crear)])
+    with pytest.raises(SystemExit) as error:
+        entorno.main()
+    assert error.value.code == 2 and not sin_crear.exists()
+
+
+def test_cli_sumo_prepara_red_suministrada_sin_ejecutar(monkeypatch, tmp_path):
+    flujos = tmp_path / 'flujos.csv'
+    flujos.write_text(FLUJOS.read_text(encoding='utf-8-sig').replace('true', 'false'), encoding='utf-8')
+    accesos = tmp_path / 'accesos.csv'
+    accesos.write_text('acceso,entrada,salida\nN,N_in,S_out\nS,S_in,N_out\n'
+                      'E,E_in,W_out\nW,W_in,E_out\n', encoding='utf-8')
+    salida = tmp_path / 'existente'
+    salida.mkdir()
+    monkeypatch.setattr(sys, 'argv', ['sumo_base', '--network', str(escenario_sumo.DEMO / 'red.net.xml'),
+                        '--access-map', str(accesos), '--counts', str(flujos), '--out', str(salida),
+                        '--seed', '14', '--prepare-only'])
+    escenario_sumo.main()
+    assert {archivo.name for archivo in salida.iterdir()} == {'red.net.xml', 'flujos.rou.xml', 'base.sumocfg'}

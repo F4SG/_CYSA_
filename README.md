@@ -13,6 +13,8 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 - Ingresar como operador o administrador; gestionar usuarios con el segundo rol.
 - Guardar conteos agregados en CSV y enviarlos al panel mediante MQTT.
 
+[Uso de los patrones creacionales y de los entornos de prueba](casos_estudio/README.md).
+
 ## 1. Antes de instalar
 
 Esta guía usa **Windows y PowerShell**. Ejecuta los comandos desde la carpeta del repositorio.

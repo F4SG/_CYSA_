@@ -1,6 +1,6 @@
 # Patrones creacionales en CYSA
 
-En Sprint 1, Prototype está disponible en el gestor del detector. Los otros patrones se estudian por separado. El piloto trabaja en modo sombra.
+Los patrones se usan desde el detector, la herramienta de simulación y el comando de entornos. El piloto trabaja en modo sombra.
 
 ## Clonar y calibrar un perfil
 
@@ -13,28 +13,28 @@ python tools/cristhian/detector.py iniciar --config deteccion/config/camara_int_
 
 Usa el ID de la intersección registrado en el inventario. También puedes indicar un índice de cámara o un archivo de video con `--fuente`. El perfil queda pendiente de calibración. En el editor, guarda los carriles de la escena nueva antes de contar.
 
-## Casos de estudio
+## Ejecutar el detector y preparar SUMO
 
-| Patrón | Comportamiento del caso |
-| --- | --- |
-| Factory Method | `fuentes.py` crea fuentes de cámara y video que comparten el procesamiento. La operación común cierra el generador si falla el consumidor. |
-| Builder | `escenario_sumo.py` valida una red con plan fijo, demanda de prueba y correspondencias. Prepara una carpeta nueva con red, rutas y configuración para SUMO. |
-| Abstract Factory | `entorno.py` compone una fuente de prueba y un emulador en memoria. Ambos verifican la marca de prueba y la intersección. |
-| Singleton | Las pruebas muestran cómo un contador por cámara aísla los conteos, incluso cuando dos cámaras asignan el mismo ID de seguimiento. |
+El comando habitual del detector selecciona el creador de cámara o video según el YAML. Ambos usan el mismo procesamiento y cierran los recursos si falla la publicación. El Singleton permite una sesión por proceso. Cada sesión crea su cámara, modelo y contador.
 
-Para preparar un escenario sin ejecutar SUMO:
+El comando habitual de SUMO prepara y valida el escenario antes de ejecutar la simulación. Para preparar solo los archivos, agrega `--prepare-only`.
 
-```python
-from casos_estudio.escenario_sumo import EscenarioSUMOBuilder
-
-escenario = (
-    EscenarioSUMOBuilder()
-    .con_red_demo()
-    .con_demanda("data/leonardo/ejemplos/flujos_DEMO.csv")
-    .con_semilla(42)
-    .con_salida("escenario_demo")
-    .construir()
-)
+```powershell
+python simulacion/sumo_base.py --demo --counts data/leonardo/ejemplos/flujos_DEMO.csv --seed 42 --out resultados/escenario_preparado --prepare-only
 ```
 
-Las pruebas de estos casos están en `tests/test_patrones_creacionales.py` y se ejecutan con el resto de la suite de Sprint 1.
+Usa `--network` y `--access-map` en lugar de `--demo` para suministrar una red con plan fijo y su mapa de accesos. El resultado preparado contiene red, rutas y configuración. Ejecuta SUMO por separado con el archivo `base.sumocfg` y la semilla indicada.
+
+## Ejecutar un entorno
+
+Desde la raíz, usa el Python del detector y configura las rutas de importación.
+
+```powershell
+$env:PYTHONPATH = "$PWD/shared;$PWD/deteccion"
+python -m cysa_detector.entorno laboratorio --conteo data/franco/ejemplos/conteo_DEMO.json --plan data/franco/ejemplos/plan_borrador_DEMO.json --salida laboratorio.jsonl
+python -m cysa_detector.entorno sombra --config perfil_calibrado.yaml --estado estado_observado.json --salida sombra.jsonl
+```
+
+Laboratorio reproduce mensajes `Conteo` marcados como prueba. El plan opcional cambia el estado del emulador en memoria. Sombra usa el detector del perfil y lee una instantánea del mensaje `Estado` de la misma intersección, con la misma marca de prueba. En sombra el controlador bloquea el envío de planes. Ambos comandos generan JSONL local con el estado y los conteos.
+
+Las pruebas de integración de los patrones están en `tests/test_patrones_creacionales.py` y se ejecutan con la suite de CYSA.

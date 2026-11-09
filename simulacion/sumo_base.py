@@ -1,8 +1,10 @@
 """Genera red DEMO o reutiliza una red real con su plan fijo. Solo CLI."""
-import argparse,csv,json,os,shutil,subprocess,sys
+import argparse,csv,json,shutil,subprocess
+from dataclasses import dataclass
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from datetime import datetime
-from xml.etree.ElementTree import Element,SubElement,ElementTree
+from xml.etree.ElementTree import Element,SubElement,ElementTree,ParseError,parse
 
 def binary(name):
     found=shutil.which(name)
@@ -22,8 +24,6 @@ def load_counts(path):
         if key in seen:raise ValueError('Intervalo/carril/clase duplicado')
         seen.add(key);ints.add(r['interseccion'])
     if len(ints)!=1:raise ValueError('Ejecutar una intersección por escenario')
-    if sum(r['cantidad'] for r in rows)==0:raise ValueError('Sin vehículos no existe una demora base medible')
-    if sum(r['cantidad'] for r in rows)==0:raise ValueError('Sin vehículos no existe una demora base medible')
     if sum(r['cantidad'] for r in rows)==0:raise ValueError('Sin vehículos no existe una demora base medible')
     # Rechazar intervalos que se superpongan para el mismo carril y clase.
     groups={}
@@ -96,36 +96,171 @@ def summarize(tripinfo,path,prueba):
         for access,values in sorted(groups.items()):w.writerow({'acceso':access,'vehiculos_completados':len(values),'demora_media_timeLoss_s':f'{sum(values)/len(values):.6f}','prueba':str(prueba).lower()})
     return sum(map(len,groups.values())),unfinished
 
-def main():
-    p=argparse.ArgumentParser();p.add_argument('--counts',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
-    p.add_argument('--demo',action='store_true');p.add_argument('--network',type=Path);p.add_argument('--access-map',type=Path);p.add_argument('--seed',type=int,default=42)
-    a=p.parse_args();rows=load_counts(a.counts);out=a.out.resolve()
-    if out.exists() and any(out.iterdir()):p.error('Usar una carpeta de salida nueva/vacía para no mezclar resultados')
-    out.mkdir(parents=True,exist_ok=True)
-    if a.demo:
-        if any(r['prueba'].lower()!='true' for r in rows):p.error('La red DEMO requiere todos los conteos marcados prueba=true')
-        network,mapping=demo_network(out);prueba=True
-    else:
-        if not a.network or not a.access_map:p.error('Para red real proporcionar --network y --access-map; el plan fijo debe estar en la red')
-        # Reutilizar la red .net.xml completa; programas adicionales se incorporan con netconvert antes de este comando.
-        network=out/'red.net.xml';shutil.copyfile(a.network,network)
-        with a.access_map.open(encoding='utf-8-sig',newline='') as f:mapping={r['acceso']:(r['entrada'],r['salida']) for r in csv.DictReader(f)}
-        prueba=any(r['prueba'].lower()=='true' for r in rows)
-    last=build_routes(rows,mapping,out)
-    config=Element('configuration');inputs=SubElement(config,'input');SubElement(inputs,'net-file',value='red.net.xml');SubElement(inputs,'route-files',value='flujos.rou.xml')
-    timing=SubElement(config,'time');SubElement(timing,'begin',value='0');SubElement(timing,'end',value=str(last+900))
-    processing=SubElement(config,'processing');SubElement(processing,'time-to-teleport',value='-1')
-    output=SubElement(config,'output');SubElement(output,'tripinfo-output',value='tripinfo.xml');SubElement(output,'tripinfo-output.write-unfinished',value='true')
-    write_xml(out/'base.sumocfg',config)
-    command=[binary('sumo'),'-c',str(out/'base.sumocfg'),'--seed',str(a.seed),'--no-step-log','true','--duration-log.disable','true']
-    subprocess.run(command,cwd=out,check=True)
-    completed,unfinished=summarize(out/'tripinfo.xml',out/'demora_base.csv',prueba)
-    expected=sum(r['cantidad'] for r in rows)
-    status={'prueba':prueba,'geometria':'SINTETICA' if a.demo else 'SUMINISTRADA_NO_VALIDADA','semilla':a.seed,
-      'esperados':expected,'completados':completed,'incompletos':unfinished,'criterio':'timeLoss promedio por acceso, sin incluir departDelay',
-      'version_sumo':subprocess.check_output([binary('sumo'),'--version'],text=True).splitlines()[0],
-      'fuente_conteos':str(a.counts),'comando':command,'validacion_piloto_real':False}
-    (out/'ejecucion.json').write_text(json.dumps(status,indent=2,ensure_ascii=False),encoding='utf-8')
-    if unfinished or completed!=expected:raise SystemExit('CORRIDA INCOMPLETA: revisar vehículos no completados antes de interpretar demora')
+
+DEMO = Path(__file__).resolve().parent / 'escenarios' / 'DEMO'
+DEMO_MAP = {'N': ('N_in', 'S_out'), 'S': ('S_in', 'N_out'),
+            'E': ('E_in', 'W_out'), 'W': ('W_in', 'E_out')}
+
+
+@dataclass(frozen=True)
+class EscenarioSUMO:
+    red: Path
+    rutas: Path
+    config: Path
+    semilla: int
+    demanda: Path
+    esperados: int
+    prueba: bool
+    demo: bool
+
+
+class EscenarioSUMOBuilder:
+    def __init__(self):
+        self.red = None
+        self.accesos = None
+        self.demanda = None
+        self.salida = None
+        self.semilla = 42
+        self.generar_demo = False
+
+    def con_red_demo(self, *, generar=False):
+        self.generar_demo = generar
+        self.red = DEMO / 'red.net.xml'
+        self.accesos = None
+        return self
+
+    def con_red(self, red, accesos):
+        self.generar_demo = False
+        self.red = Path(red)
+        self.accesos = Path(accesos)
+        return self
+
+    def con_demanda(self, demanda):
+        self.demanda = Path(demanda)
+        return self
+
+    def con_salida(self, salida):
+        self.salida = Path(salida)
+        return self
+
+    def con_semilla(self, semilla):
+        self.semilla = semilla
+        return self
+
+    def construir(self):
+        if self.red is None or self.demanda is None or self.salida is None:
+            raise ValueError('Completar red, demanda y salida')
+        if not isinstance(self.semilla, int) or isinstance(self.semilla, bool):
+            raise ValueError('La semilla debe ser un entero')
+        salida = self.salida.resolve()
+        if salida.exists() and (not salida.is_dir() or any(salida.iterdir())):
+            raise FileExistsError('Usar una carpeta de salida nueva/vacía para no mezclar resultados')
+        rows = load_counts(self.demanda)
+        marcas = [row['prueba'].lower() == 'true' for row in rows]
+        demo = self.accesos is None
+        if demo and not all(marcas):
+            raise ValueError('La red DEMO requiere todos los conteos marcados prueba=true')
+        if demo:
+            mapping = DEMO_MAP
+        else:
+            with self.accesos.open(encoding='utf-8-sig', newline='') as archivo:
+                mapping = {}
+                reader = csv.DictReader(archivo)
+                if not {'acceso', 'entrada', 'salida'} <= set(reader.fieldnames or []):
+                    raise ValueError('El mapa requiere las columnas acceso, entrada y salida')
+                for row in reader:
+                    acceso = row['acceso']
+                    if not acceso:
+                        raise ValueError('El mapa contiene un acceso vacío')
+                    if acceso in mapping:
+                        raise ValueError(f'Acceso repetido: {acceso}')
+                    mapping[acceso] = (row['entrada'], row['salida'])
+
+        red = parse(self.red).getroot()
+        if not any(plan.get('type') == 'static' and plan.find('phase') is not None
+                   for plan in red.findall('tlLogic')):
+            raise ValueError('La red debe incluir un plan fijo con fases')
+        edges = {edge.get('id') for edge in red.findall('edge')}
+        conexiones = {(item.get('from'), item.get('to')) for item in red.findall('connection')}
+        for acceso, par in mapping.items():
+            if not set(par) <= edges:
+                raise ValueError(f'El mapa usa aristas desconocidas para {acceso}')
+            if par not in conexiones:
+                raise ValueError(f'Las aristas del acceso {acceso} no están conectadas')
+        for row in rows:
+            if row['acceso'] not in mapping:
+                raise ValueError(f'Acceso sin correspondencia: {row["acceso"]}')
+
+        # Reutilizar la configuración base y publicar los archivos juntos.
+        config = parse(DEMO / 'base.sumocfg').getroot()
+        salida.parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=salida.parent, prefix='.sumo-') as temporal:
+            preparado = Path(temporal) / 'escenario'
+            preparado.mkdir()
+            if demo and self.generar_demo:
+                _, mapping = demo_network(preparado)
+            else:
+                shutil.copyfile(self.red, preparado / 'red.net.xml')
+            duracion = build_routes(rows, mapping, preparado)
+            config.find('time/end').set('value', str(duracion + 900))
+            write_xml(preparado / 'base.sumocfg', config)
+            if salida.exists():
+                salida.rmdir()  # Solo se reemplaza una carpeta vacía.
+            preparado.rename(salida)
+
+        return EscenarioSUMO(salida / 'red.net.xml', salida / 'flujos.rou.xml',
+                             salida / 'base.sumocfg', self.semilla, self.demanda,
+                             sum(row['cantidad'] for row in rows), any(marcas), demo)
+
+
+def ejecutar_escenario(escenario):
+    out = escenario.config.parent
+    command = [binary('sumo'), '-c', str(escenario.config), '--seed', str(escenario.semilla),
+               '--no-step-log', 'true', '--duration-log.disable', 'true']
+    subprocess.run(command, cwd=out, check=True)
+    completed, unfinished = summarize(out / 'tripinfo.xml', out / 'demora_base.csv', escenario.prueba)
+    status = {
+        'prueba': escenario.prueba,
+        'geometria': 'SINTETICA' if escenario.demo else 'SUMINISTRADA_NO_VALIDADA',
+        'semilla': escenario.semilla, 'esperados': escenario.esperados,
+        'completados': completed, 'incompletos': unfinished,
+        'criterio': 'timeLoss promedio por acceso, sin incluir departDelay',
+        'version_sumo': subprocess.check_output([binary('sumo'), '--version'], text=True).splitlines()[0],
+        'fuente_conteos': str(escenario.demanda), 'comando': command, 'validacion_piloto_real': False,
+    }
+    (out / 'ejecucion.json').write_text(json.dumps(status, indent=2, ensure_ascii=False), encoding='utf-8')
+    if unfinished or completed != escenario.esperados:
+        raise SystemExit('CORRIDA INCOMPLETA: revisar vehículos no completados antes de interpretar demora')
     print('Corrida terminada. Ver demora_base.csv y ejecucion.json. Esto no valida el piloto real.')
-if __name__=='__main__':main()
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--counts', type=Path, required=True)
+    p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--demo', action='store_true')
+    p.add_argument('--network', type=Path)
+    p.add_argument('--access-map', type=Path)
+    p.add_argument('--seed', type=int, default=42)
+    p.add_argument('--prepare-only', action='store_true', help='Preparar los archivos sin ejecutar SUMO')
+    a = p.parse_args()
+
+    builder = EscenarioSUMOBuilder().con_demanda(a.counts).con_salida(a.out).con_semilla(a.seed)
+    if a.demo:
+        builder.con_red_demo(generar=not a.prepare_only)
+    elif a.network and a.access_map:
+        builder.con_red(a.network, a.access_map)
+    else:
+        p.error('Para red real proporcionar --network y --access-map; el plan fijo debe estar en la red')
+    try:
+        escenario = builder.construir()
+    except (OSError, ValueError, KeyError, ParseError) as error:
+        p.error(str(error))
+    if a.prepare_only:
+        print(f'Escenario preparado en {escenario.config}. Semilla: {escenario.semilla}.')
+        return
+    ejecutar_escenario(escenario)
+
+
+if __name__ == '__main__':
+    main()

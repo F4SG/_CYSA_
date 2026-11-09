@@ -1,4 +1,6 @@
 import argparse,csv,time
+from abc import ABC, abstractmethod
+from contextlib import closing
 from pathlib import Path
 from datetime import datetime,timedelta,timezone
 from uuid import uuid4
@@ -11,6 +13,12 @@ from .camera import open_source
 from .inference import detection_settings
 from .roi import crop_for_lanes,restore_box
 from .delivery import QueuedPublisher
+from .coordinacion import CoordinadorDetector
+
+def validar_inicio_video(inicio_video):
+    if inicio_video is not None and (inicio_video.tzinfo is None or inicio_video.utcoffset() is None):
+        raise ValueError('inicio_video requiere zona horaria, p. ej. 2026-10-31T07:00:00-04:00')
+
 
 class CameraSource(FuenteDeteccion):
     def __init__(self,config,inicio_video=None):
@@ -18,8 +26,7 @@ class CameraSource(FuenteDeteccion):
         self.edit_requested=False
         # inicio_video: hora real en que empezó la grabación. Activa el reloj del video (cuadro/fps)
         # en vez del reloj de la PC, para que los intervalos coincidan con un conteo manual del mismo video.
-        if inicio_video is not None and (inicio_video.tzinfo is None or inicio_video.utcoffset() is None):
-            raise ValueError('inicio_video requiere zona horaria, p. ej. 2026-10-31T07:00:00-04:00')
+        validar_inicio_video(inicio_video)
         self.inicio_video=inicio_video
     def eventos(self):
         import cv2
@@ -245,6 +252,86 @@ class CameraSource(FuenteDeteccion):
         if ready and n>0 and 0<(end-start).total_seconds()<=30.5:
             yield from flush(end)
 
+
+class FuenteCamara(CameraSource):
+    def __init__(self, config, inicio_video=None):
+        if not isinstance(config.get('source', 0), int):
+            raise ValueError('La cámara local requiere un índice')
+        super().__init__(config, inicio_video)
+
+
+class FuenteVideo(CameraSource):
+    def __init__(self, config, inicio_video=None):
+        if not isinstance(config.get('source'), str):
+            raise ValueError('La fuente secuencial requiere una ruta o URL')
+        super().__init__(config, inicio_video)
+
+
+class CreadorDetector(ABC):
+    def __init__(self, config, inicio_video=None):
+        validar_inicio_video(inicio_video)
+        self.config = config
+        self.inicio_video = inicio_video
+
+    @abstractmethod
+    def crear_fuente(self) -> CameraSource:
+        ...
+
+    def ejecutar(self, publicar):
+        fuente = self.crear_fuente()
+        # CameraSource.eventos es un generador con cierre de recursos en finally.
+        with closing(fuente.eventos()) as eventos:
+            for evento in eventos:
+                publicar(evento)
+        return fuente.edit_requested
+
+
+class CreadorCamara(CreadorDetector):
+    def crear_fuente(self):
+        return FuenteCamara(self.config, self.inicio_video)
+
+
+class CreadorVideo(CreadorDetector):
+    def crear_fuente(self):
+        return FuenteVideo(self.config, self.inicio_video)
+
+
+def creador_detector(config, inicio_video=None):
+    tipo = CreadorCamara if isinstance(config.get('source', 0), int) else CreadorVideo
+    return tipo(config, inicio_video)
+
+
+def validar_calibracion(config):
+    if not config.get('auto_carriles') and not config.get('configuracion_verificada', False):
+        raise ValueError('Adaptar y verificar líneas/fuente y marcar configuracion_verificada=true')
+
+
+def guardar_conteos(creador, salida):
+    with CoordinadorDetector().sesion():
+        salida.parent.mkdir(parents=True, exist_ok=True)
+        with salida.open('a', encoding='utf-8', newline='') as out, Publisher('cysa-deteccion') as pub, QueuedPublisher(pub) as delivery:
+            writer = None
+
+            def publicar(evento):
+                nonlocal writer
+                fila = evento.model_dump(mode='json')
+                if writer is None:
+                    writer = csv.DictWriter(out, fieldnames=list(fila))
+                    if out.tell() == 0:
+                        writer.writeheader()
+                # El CSV permite reintentar con el mismo UUID si el broker no confirma.
+                writer.writerow(fila)
+                out.flush()
+                delivery.publish(evento)
+                print(f'[{datetime.now():%H:%M:%S}] Conteo registrado y encolado -> '
+                      f'{evento.clase}: {evento.cantidad} ({evento.acceso}/{evento.carril})')
+
+            try:
+                return 20 if creador.ejecutar(publicar) else 0
+            except KeyboardInterrupt:
+                return 0
+
+
 def main():
     import yaml
     p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True)
@@ -259,23 +346,10 @@ def main():
     if a.stop_file:config['stop_file']=str(a.stop_file.resolve())
     if a.auto_carriles:config['auto_carriles']=True
     if a.calibracion_s is not None:config['calibracion_s']=a.calibracion_s
-    if not config.get('auto_carriles') and not config.get('configuracion_verificada',False):p.error('Adaptar y verificar líneas/fuente y marcar configuracion_verificada=true')
-    source=CameraSource(config,a.inicio_video)
-    a.salida_conteos.parent.mkdir(parents=True,exist_ok=True)
-    exists=a.salida_conteos.exists() and a.salida_conteos.stat().st_size>0
-    with a.salida_conteos.open('a',encoding='utf-8',newline='') as out,Publisher('cysa-deteccion') as pub,QueuedPublisher(pub) as delivery:
-        writer=None
-        try:
-            for event in source.eventos():
-                row=event.model_dump(mode='json')
-                if writer is None:
-                    writer=csv.DictWriter(out,fieldnames=list(row))
-                    if not exists:writer.writeheader()
-                # El CSV permite reintentar un evento con el mismo UUID si el broker no confirma.
-                writer.writerow(row);out.flush();delivery.publish(event)
-                print(f'[{datetime.now().strftime("%H:%M:%S")}] Conteo registrado y encolado -> {event.clase}: {event.cantidad} ({event.acceso}/{event.carril})')
-        except KeyboardInterrupt:pass
-    # La cámara y MQTT ya están cerrados antes de abrir el editor en el gestor.
-    if source.edit_requested:return 20
-    return 0
+    try:
+        validar_calibracion(config)
+        creador = creador_detector(config, a.inicio_video)
+    except ValueError as error:
+        p.error(str(error))
+    return guardar_conteos(creador, a.salida_conteos)
 if __name__=='__main__':raise SystemExit(main())
