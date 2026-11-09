@@ -1,5 +1,6 @@
 """Inicia, consulta y detiene el detector; todos los archivos son locales a resultados/."""
-import argparse,json,os,subprocess,sys,time
+import argparse,json,os,re,subprocess,sys,time
+from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
@@ -158,7 +159,7 @@ def ask_source(settings,ask=input,cameras=None,pick_file=pick_video_file):
 
 def apply_source(settings,choice):
     """Copia del YAML con la fuente elegida y las opciones que corresponden a ese tipo de fuente."""
-    s=dict(settings)
+    s=deepcopy(settings)
     if choice['tipo']=='video':
         s['source']=choice['valor'];s.pop('camera_name',None)
         s['async_inference']=False;s['capture_latest']=False;s['ritmo_real']=True
@@ -167,6 +168,57 @@ def apply_source(settings,choice):
         if choice.get('nombre'):s['camera_name']=choice['nombre']
         else:s.pop('camera_name',None)
     return s
+
+
+# Los perfiles exportados solo llevan opciones del detector. Las credenciales
+# de MQTT se cargan por separado desde el archivo de entorno.
+PROFILE_FIELDS = frozenset("""
+    acceso_auto agnostic_nms async_inference auto_carriles calibracion_s
+    camera_backend camera_fps camera_height camera_width capture_latest
+    class_confidence class_map confidence conteo_reenlace_distancia
+    conteo_reenlace_s crop_to_lanes device end2end imgsz intervalo_s iou
+    lanes model prueba roi_padding show show_outside_lanes track_confidence tracker
+""".split())
+LANE_FIELDS = frozenset('acceso carril a b direction polygon'.split())
+
+
+def clonar_perfil(settings, interseccion, choice):
+    """Crea datos de configuración independientes para otra fuente o intersección."""
+    if not isinstance(settings, dict):
+        raise ValueError('El perfil base debe ser un mapa YAML')
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', interseccion):
+        raise ValueError('Intersección inválida: usar el ID del inventario')
+    perfil = {key: value for key, value in settings.items() if key in PROFILE_FIELDS}
+    if 'lanes' in perfil:
+        lanes = perfil['lanes']
+        if not isinstance(lanes, list) or any(not isinstance(lane, dict) for lane in lanes):
+            raise ValueError('Los carriles del perfil deben ser una lista de mapas')
+        perfil['lanes'] = [
+            {key: value for key, value in lane.items() if key in LANE_FIELDS}
+            for lane in lanes
+        ]
+    copia = apply_source(perfil, choice)
+    copia.update(interseccion=interseccion, configuracion_verificada=False, auto_carriles=False)
+    return copia
+
+
+def guardar_perfil(args):
+    import yaml
+
+    base = yaml.safe_load(args.config.read_text(encoding='utf-8'))
+    copia = clonar_perfil(base, args.interseccion, parse_source(args.fuente))
+    contenido = yaml.safe_dump(copia, allow_unicode=True, sort_keys=False)
+    # Abrir en modo exclusivo para proteger perfiles existentes incluso si se
+    # lanzan dos clonaciones al mismo tiempo.
+    archivo = args.salida.open('x', encoding='utf-8')
+    try:
+        with archivo:
+            archivo.write(contenido)
+    except OSError:
+        args.salida.unlink(missing_ok=True)
+        raise
+    print(f'Perfil guardado en {args.salida}. Marca los carriles antes de iniciar.')
+    return 0
 
 
 def session_config(config,choice):
@@ -181,11 +233,11 @@ def session_config(config,choice):
     base=yaml.safe_load(config.read_text(encoding='utf-8'))
     settings=apply_source(base,choice)
     previous=yaml.safe_load(path.read_text(encoding='utf-8')) if path.exists() else None
-    key=lambda c:(c.get('source'),c.get('camera_name'))
+    key=lambda c:(c.get('interseccion'),c.get('source'),c.get('camera_name'))
     if previous and key(previous)==key(settings):
         settings['lanes']=previous.get('lanes',settings.get('lanes'))
         settings['configuracion_verificada']=previous.get('configuracion_verificada',False)
-        mark=False
+        mark=not settings['configuracion_verificada']
     else:
         mark=key(settings)!=key(base) or not base.get('configuracion_verificada',False)
         if mark:settings['configuracion_verificada']=False
@@ -279,11 +331,22 @@ def main():
                    help='Elegir la fuente al iniciar: sin valor muestra un menú; o 0/1 (índice), "camara:Nombre" o la ruta de un video')
     a.add_argument('--marcar',nargs='?',const='zona',choices=['zona','linea'],default=None,
                    help='Marcar antes de contar: zona (4 esquinas de la via, por defecto) o linea (2 puntos por carril)')
+    a=sub.add_parser('clonar-perfil',help='Crear un YAML independiente pendiente de calibración')
+    a.add_argument('--config',type=Path,required=True,help='Perfil base')
+    a.add_argument('--interseccion',required=True,help='ID de destino en el inventario')
+    a.add_argument('--fuente',required=True,help='Índice, camara:Nombre o archivo de video')
+    a.add_argument('--salida',type=Path,required=True,help='Ruta del nuevo YAML')
     a=sub.add_parser('detener');a.add_argument('--espera',type=float,default=20)
     sub.add_parser('estado')
     a=sub.add_parser('_worker');a.add_argument('--config',type=Path,required=True);a.add_argument('--salida',type=Path,required=True)
     a.add_argument('--stop',type=Path,required=True);a.add_argument('--done',type=Path,required=True)
     args=p.parse_args()
+    if args.action=='clonar-perfil':
+        import yaml
+        try:
+            return guardar_perfil(args)
+        except (OSError, ValueError, yaml.YAMLError) as error:
+            p.error(str(error))
     return start(args) if args.action=='iniciar' else stop(args) if args.action=='detener' else status() if args.action=='estado' else worker(args)
 
 if __name__=='__main__':raise SystemExit(main())
