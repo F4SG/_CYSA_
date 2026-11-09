@@ -271,3 +271,13 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 Esta configuración es de laboratorio local. La validación en campo, MFA, auditoría integral y activación de planes corresponden a etapas posteriores.
 
 Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
+
+## Patrones de diseño implementados
+
+| Patrón | Tipo | Cómo se usa en CYSA |
+| --- | --- | --- |
+| Prototype | Creacional de objeto | `clonar-perfil` copia un perfil YAML y sus carriles para otra fuente y deja la copia pendiente de calibración. |
+| Factory Method | Creacional de clase | Los creadores del detector construyen una fuente de cámara o video según el perfil. Ambas usan el mismo flujo de conteo. |
+| Builder | Creacional de objeto | `EscenarioSUMOBuilder` valida y prepara la red, las rutas y la configuración del escenario. |
+| Abstract Factory | Creacional de objeto | Cada fábrica crea una fuente de conteos y un controlador compatibles con su entorno, laboratorio o sombra. |
+| Singleton | Creacional de objeto | `CoordinadorDetector` mantiene una instancia por proceso y permite una sola sesión de detección activa a la vez. |
