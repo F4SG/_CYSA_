@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 import csv
 import json
@@ -15,7 +14,6 @@ from simulacion import sumo_base as escenario_sumo
 from simulacion.sumo_base import EscenarioSUMOBuilder
 from cysa.contracts import Conteo, Estado, PlanBorrador
 from cysa_detector import entorno, run
-from cysa_detector.coordinacion import CoordinadorDetector
 from cysa_detector.entorno import FabricaLaboratorio, FabricaSombra, preparar_entorno
 from cysa_detector.run import CreadorCamara, CreadorVideo, FuenteCamara, FuenteVideo
 from cysa_detector.counter import Lane, LineCounter
@@ -170,7 +168,7 @@ def test_abstract_factory_limita_laboratorio_a_eventos_y_planes_de_prueba(conteo
             conteo.interseccion, [conteo.model_copy(update={'prueba': False})]))
 
 
-def test_alternativa_a_singleton_aisla_conteos_de_dos_camaras():
+def test_contadores_de_dos_camaras_mantienen_estado_independiente():
     carril = Lane('N', 'N_0', (.1, .5), (.9, .5))
     a = LineCounter([carril])
     b = LineCounter([carril])
@@ -219,26 +217,6 @@ def test_cli_detector_usa_creadores_y_anexa_sin_duplicar_cabecera(monkeypatch, t
         filas = list(csv.DictReader(stream))
     assert fuentes == [(FuenteCamara, None), (FuenteVideo, inicio)]
     assert [fila['mensaje_id'] for fila in filas] == [str(evento.mensaje_id) for evento in publicados]
-
-
-def test_singleton_excluye_otra_sesion_y_se_libera_al_fallar(tmp_path):
-    coordinador = CoordinadorDetector()
-    assert CoordinadorDetector() is coordinador
-    destino = tmp_path / 'no-debe-crearse.csv'
-
-    def segundo_detector():
-        with pytest.raises(RuntimeError, match='sesión de detector activa'):
-            run.guardar_conteos(None, destino)
-
-    with pytest.raises(ValueError, match='falló la sesión'):
-        with coordinador.sesion(), ThreadPoolExecutor(max_workers=1) as hilo:
-            hilo.submit(segundo_detector).result(timeout=3)
-            raise ValueError('falló la sesión')
-
-    assert not destino.exists()
-    with coordinador.sesion():
-        pass
-
 
 def test_cli_entornos_compone_familias_y_valida_la_marca(monkeypatch, tmp_path, conteo):
     salida = tmp_path / 'laboratorio.jsonl'

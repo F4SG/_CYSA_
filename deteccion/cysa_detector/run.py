@@ -13,7 +13,6 @@ from .camera import open_source
 from .inference import detection_settings
 from .roi import crop_for_lanes,restore_box
 from .delivery import QueuedPublisher
-from .coordinacion import CoordinadorDetector
 
 def validar_inicio_video(inicio_video):
     if inicio_video is not None and (inicio_video.tzinfo is None or inicio_video.utcoffset() is None):
@@ -307,29 +306,28 @@ def validar_calibracion(config):
 
 
 def guardar_conteos(creador, salida):
-    with CoordinadorDetector().sesion():
-        salida.parent.mkdir(parents=True, exist_ok=True)
-        with salida.open('a', encoding='utf-8', newline='') as out, Publisher('cysa-deteccion') as pub, QueuedPublisher(pub) as delivery:
-            writer = None
+    salida.parent.mkdir(parents=True, exist_ok=True)
+    with salida.open('a', encoding='utf-8', newline='') as out, Publisher('cysa-deteccion') as pub, QueuedPublisher(pub) as delivery:
+        writer = None
 
-            def publicar(evento):
-                nonlocal writer
-                fila = evento.model_dump(mode='json')
-                if writer is None:
-                    writer = csv.DictWriter(out, fieldnames=list(fila))
-                    if out.tell() == 0:
-                        writer.writeheader()
-                # El CSV permite reintentar con el mismo UUID si el broker no confirma.
-                writer.writerow(fila)
-                out.flush()
-                delivery.publish(evento)
-                print(f'[{datetime.now():%H:%M:%S}] Conteo registrado y encolado -> '
-                      f'{evento.clase}: {evento.cantidad} ({evento.acceso}/{evento.carril})')
+        def publicar(evento):
+            nonlocal writer
+            fila = evento.model_dump(mode='json')
+            if writer is None:
+                writer = csv.DictWriter(out, fieldnames=list(fila))
+                if out.tell() == 0:
+                    writer.writeheader()
+            # El CSV permite reintentar con el mismo UUID si el broker no confirma.
+            writer.writerow(fila)
+            out.flush()
+            delivery.publish(evento)
+            print(f'[{datetime.now():%H:%M:%S}] Conteo registrado y encolado -> '
+                  f'{evento.clase}: {evento.cantidad} ({evento.acceso}/{evento.carril})')
 
-            try:
-                return 20 if creador.ejecutar(publicar) else 0
-            except KeyboardInterrupt:
-                return 0
+        try:
+            return 20 if creador.ejecutar(publicar) else 0
+        except KeyboardInterrupt:
+            return 0
 
 
 def main():

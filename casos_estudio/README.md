@@ -15,7 +15,7 @@ Usa el ID de la intersección registrado en el inventario. También puedes indic
 
 ## Ejecutar el detector y preparar SUMO
 
-El comando habitual del detector selecciona el creador de cámara o video según el YAML. Ambos usan el mismo procesamiento y cierran los recursos si falla la publicación. El Singleton permite una sesión por proceso. Cada sesión crea su cámara, modelo y contador.
+El comando habitual del detector selecciona el creador de cámara o video según el YAML. Ambos usan el mismo procesamiento y cierran los recursos si falla la publicación. Cada sesión crea su cámara, modelo y contador.
 
 El comando habitual de SUMO prepara y valida el escenario antes de ejecutar la simulación. Para preparar solo los archivos, agrega `--prepare-only`.
 

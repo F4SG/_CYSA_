@@ -280,4 +280,3 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 | Factory Method | Creacional de clase | Los creadores del detector construyen una fuente de cámara o video según el perfil. Ambas usan el mismo flujo de conteo. |
 | Builder | Creacional de objeto | `EscenarioSUMOBuilder` valida y prepara la red, las rutas y la configuración del escenario. |
 | Abstract Factory | Creacional de objeto | Cada fábrica crea una fuente de conteos y un controlador compatibles con su entorno, laboratorio o sombra. |
-| Singleton | Creacional de objeto | `CoordinadorDetector` mantiene una instancia por proceso y permite una sola sesión de detección activa a la vez. |

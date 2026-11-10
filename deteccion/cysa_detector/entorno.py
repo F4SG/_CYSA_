@@ -10,7 +10,6 @@ from uuid import uuid4
 
 from cysa.contracts import Conteo, Estado, PlanBorrador
 from cysa.interfaces import Controlador, FuenteDeteccion
-from .coordinacion import CoordinadorDetector
 from .run import creador_detector, validar_calibracion
 
 
@@ -127,7 +126,7 @@ def main():
         fuente, controlador = preparar_entorno(fabrica)
         if args.entorno == 'laboratorio' and args.plan:
             controlador.enviar_plan(PlanBorrador.model_validate_json(args.plan.read_bytes()))
-        with CoordinadorDetector().sesion(), args.salida.open('x', encoding='utf-8') as salida:
+        with args.salida.open('x', encoding='utf-8') as salida:
             def escribir(tipo, evento):
                 registro = {'tipo': tipo, 'datos': evento.model_dump(mode='json')}
                 salida.write(json.dumps(registro, ensure_ascii=False) + '\n')
