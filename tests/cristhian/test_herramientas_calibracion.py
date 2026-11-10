@@ -68,3 +68,30 @@ def test_guardar_lineas_en_el_yaml(tmp_path):
     lane = c['lanes'][0]
     Lane(lane['acceso'], lane['carril'], tuple(lane['a']), tuple(lane['b']), lane['direction'])
     assert 'polygon' not in lane
+
+
+def test_editor_de_lineas_devuelve_cancelacion_al_gestor(monkeypatch, tmp_path):
+    import sys
+    from types import SimpleNamespace
+
+    import cv2
+    import numpy as np
+    from cysa_detector import camera
+    from marcar_lineas import main
+
+    perfil = tmp_path / 'perfil.yaml'
+    original = 'source: 0\nconfiguracion_verificada: false\n'
+    perfil.write_text(original, encoding='utf-8')
+    liberaciones = []
+    captura = SimpleNamespace(read=lambda: (True, np.zeros((20, 30, 3), np.uint8)),
+                              release=lambda: liberaciones.append(True))
+    monkeypatch.setattr(camera, 'open_source', lambda *args: captura)
+    for nombre in ('namedWindow', 'setMouseCallback', 'imshow', 'destroyAllWindows'):
+        monkeypatch.setattr(cv2, nombre, lambda *args: None)
+    monkeypatch.setattr(cv2, 'waitKey', lambda _: 27)
+    monkeypatch.setattr(sys, 'path', sys.path.copy())
+    monkeypatch.setattr(sys, 'argv', ['marcar_lineas.py', '--config', str(perfil), '--cancelar-inicio'])
+
+    assert main() == 130
+    assert liberaciones == [True]
+    assert perfil.read_text(encoding='utf-8') == original

@@ -2,6 +2,7 @@ import importlib.util,sys
 from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
+import pytest
 
 def module():
     path=Path(__file__).resolve().parents[2]/'tools/cristhian/calibrar_via.py'
@@ -24,7 +25,8 @@ def test_congelar_solo_copia_en_ram_y_reanudar_limpia_marcas():
     assert state.toggle_freeze() and state.points==[]
     state.update(detailed(200));assert np.array_equal(state.frame,detailed(200))
 
-def test_calibrador_mantiene_camara_abierta_hasta_q(monkeypatch,tmp_path):
+@pytest.mark.parametrize('opciones,codigo', [([], 0), (['--cancelar-inicio'], 130)])
+def test_calibrador_mantiene_camara_abierta_hasta_q(monkeypatch,tmp_path,opciones,codigo):
     import cv2,yaml
     import cysa_detector.camera as camera
     m=module()
@@ -50,8 +52,8 @@ def test_calibrador_mantiene_camara_abierta_hasta_q(monkeypatch,tmp_path):
     monkeypatch.setattr(cv2,'waitKey',key)
     config=tmp_path/'config.yaml';original='source: 1\nconfiguracion_verificada: false\n'
     config.write_text(original,encoding='utf-8')
-    monkeypatch.setattr(sys,'argv',['calibrar_via.py','--config',str(config)])
-    m.main()
+    monkeypatch.setattr(sys,'argv',['calibrar_via.py','--config',str(config),*opciones])
+    assert m.main() == codigo
     assert cap.reads==3 and cap.releases==1
     assert config.read_text(encoding='utf-8')==original
 

@@ -1,5 +1,8 @@
 import importlib.util
 from pathlib import Path
+import sys
+
+import pytest
 
 def manager():
     path=Path(__file__).resolve().parents[2]/'tools/cristhian/detector.py'
@@ -86,7 +89,8 @@ def test_marcar_linea_usa_el_editor_de_dos_puntos(monkeypatch,tmp_path):
     def call(command,**kw):calls.append(command);return next(returns)
     monkeypatch.setattr(m.subprocess,'call',call)
     assert m.foreground(config,output,mark='linea')==0
-    assert calls[0][1].endswith('marcar_lineas.py') and calls[0][-2:]==['--config',str(config)]
+    assert calls[0][1].endswith('marcar_lineas.py')
+    assert calls[0][-3:]==['--config',str(config),'--cancelar-inicio']
 
 
 def test_interpretar_fuente(tmp_path):
@@ -140,3 +144,80 @@ def test_acceso_directo_elige_fuente_y_marca_antes_de_contar():
     ps1=(raiz/'iniciar_conteo.ps1').read_text(encoding='ascii')
     assert 'tools/cristhian/detector.py iniciar' in ps1 and '--fuente' in ps1 and '--marcar' in ps1
     assert 'iniciar_conteo.ps1' in (raiz/'iniciar_conteo.bat').read_text(encoding='ascii')
+
+
+@pytest.mark.parametrize('salida_editor', [0, 130])
+def test_iniciar_coordina_fuente_nueva_calibracion_y_conteo(monkeypatch, tmp_path, salida_editor):
+    import yaml
+
+    gestor = manager()
+    runtime = tmp_path / 'sesiones'
+    monkeypatch.setattr(gestor, 'RUNTIME', runtime)
+    monkeypatch.setattr(gestor, 'STATE', runtime / 'estado.json')
+    monkeypatch.setattr(gestor, 'environment', lambda: {})
+    perfil = tmp_path / 'perfil.yaml'
+    original = 'interseccion: DEMO_INT_01\nsource: 0\nconfiguracion_verificada: true\n'
+    perfil.write_text(original, encoding='utf-8')
+    video = tmp_path / 'calle.mp4'
+    video.touch()
+    salida = tmp_path / 'conteos.csv'
+    sesion = runtime / 'sesion_perfil.yaml'
+    llamadas = []
+
+    def ejecutar(comando, **kwargs):
+        llamadas.append(comando)
+        if len(llamadas) == 1:
+            assert Path(comando[1]).name == 'calibrar_via.py'
+            assert '--cancelar-inicio' in comando
+            datos = yaml.safe_load(sesion.read_text(encoding='utf-8'))
+            assert Path(datos['source']) == video
+            assert datos['configuracion_verificada'] is False
+            if salida_editor == 0:
+                datos['configuracion_verificada'] = True
+                sesion.write_text(yaml.safe_dump(datos), encoding='utf-8')
+            return salida_editor
+        assert comando == gestor.detector_command(sesion, salida)
+        assert yaml.safe_load(sesion.read_text(encoding='utf-8'))['configuracion_verificada'] is True
+        return 0
+
+    monkeypatch.setattr(gestor.subprocess, 'call', ejecutar)
+    monkeypatch.setattr(sys, 'argv', ['detector.py', 'iniciar', '--config', str(perfil),
+                                     '--fuente', str(video), '--salida', str(salida)])
+    assert gestor.main() == salida_editor
+    assert len(llamadas) == (2 if salida_editor == 0 else 1)
+    assert perfil.read_text(encoding='utf-8') == original
+
+
+def test_iniciar_rechaza_video_inexistente_antes_del_arranque(monkeypatch, tmp_path, capsys):
+    gestor = manager()
+    runtime = tmp_path / 'sesiones'
+    monkeypatch.setattr(gestor, 'RUNTIME', runtime)
+    monkeypatch.setattr(gestor, 'STATE', runtime / 'estado.json')
+    perfil = tmp_path / 'perfil.yaml'
+    perfil.write_text('source: 0\n', encoding='utf-8')
+    monkeypatch.setattr(sys, 'argv', ['detector.py', 'iniciar', '--config', str(perfil),
+                                     '--fuente', str(tmp_path / 'inexistente.mp4')])
+    with pytest.raises(SystemExit) as error:
+        gestor.main()
+    assert error.value.code == 2
+    assert 'No existe el archivo de video' in capsys.readouterr().err
+    assert not runtime.exists()
+
+
+def test_fachada_conserva_salida_exitosa_de_trabajador_rapido(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    gestor = manager()
+    runtime = tmp_path / 'sesiones'
+    monkeypatch.setattr(gestor, 'RUNTIME', runtime)
+    monkeypatch.setattr(gestor, 'STATE', runtime / 'estado.json')
+    monkeypatch.setattr(gestor, 'environment', lambda: {})
+    monkeypatch.setattr(gestor, 'process_stamp', lambda pid: 'trabajador')
+    proceso = SimpleNamespace(pid=123, poll=lambda: 0)
+    monkeypatch.setattr(gestor.subprocess, 'Popen', lambda *args, **kwargs: proceso)
+    perfil = tmp_path / 'perfil.yaml'
+    perfil.write_text('source: 0\n', encoding='utf-8')
+
+    assert gestor.FachadaConteo().iniciar(perfil, tmp_path / 'conteos.csv', segundo_plano=True) == 0
+    assert gestor.load_state()['pid'] == proceso.pid
+    assert not (runtime / 'inicio.lock').exists()

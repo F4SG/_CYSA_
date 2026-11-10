@@ -109,6 +109,7 @@ def main():
     p.add_argument('--acceso',default='N')
     p.add_argument('--direction',choices=['negative_to_positive','positive_to_negative','both'],default='negative_to_positive',help='Por defecto: del borde lejano al cercano')
     p.add_argument('--iniciar',action='store_true',help='Iniciar detector despues de guardar y liberar la camara')
+    p.add_argument('--cancelar-inicio', action='store_true', help='Devolver código 130 al cancelar sin guardar')
     args=p.parse_args()
     if not 1<=args.carriles<=8:p.error('--carriles debe estar entre 1 y 8')
     config=yaml.safe_load(args.config.read_text(encoding='utf-8'))
@@ -179,8 +180,10 @@ def main():
     finally:
         cap.release()
         cv2.destroyAllWindows()
-    if saved and args.iniciar:
+    if not saved:
+        return 130 if args.cancelar_inicio else 0
+    if args.iniciar:
         import subprocess
         raise SystemExit(subprocess.call([sys.executable,str(ROOT/'tools/cristhian/detector.py'),'iniciar','--config',str(args.config.resolve())],cwd=ROOT))
 
-if __name__=='__main__':main()
+if __name__=='__main__':raise SystemExit(main())
