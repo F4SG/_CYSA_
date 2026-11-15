@@ -261,6 +261,7 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 - Consultar conteos, inventario y estados reportados desde el navegador.
 - Ingresar como operador o administrador; gestionar usuarios con el segundo rol.
 - Guardar conteos agregados en CSV y enviarlos al panel mediante MQTT.
+- Sprint 2: hacer funcionar el controlador semafórico emulado con la placa Arduino como monitor de conflictos y probar el modo local seguro ([guía del controlador](controlador/README.md)).
 
 [Uso de los patrones creacionales y de los entornos de prueba](casos_estudio/README.md).
 
@@ -296,7 +297,7 @@ git clone https://github.com/F4SG/_CYSA_.git CYSA
 Set-Location CYSA
 py -3.12 -m venv .venv
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
-& $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r tests/requirements.txt
+& $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r controlador/requirements.txt -r tests/requirements.txt
 ```
 
 Usar `$py` evita tener que activar el entorno virtual. En cada PowerShell nueva, entra a `CYSA` y vuelve a definir `$py` con el comando anterior.
@@ -428,7 +429,7 @@ Haz este ensayo completo antes de presentar. Usa un video con vehículos visible
 | 7 | Cerrar con Q y revisar el CSV generado | Existen conteos agregados; no se guarda el video |
 | 8 | Cerrar sesión y entrar como administrador | Aparece Usuarios; puedes consultar las cuentas |
 
-Un inventario vacío en una instalación nueva es posible: se carga por separado. La vista Comunicación necesita un publicador de estados; ejecutar solo el detector no genera estados de un controlador.
+Un inventario vacío en una instalación nueva es posible: se carga por separado. La vista Comunicación necesita un publicador de estados; ejecutar solo el detector no genera estados de un controlador. El [controlador emulado](controlador/README.md) iniciado con `-Mqtt` publica esos estados.
 
 #### Pruebas automáticas
 
@@ -479,7 +480,7 @@ git fetch origin
 git switch main
 git pull --ff-only origin main
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
-& $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r tests/requirements.txt
+& $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r controlador/requirements.txt -r tests/requirements.txt
 & $py tools/franco/configurar_usuarios_local.py --solo-archivos
 docker compose --env-file infra/.env -f infra/compose.yaml up -d --build
 ```
@@ -517,6 +518,7 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 - [Visor y controles](docs/cristhian/visor_completo.md).
 - [Calibración de la vía](docs/cristhian/calibrar_solo_via_inferior.md).
 - [Evidencia de conteo con video](docs/cristhian/evidencia_conteo_video.md).
+- [Controlador emulado y placa MMU (Sprint 2)](controlador/README.md).
 
 Esta configuración IoT es de laboratorio local. La validación en campo, MFA real, auditoría integral del corredor y activación física de planes corresponden a etapas posteriores. La MFA simulada y la auditoría de operaciones del laboratorio Web III se describen en su guía.
 
@@ -535,5 +537,6 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 | Template Method | Comportamiento | `CreadorDetector.ejecutar()` fija los pasos (crear fuente, publicar, cerrar) y cada creador redefine `crear_fuente()`. |
 | Iterator | Comportamiento | `FuenteDeteccion.eventos()` entrega los conteos uno a uno con un generador que libera la cámara al terminar. |
 | Observer | Comportamiento | El detector publica por MQTT y el consumidor se suscribe a los tópicos de conteos y estado. |
+| State | Comportamiento | El [controlador emulado](controlador/README.md) cambia entre `CENTRO`, `LOCAL_SEGURO` (RF-06) e `INTERMITENTE`; cada modo decide qué hacer con los latidos y las fallas del MMU. |
 
-Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. State y Command tienen pruebas de concepto en [`casos_comportamiento`](casos_comportamiento/README.md).
+Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. Command tiene una prueba de concepto para RF-02 y RF-16 en [`casos_comportamiento`](casos_comportamiento/README.md).
