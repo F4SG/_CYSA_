@@ -40,6 +40,13 @@ class Estado(Timed):
     timestamp: datetime
     prueba: StrictBool
     _date = field_validator('timestamp')(Timed.utc)
+class Latido(Timed):
+    """Señal periódica del centro de control (tópico centro/latido). Sin latidos por más de
+    60 s, cada controlador pasa a su plan local seguro (RF-06)."""
+    version: Literal['1.0'] = '1.0'
+    timestamp: datetime
+    _date = field_validator('timestamp')(Timed.utc)
+TOPICO_LATIDO = 'centro/latido'
 class Activo(StrictModel):
     activo_id: Identifier
     interseccion: Identifier

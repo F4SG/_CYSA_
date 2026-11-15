@@ -1,9 +1,20 @@
 """Proceso separado de FastAPI: un suscriptor, confirmación después de persistir."""
-import logging,os,time
+import logging,os,threading,time
+from datetime import datetime,timezone
 from cysa.mqtt import client
-from cysa.contracts import decode_message
+from cysa.contracts import decode_message,Latido,TOPICO_LATIDO
 from app.repository import Repository
 log=logging.getLogger('cysa.consumer')
+def iniciar_latido(c,intervalo_s=5.0,detener=None):
+    """Publica el latido del centro de control. Si deja de llegar por más de 60 s, cada
+    controlador pasa a su plan local seguro (RF-06)."""
+    detener=detener or threading.Event()
+    def latir():
+        while not detener.wait(intervalo_s):
+            if c.is_connected():
+                c.publish(TOPICO_LATIDO,Latido(timestamp=datetime.now(timezone.utc)).model_dump_json(),qos=1)
+    hilo=threading.Thread(target=latir,name='cysa-latido',daemon=True);hilo.start()
+    return detener
 def main():
     logging.basicConfig(level=logging.INFO)
     repo=Repository();repo.ready()
@@ -26,6 +37,7 @@ def main():
                 time.sleep(delay);delay=min(30,delay*2)
         if msg.qos:client.ack(msg.mid,msg.qos)
     c.on_connect=connected;c.on_message=message
+    iniciar_latido(c,float(os.environ.get('LATIDO_S','5')))
     c.connect(os.environ.get('MQTT_HOST','mosquitto'),int(os.environ.get('MQTT_PORT','8883')),60)
     try:c.loop_forever(retry_first_connection=True)
     finally:c.disconnect()

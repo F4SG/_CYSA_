@@ -3,8 +3,11 @@ topic write corredor/+/+/conteos
 user plataforma
 topic read corredor/+/+/conteos
 topic read corredor/+/estado
+topic write centro/latido
 user prueba
+topic write centro/latido
 topic write corredor/DEMO_INT_01/+/conteos
 topic write corredor/DEMO_INT_01/estado
 user emulador
 topic write corredor/+/estado
+topic read centro/latido
