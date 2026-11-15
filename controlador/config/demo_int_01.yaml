@@ -1,0 +1,37 @@
+# Controlador emulado del banco de pruebas para DEMO_INT_01 (EJEMPLO, no es una intersección real).
+# Los tiempos los define y aprueba el ingeniero de tránsito; el administrador solo los carga.
+interseccion: DEMO_INT_01
+prueba: true
+
+# Grupos semafóricos en el mismo orden que los LEDs de la placa (grupo 0, grupo 1, ...).
+grupos: [NS, EO]
+conflictos:
+  - [NS, EO]
+
+# Mínimos de seguridad: ningún plan puede bajar de estos tiempos.
+tiempos_min:
+  ambar_s: 3
+  todo_rojo_s: 2
+  verde_s: 10
+
+# Plan que corre mientras hay comunicación con el centro (plan fijo vigente, como el DEMO de SUMO).
+plan_centro:
+  plan_id: DEMO_FIJO
+  fases:
+    - {fase_id: F1_NS_VERDE, duracion_s: 30, luces: {NS: G, EO: R}}
+    - {fase_id: F1_NS_AMBAR, duracion_s: 3, luces: {NS: Y, EO: R}}
+    - {fase_id: F1_TODO_ROJO, duracion_s: 2, luces: {NS: R, EO: R}}
+    - {fase_id: F2_EO_VERDE, duracion_s: 30, luces: {NS: R, EO: G}}
+    - {fase_id: F2_EO_AMBAR, duracion_s: 3, luces: {NS: R, EO: Y}}
+    - {fase_id: F2_TODO_ROJO, duracion_s: 2, luces: {NS: R, EO: R}}
+
+# Plan local seguro (RF-06): se usa al arrancar y si no llegan latidos del centro por más de 60 s.
+plan_local:
+  plan_id: LOCAL_SEGURO
+  fases:
+    - {fase_id: L1_NS_VERDE, duracion_s: 25, luces: {NS: G, EO: R}}
+    - {fase_id: L1_NS_AMBAR, duracion_s: 3, luces: {NS: Y, EO: R}}
+    - {fase_id: L1_TODO_ROJO, duracion_s: 3, luces: {NS: R, EO: R}}
+    - {fase_id: L2_EO_VERDE, duracion_s: 25, luces: {NS: R, EO: G}}
+    - {fase_id: L2_EO_AMBAR, duracion_s: 3, luces: {NS: R, EO: Y}}
+    - {fase_id: L2_TODO_ROJO, duracion_s: 3, luces: {NS: R, EO: R}}
