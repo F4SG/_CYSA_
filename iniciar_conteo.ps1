@@ -21,5 +21,5 @@ $modo = if ($Linea) { 'linea' } else { 'zona' }
 Write-Host '1) Elegir la fuente  2) Marcar los carriles (flecha roja = sentido, D invierte, S guarda)  3) Contar (Q termina)' -ForegroundColor Cyan
 & $py tools/cristhian/detector.py iniciar --config $Perfil --fuente --marcar $modo --salida $Salida
 $codigo = $LASTEXITCODE
-Write-Host "Conteos guardados en $Salida" -ForegroundColor Green
+if ($codigo -eq 0) { Write-Host "Conteos guardados en $Salida" -ForegroundColor Green }
 exit $codigo

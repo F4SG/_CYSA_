@@ -2,7 +2,7 @@
 
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
-**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. La API actual es FastAPI; el servicio de análisis en .NET es una propuesta futura y no forma parte de esta entrega.
+**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora dos APIs independientes de evaluación y decisiones para pruebas locales.
 
 ## Qué puedes demostrar
 
@@ -12,6 +12,8 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 - Consultar conteos, inventario y estados reportados desde el navegador.
 - Ingresar como operador o administrador; gestionar usuarios con el segundo rol.
 - Guardar conteos agregados en CSV y enviarlos al panel mediante MQTT.
+
+[Uso de los patrones creacionales y de los entornos de prueba](casos_estudio/README.md).
 
 ## 1. Antes de instalar
 
@@ -269,3 +271,34 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 Esta configuración es de laboratorio local. La validación en campo, MFA, auditoría integral y activación de planes corresponden a etapas posteriores.
 
 Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
+
+## Patrones de diseño implementados
+
+| Patrón | Tipo | Cómo se usa en CYSA |
+| --- | --- | --- |
+| Prototype | Creacional de objeto | `clonar-perfil` copia un perfil YAML y sus carriles para otra fuente y deja la copia pendiente de calibración. |
+| Factory Method | Creacional de clase | Los creadores del detector construyen una fuente de cámara o video según el perfil. Ambas usan el mismo flujo de conteo. |
+| Builder | Creacional de objeto | `EscenarioSUMOBuilder` valida y prepara la red, las rutas y la configuración del escenario. |
+| Abstract Factory | Creacional de objeto | Cada fábrica crea una fuente de conteos y un controlador compatibles con su entorno, laboratorio o sombra. |
+| Facade (Fachada) | Estructural de objeto | [`FachadaConteo`](tools/cristhian/detector.py#L268) coordina la fuente, el perfil y la calibración antes de arrancar el detector desde «Iniciar conteo». |
+| Strategy | Comportamiento | `AsignadorCarril` elige al iniciar cómo asignar un vehículo a un carril: por zonas, solo líneas o automático. El bucle del detector ya no decide por modo. |
+| Template Method | Comportamiento | `CreadorDetector.ejecutar()` fija los pasos (crear fuente, publicar, cerrar) y cada creador redefine `crear_fuente()`. |
+| Iterator | Comportamiento | `FuenteDeteccion.eventos()` entrega los conteos uno a uno con un generador que libera la cámara al terminar. |
+| Observer | Comportamiento | El detector publica por MQTT y el consumidor se suscribe a los tópicos de conteos y estado. |
+
+Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. State y Command tienen pruebas de concepto en [`casos_comportamiento`](casos_comportamiento/README.md).
+
+## Dos APIs propias en .NET
+
+Desarrollamos dos APIs independientes en **C# y ASP.NET Core 10**, con controladores escritos manualmente, Swagger y persistencia en bases SQLite separadas. Se organizan en la solución [CYSA.Web.sln](dotnet/CYSA.Web.sln) para **Visual Studio Community 2026**.
+
+| API | Acción principal | Qué hace |
+| --- | --- | --- |
+| Evaluaciones · puerto 5181 | `POST /api/evaluaciones` | Compara las demoras de un plan con su referencia, rechaza aumentos mayores al 15 % y comprueba el mínimo peatonal `longitud / 0,9 + 5`. Guarda el resultado y sus motivos por versión. |
+| Decisiones · puerto 5182 | `POST /api/planes/{planId}/decisiones` | Consulta la evaluación por HTTP y permite al operador autorizar o rechazar un plan aprobado y vigente. Registra usuario, fecha y motivo; los reintentos no duplican la decisión. |
+
+El historial se consulta con `GET /api/planes/{planId}/historial`. Las APIs usan autenticación JWT y permisos; **la MFA del modo demo es simulada**. Trabajan con métricas suministradas: no ejecutan SUMO ni activan semáforos. El backend FastAPI y los servicios anteriores mantienen su funcionamiento.
+
+**Inicio rápido:** abre la solución, ejecuta `scripts/Preparar-Demo.ps1` desde la carpeta `dotnet`, selecciona **CYSA dos APIs** con el perfil **Demo local** y pulsa F5. Prueba las peticiones de `runtime/Demo.http` o utiliza Swagger.
+
+[Guía de ejecución y ejemplos](dotnet/README.md) · [Verificación: 31 pruebas .NET, 206 Python y 3 JavaScript aprobadas](dotnet/VERIFICACION.md).
