@@ -9,6 +9,7 @@ from cysa.interfaces import FuenteDeteccion
 from cysa.mqtt import Publisher
 from .counter import Lane,LineCounter,counter_options
 from .auto_lanes import AutoLanes
+from .asignacion import crear_asignador
 from .camera import open_source
 from .inference import detection_settings
 from .roi import crop_for_lanes,restore_box
@@ -85,6 +86,7 @@ class CameraSource(FuenteDeteccion):
         totals={}
         automatic=bool(c.get('auto_carriles',False))
         auto=AutoLanes(c.get('acceso_auto','N'))
+        asignador=crear_asignador(c,counter.lanes,auto)
         ready=not automatic
         candidate=[];stable=0;last_attempt=None
         warmup=float(c.get('calibracion_s',12))
@@ -160,21 +162,14 @@ class CameraSource(FuenteDeteccion):
                 raise RuntimeError('Procesamiento demasiado lento: reducir resolucion/modelo o usar GPU')
             labels=[]
             for xyxy,tid,cls,point in detections:
-                if automatic and ready:lane=auto.assign(tid,point)
-                else:
-                    # Solo una zona dibujada (polygon) asigna un vehículo a un carril. Un segmento sin zona
-                    # "contiene" cualquier punto, así que no sirve para asignar: con él, el primer carril
-                    # se quedaba con todos los vehículos y los demás contaban siempre 0.
-                    lane=next((l for l in counter.lanes if l.polygon and l.contains(point)),None)
+                # Strategy: la forma de asignar (zonas, solo líneas o automática) se eligió al iniciar.
+                lane,key=asignador.asignar(tid,point) if ready else (None,None)
                 if ready:
                     before=counter.snapshot()
-                    if lane:key=(lane.acceso,lane.carril)
-                    elif automatic or any(l.polygon for l in counter.lanes):key=('','')  # fuera de toda zona
-                    else:key=None  # solo segmentos: decide el cruce de cada línea
                     counter.observe(tid,mapping.get(cls),point,now_tick,lane_key=key)
                     for k,value in counter.snapshot().items():
                         totals[k]=totals.get(k,0)+value-before.get(k,0)
-                if lane or not ready or not any(l.polygon for l in counter.lanes) or c.get('show_outside_lanes',False):labels.append((xyxy,tid,cls,lane))
+                if lane or not ready or asignador.muestra_fuera_de_zona() or c.get('show_outside_lanes',False):labels.append((xyxy,tid,cls,lane))
             if results is not None:
                 cached_labels=labels;labels_at=result_at
             if inference is not None:
@@ -242,6 +237,7 @@ class CameraSource(FuenteDeteccion):
                 counter.reset_interval();start=end;tick=now_tick
             if recalibrate:
                 auto=AutoLanes(c.get('acceso_auto','N'));counter=LineCounter([],**counter_options(c))
+                asignador=crear_asignador(c,counter.lanes,auto)
                 ready=False;candidate=[];stable=0;last_attempt=None;totals={};cached_labels=[]
                 calibration_start=now_tick;tick=now_tick;start=wall(tick)
                 print('Recalibrando: se reinician los totales de pantalla; CSV anterior conservado.',flush=True)
