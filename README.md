@@ -2,7 +2,7 @@
 
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
-**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. La API actual es FastAPI; el servicio de análisis en .NET es una propuesta futura y no forma parte de esta entrega.
+**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora dos APIs independientes de evaluación y decisiones para pruebas locales.
 
 ## Qué puedes demostrar
 
@@ -281,3 +281,22 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 | Builder | Creacional de objeto | `EscenarioSUMOBuilder` valida y prepara la red, las rutas y la configuración del escenario. |
 | Abstract Factory | Creacional de objeto | Cada fábrica crea una fuente de conteos y un controlador compatibles con su entorno, laboratorio o sombra. |
 | Facade (Fachada) | Estructural de objeto | [`FachadaConteo`](tools/cristhian/detector.py#L268) coordina la fuente, el perfil y la calibración antes de arrancar el detector desde «Iniciar conteo». |
+| Template Method | Comportamiento | `CreadorDetector.ejecutar()` define el procesamiento común y delega la creación de la fuente en las subclases. |
+| Iterator | Comportamiento | `eventos()` entrega los conteos mediante iteradores y generadores de Python. |
+
+Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. Strategy, State y Command siguen pendientes de implementación.
+
+## Dos APIs propias en .NET
+
+Desarrollamos dos APIs independientes en **C# y ASP.NET Core 10**, con controladores escritos manualmente, Swagger y persistencia en bases SQLite separadas. Se organizan en la solución [CYSA.Web.sln](dotnet/CYSA.Web.sln) para **Visual Studio Community 2026**.
+
+| API | Acción principal | Qué hace |
+| --- | --- | --- |
+| Evaluaciones · puerto 5181 | `POST /api/evaluaciones` | Compara las demoras de un plan con su referencia, rechaza aumentos mayores al 15 % y comprueba el mínimo peatonal `longitud / 0,9 + 5`. Guarda el resultado y sus motivos por versión. |
+| Decisiones · puerto 5182 | `POST /api/planes/{planId}/decisiones` | Consulta la evaluación por HTTP y permite al operador autorizar o rechazar un plan aprobado y vigente. Registra usuario, fecha y motivo; los reintentos no duplican la decisión. |
+
+El historial se consulta con `GET /api/planes/{planId}/historial`. Las APIs usan autenticación JWT y permisos; **la MFA del modo demo es simulada**. Trabajan con métricas suministradas: no ejecutan SUMO ni activan semáforos. El backend FastAPI y los servicios anteriores mantienen su funcionamiento.
+
+**Inicio rápido:** abre la solución, ejecuta `scripts/Preparar-Demo.ps1` desde la carpeta `dotnet`, selecciona **CYSA dos APIs** con el perfil **Demo local** y pulsa F5. Prueba las peticiones de `runtime/Demo.http` o utiliza Swagger.
+
+[Guía de ejecución y ejemplos](dotnet/README.md) · [Verificación: 31 pruebas .NET, 206 Python y 3 JavaScript aprobadas](dotnet/VERIFICACION.md).
