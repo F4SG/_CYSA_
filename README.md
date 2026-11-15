@@ -281,3 +281,9 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 | Builder | Creacional de objeto | `EscenarioSUMOBuilder` valida y prepara la red, las rutas y la configuración del escenario. |
 | Abstract Factory | Creacional de objeto | Cada fábrica crea una fuente de conteos y un controlador compatibles con su entorno, laboratorio o sombra. |
 | Facade (Fachada) | Estructural de objeto | [`FachadaConteo`](tools/cristhian/detector.py#L268) coordina la fuente, el perfil y la calibración antes de arrancar el detector desde «Iniciar conteo». |
+| Strategy | Comportamiento | `AsignadorCarril` elige al iniciar cómo asignar un vehículo a un carril: por zonas, solo líneas o automático. El bucle del detector ya no decide por modo. |
+| Template Method | Comportamiento | `CreadorDetector.ejecutar()` fija los pasos (crear fuente, publicar, cerrar) y cada creador redefine `crear_fuente()`. |
+| Iterator | Comportamiento | `FuenteDeteccion.eventos()` entrega los conteos uno a uno con un generador que libera la cámara al terminar. |
+| Observer | Comportamiento | El detector publica por MQTT y el consumidor se suscribe a los tópicos de conteos y estado. |
+
+State y Command tienen pruebas de concepto para el Sprint 2 en [`casos_comportamiento`](casos_comportamiento/README.md).
