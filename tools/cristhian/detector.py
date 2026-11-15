@@ -62,7 +62,7 @@ def detector_command(config,output,stop=None):
 
 
 
-def edit_lanes(config,env):
+def edit_lanes(config,env,*,cancelar_inicio=False):
     """Abre el editor de carriles sobre la misma fuente del YAML (cámara o primer cuadro del video)."""
     import yaml
     settings=yaml.safe_load(config.read_text(encoding='utf-8'))
@@ -70,25 +70,35 @@ def edit_lanes(config,env):
     count=max(1,min(8,len(lanes) or 3))
     direction=lanes[0].get('direction','negative_to_positive') if lanes else 'negative_to_positive'
     access=lanes[0].get('acceso','N') if lanes else 'N'
-    return subprocess.call([sys.executable,str(REPO/'tools/cristhian/calibrar_via.py'),
-        '--config',str(config),'--carriles',str(count),'--acceso',access,'--direction',direction],cwd=REPO,env=env)
+    command = [sys.executable, str(REPO/'tools/cristhian/calibrar_via.py'),
+               '--config', str(config), '--carriles', str(count), '--acceso', access, '--direction', direction]
+    if cancelar_inicio:
+        command.append('--cancelar-inicio')
+    return subprocess.call(command, cwd=REPO, env=env)
 
 
-def mark_lines(config,env):
+def mark_lines(config,env,*,cancelar_inicio=False):
     """Solo líneas de dos puntos (sin zonas) sobre la fuente del YAML."""
-    return subprocess.call([sys.executable,str(REPO/'tools/cristhian/marcar_lineas.py'),'--config',str(config)],cwd=REPO,env=env)
+    command = [sys.executable, str(REPO/'tools/cristhian/marcar_lineas.py'), '--config', str(config)]
+    if cancelar_inicio:
+        command.append('--cancelar-inicio')
+    return subprocess.call(command, cwd=REPO, env=env)
 
 
 def foreground(config,output,mark=None):
     """El detector libera la cámara antes del editor; después recarga su YAML.
 
     mark='zona' abre primero el editor de vía (4 esquinas, carriles con zona y línea) y mark='linea'
-    el de líneas de dos puntos; recién después empieza a contar. Cancelar conserva los carriles anteriores.
+    el de líneas de dos puntos. Cancelar el marcado inicial detiene el arranque.
     """
     env=environment()
     if mark:
-        result=mark_lines(config,env) if mark=='linea' else edit_lanes(config,env)
-        if result:return result
+        editor = mark_lines if mark == 'linea' else edit_lanes
+        result = editor(config, env, cancelar_inicio=True)
+        if result == 130:
+            print('Inicio cancelado durante la calibración.')
+        if result:
+            return result
     while True:
         result=subprocess.call(detector_command(config,output),cwd=REPO,env=env)
         if result!=20:return result
@@ -221,7 +231,16 @@ def guardar_perfil(args):
     return 0
 
 
-def session_config(config,choice):
+def leer_perfil(config):
+    import yaml
+
+    perfil = yaml.safe_load(config.read_text(encoding='utf-8'))
+    if not isinstance(perfil, dict):
+        raise ValueError('El perfil debe ser un mapa YAML')
+    return perfil
+
+
+def session_config(config,choice,*,base=None):
     """YAML de sesión en resultados/detector/ (no modifica el perfil original).
 
     Devuelve (ruta, hay_que_marcar). Si la sesión anterior usó la misma fuente se conservan sus carriles;
@@ -230,7 +249,8 @@ def session_config(config,choice):
     import yaml
     RUNTIME.mkdir(parents=True,exist_ok=True)
     path=RUNTIME/f'sesion_{config.stem}.yaml'
-    base=yaml.safe_load(config.read_text(encoding='utf-8'))
+    if base is None:
+        base = leer_perfil(config)
     settings=apply_source(base,choice)
     previous=yaml.safe_load(path.read_text(encoding='utf-8')) if path.exists() else None
     key=lambda c:(c.get('interseccion'),c.get('source'),c.get('camera_name'))
@@ -245,24 +265,40 @@ def session_config(config,choice):
     return path,mark
 
 
-def start(args):
+class FachadaConteo:
+    """Coordina la fuente, el perfil, la calibración y el detector desde una sola entrada."""
+
+    def iniciar(self, config, salida, *, fuente=None, marcar=None, segundo_plano=False):
+        if running(load_state()):
+            raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
+        if marcar and segundo_plano:
+            raise SystemExit('--marcar necesita ventana: no usarlo con --segundo-plano')
+
+        config = config.resolve()
+        salida = salida.resolve()
+        perfil = leer_perfil(config)
+        try:
+            if fuente is not None:
+                choice = ask_source(perfil) if fuente == 'preguntar' else parse_source(fuente)
+                config, necesita_marcar = session_config(config, choice, base=perfil)
+                print(f'Configuración de esta sesión: {config}')
+                if necesita_marcar and not marcar:
+                    if segundo_plano:
+                        raise SystemExit('Fuente nueva: marca los carriles primero (sin --segundo-plano)')
+                    print('Fuente nueva: primero hay que marcar los carriles.')
+                    marcar = 'zona'
+
+            if segundo_plano:
+                return iniciar_segundo_plano(config, salida)
+            return foreground(config, salida, marcar)
+        except KeyboardInterrupt:
+            print('Sesión interrumpida.')
+            return 130
+
+
+def iniciar_segundo_plano(config,output):
     import yaml
-    state=load_state()
-    if running(state):raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
-    if args.marcar and args.segundo_plano:raise SystemExit('--marcar necesita ventana: no usarlo con --segundo-plano')
-    config=args.config.resolve();output=args.salida.resolve()
-    if args.fuente is not None:
-        import yaml
-        settings=yaml.safe_load(config.read_text(encoding='utf-8'))
-        choice=ask_source(settings) if args.fuente=='preguntar' else parse_source(args.fuente)
-        config,need_mark=session_config(config,choice)
-        print(f'Configuración de esta sesión: {config}')
-        if need_mark and not args.marcar:
-            if args.segundo_plano:raise SystemExit('Fuente nueva: marca los carriles primero (sin --segundo-plano)')
-            print('Fuente nueva: primero hay que marcar los carriles.');args.marcar='zona'
-    if not args.segundo_plano:
-        try:return foreground(config,output,args.marcar)
-        except KeyboardInterrupt:return 130
+
     RUNTIME.mkdir(parents=True,exist_ok=True)
     lock=RUNTIME/'inicio.lock'
     try:fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY)
@@ -271,7 +307,7 @@ def start(args):
         if running(load_state()):raise SystemExit('Ya hay un detector en segundo plano.')
         token=uuid4().hex
         runtime_config=RUNTIME/f'{token}.yaml'
-        settings=yaml.safe_load(config.read_text(encoding='utf-8'));settings['show']=False
+        settings=leer_perfil(config);settings['show']=False
         runtime_config.write_text(yaml.safe_dump(settings,allow_unicode=True,sort_keys=False),encoding='utf-8')
         stop=RUNTIME/f'{token}.stop';done=RUNTIME/f'{token}.done';log=RUNTIME/f'{token}.log'
         command=[sys.executable,str(Path(__file__).resolve()),'_worker','--config',str(runtime_config),
@@ -284,8 +320,10 @@ def start(args):
         deadline=time.monotonic()+25
         while time.monotonic()<deadline:
             text=log.read_text(encoding='utf-8',errors='replace')
-            if process.poll() is not None:
-                print(text[-3000:]);return process.returncode or 1
+            result = process.poll()
+            if result is not None:
+                print(text[-3000:])
+                return result
             if 'Resolucion recibida:' in text:
                 print('Cámara abierta; detector sin ventana. Esperar la calibración si está en modo automático.')
                 print(f'Registro: {log}');return 0
@@ -341,12 +379,17 @@ def main():
     a=sub.add_parser('_worker');a.add_argument('--config',type=Path,required=True);a.add_argument('--salida',type=Path,required=True)
     a.add_argument('--stop',type=Path,required=True);a.add_argument('--done',type=Path,required=True)
     args=p.parse_args()
-    if args.action=='clonar-perfil':
+    if args.action in {'iniciar', 'clonar-perfil'}:
         import yaml
         try:
-            return guardar_perfil(args)
+            if args.action == 'clonar-perfil':
+                return guardar_perfil(args)
+            return FachadaConteo().iniciar(
+                args.config, args.salida, fuente=args.fuente, marcar=args.marcar,
+                segundo_plano=args.segundo_plano,
+            )
         except (OSError, ValueError, yaml.YAMLError) as error:
             p.error(str(error))
-    return start(args) if args.action=='iniciar' else stop(args) if args.action=='detener' else status() if args.action=='estado' else worker(args)
+    return stop(args) if args.action=='detener' else status() if args.action=='estado' else worker(args)
 
 if __name__=='__main__':raise SystemExit(main())

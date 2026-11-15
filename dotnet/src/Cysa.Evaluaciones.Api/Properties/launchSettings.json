@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "Demo local": {
+      "commandName": "Project", "launchBrowser": true, "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5181",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development", "Security__Mode": "Demo" }
+    },
+    "OIDC": {
+      "commandName": "Project", "launchBrowser": true, "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5181",
+      "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development", "Security__Mode": "Oidc" }
+    }
+  }
+}

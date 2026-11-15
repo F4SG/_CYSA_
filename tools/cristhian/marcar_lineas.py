@@ -54,6 +54,7 @@ def main():
     p.add_argument('--direction', default='negative_to_positive',
                    choices=['negative_to_positive', 'positive_to_negative', 'both'])
     p.add_argument('--alto', type=int, default=800, help='alto máximo de la ventana en píxeles')
+    p.add_argument('--cancelar-inicio', action='store_true', help='Devolver código 130 al cancelar sin guardar')
     args = p.parse_args()
     if args.config:
         import sys
@@ -121,7 +122,7 @@ def main():
         frame_fijo = None
     if cancelado:
         print('Cancelado: configuracion sin cambios.')
-        return
+        return 130 if args.cancelar_inicio else 0
     lineas = [((puntos[i][0] / w, puntos[i][1] / h), (puntos[i + 1][0] / w, puntos[i + 1][1] / h))
               for i in range(0, len(puntos) - 1, 2)]
     if not lineas:
@@ -137,4 +138,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())
