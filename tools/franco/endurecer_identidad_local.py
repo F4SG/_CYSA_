@@ -50,7 +50,8 @@ def apply(root):
     finally:kc.api('PUT','',{'editUsernameAllowed':original})
     master=KeycloakUsers(base=base,realm='master');master.token=kc.token;master.api('PUT','',SECURITY)
     if sample.exists():sample.write_text(json.dumps(samples,indent=2,ensure_ascii=False),encoding='utf-8')
-    (root/'infra/runtime/clientes/cuentas-locales.json').write_text(json.dumps({'url':'http://localhost:8088/','users':accounts},indent=2,ensure_ascii=False),encoding='utf-8')
+    panel_config=json.loads((root/'panel/config.json').read_text(encoding='utf-8-sig'))
+    (root/'infra/runtime/clientes/cuentas-locales.json').write_text(json.dumps({'url':panel_config['redirectUri'],'users':accounts},indent=2,ensure_ascii=False),encoding='utf-8')
     print('Perfiles actualizados; identificadores, roles y contrasenas conservados. Protecciones activadas.')
     for account in accounts:print(account['username']+' / '+account['role'])
 

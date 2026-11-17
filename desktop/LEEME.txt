@@ -1,0 +1,50 @@
+CYSA - CENTRO DE PRUEBAS PARA WINDOWS X64
+
+1. Extrae TODO el ZIP en una carpeta. No ejecutes CYSA.exe desde dentro del ZIP.
+2. Abre CYSA.exe. No necesitas Git, Visual Studio ni instalar .NET.
+3. Si falta Docker Desktop, pulsa Instalar Docker Desktop. Configuralo con
+   contenedores Linux y WSL 2; reinicia Windows si el instalador lo solicita.
+4. Pulsa Configurar esta PC. La primera vez necesita internet y varios GB
+   libres para imagenes Docker, Python y las dependencias del detector.
+5. Cuando termine, pulsa Credenciales y Abrir panel.
+
+BOTONES
+- Iniciar sistema: enciende Docker, monitoreo y las dos APIs de demostracion.
+- Camara/video: selecciona fuente sin CMD. CPU por defecto, sin exigir NVIDIA.
+  Marca 4 esquinas, ajusta carriles con 1-8, D invierte sentido, S guarda, Q sale.
+  YOLO descarga su modelo al primer uso; requiere internet en esa primera vez.
+- Evaluaciones/Decisiones: abre Swagger de la API correspondiente.
+- Tokens de demo: renueva y abre los tokens locales para Authorize de Swagger.
+  Los tokens duran 30 minutos; las decisiones requieren MFA simulado reciente
+  (5 minutos). Repite este boton cuando necesites renovar.
+- Verificar sistema: comprueba acceso por roles y un conteo sintetico completo
+  desde MQTT/TLS hasta la API. Agrega un registro marcado como prueba.
+- Ejecutar pruebas: inicia servicios, renueva tokens y ejecuta pruebas Python
+  y una demostracion HTTP de evaluacion y decision. Genera datos de prueba.
+- Detener sistema: detiene solo esta instalacion sin borrar volumenes.
+  Cerrar la ventana tambien detiene los servicios de esta instalacion.
+
+DATOS Y CUENTAS
+Todo el estado se crea en %LOCALAPPDATA%\CYSA para el usuario de Windows.
+Cada instalacion genera contrasenas, certificados y cuentas locales nuevas.
+Los volumenes Docker usan un nombre propio y los puertos se eligen libres
+en el primer arranque. No se conecta con una instancia de F4SG ni requiere
+su cuenta GitHub. No compartas la carpeta de datos, credenciales ni tokens.
+Si despues otra aplicacion ocupa los puertos guardados, cierrala y reintenta.
+Para usar otro usuario de Windows, inicia Docker Desktop en esa sesion.
+
+REQUISITOS
+Windows x64 compatible con Docker Desktop, WSL 2 y virtualizacion habilitada.
+Docker Compose 2.24.4 o superior (incluido en Docker Desktop reciente).
+Python 3.12 se instala solo para el usuario si no existe; no cambia PATH.
+Las dos APIs y el lanzador incluyen su runtime .NET.
+
+El paquete no contiene imagenes Docker descargadas: no es una instalacion
+offline. El detector requiere una camara autorizada o un video propio.
+No se valida precision real de conteo automaticamente.
+Las APIs trabajan en modo demo, con MFA simulado; no activan semaforos.
+El ejecutable no lleva firma comercial; no se instala como servicio ni exige
+administrador. Docker/WSL pueden necesitar permisos durante su instalacion.
+
+Fuente del proyecto: https://github.com/F4SG/_CYSA_.git
+Rama: feature/integracion-completa

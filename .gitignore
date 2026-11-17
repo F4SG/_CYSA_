@@ -28,3 +28,10 @@ mediciones/
 
 # Archivos de diagnóstico
 gcm-diagnose.log
+
+# Compilaciones y paquetes del lanzador
+desktop/**/bin/
+desktop/**/obj/
+artifacts/
+.launcher-setup/
+infra/launcher.override.yaml

@@ -1,5 +1,11 @@
 # CYSA — Sprint 1
 
+## Probar en Windows sin escribir comandos
+
+El paquete **CYSA-Windows.zip** incluye `CYSA.exe`, un centro de pruebas con botones para configurar la PC, iniciar/detener servicios, abrir el panel y ambas APIs, elegir cámara/video, ver credenciales y ejecutar verificaciones. Extrae todo el ZIP y abre el ejecutable. La primera instalación necesita internet y Docker Desktop con contenedores Linux; el lanzador incluye los runtimes .NET y el instalador oficial de Python 3.12.
+
+Cada usuario genera sus propias cuentas, certificados, puertos y proyecto Docker en `%LOCALAPPDATA%\CYSA`. No necesita la cuenta GitHub ni la instancia de F4SG. Cerrar el lanzador detiene sus servicios y conserva los datos. Consulta [las instrucciones del paquete](desktop/LEEME.txt) y [cómo construirlo y verificarlo](desktop/README.md).
+
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
 **Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora dos APIs independientes de evaluación y decisiones para pruebas locales.
