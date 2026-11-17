@@ -28,7 +28,21 @@ GPU requiere NVIDIA/CUDA y superar una inferencia real. «Preparar GPU» instala
 
 El marcado de carriles sigue siendo necesario. El primer uso descarga YOLO; las imágenes Docker y dependencias también se descargan durante la primera configuración. El paquete no es offline.
 
-## Simulación visual
+## Apariencia del centro de pruebas
+
+El selector «Tema» permite cambiar entre Claro y Oscuro con la paleta de
+`panel/tokens.css`. La elección se guarda por usuario en `appearance.json`;
+los registros visibles se recolorean al cambiar de tema sin perder su contenido.
+Los botones incluyen una descripción y conservan los nombres de las acciones.
+La recomendación CPU/GPU mantiene su destacado verde en ambos temas.
+
+El registro muestra hora y categoría de actividad: Docker en azul, equipo en
+ámbar y SUMO en violeta. Los resultados correctos se destacan en verde, las
+advertencias en ámbar y los errores en rojo, conservando también el texto del
+aviso. «Seguir salida» controla el desplazamiento automático y «Limpiar vista»
+vacía solo la consola de la ventana; el archivo de registro se conserva.
+
+## Demostración SUMO
 
 «Simulación SUMO (demo)» abre SUMO-GUI de la venv del usuario con una red sintética,
 plan fijo y 13 vehículos. No requiere iniciar Docker. Pulsa reproducir (Ctrl+A)

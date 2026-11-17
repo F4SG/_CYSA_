@@ -9,6 +9,9 @@ CYSA - CENTRO DE PRUEBAS PARA WINDOWS X64
 5. Cuando termine, pulsa Credenciales y Abrir panel.
 
 BOTONES
+- Tema: el selector superior permite elegir Claro u Oscuro. Se guarda para
+  cada usuario. El registro distingue las acciones y los avisos por colores.
+  Limpiar vista no borra el archivo de registro.
 - Iniciar sistema: enciende Docker, monitoreo y las dos APIs de demostracion.
 - Simulación SUMO (demo): abre el mapa animado de una intersección sintética
   con vehículos y semáforos. Pulsa reproducir (Ctrl+A) en SUMO. Funciona sin

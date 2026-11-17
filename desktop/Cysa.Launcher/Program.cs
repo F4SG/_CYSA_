@@ -344,80 +344,26 @@ internal sealed class Instance
     public static void Open(string target) => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
 }
 
-internal sealed class MainForm : Form
+internal sealed partial class MainForm : Form
 {
     readonly Instance instance;
-    readonly TextBox log = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill, Font = new Font("Consolas", 10), WordWrap = false, BackColor = Color.FromArgb(20, 29, 43), ForeColor = Color.WhiteSmoke };
+    readonly RichTextBox log = new() { Multiline = true, ReadOnly = true, ScrollBars = RichTextBoxScrollBars.Both, Dock = DockStyle.Fill, Font = new Font("Consolas", 9.5f), WordWrap = false, BorderStyle = BorderStyle.None, DetectUrls = false, HideSelection = false, AccessibleName = "Registro de actividad" };
     readonly Label status = new() { AutoSize = true, Text = "Listo para configurar", ForeColor = Color.FromArgb(22, 100, 80), Margin = new Padding(0, 8, 0, 8) };
     readonly List<Button> actions = [];
     readonly RadioButton cpu = new() { Text="CPU", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
     readonly RadioButton gpu = new() { Text="GPU NVIDIA (CUDA)", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
     readonly Label hardwareDetail = new() { Text="Configura esta PC para medir CPU y GPU. La opción recomendada se marcará en verde.", Dock=DockStyle.Fill };
-    readonly Button detectHardware = new() { Text="Detectar y recomendar", AutoSize=true };
-    readonly Button prepareGpu = new() { Text="Preparar GPU", AutoSize=true, Enabled=false };
+    readonly ThemedButton detectHardware = new() { Text="Detectar y recomendar", AutoSize=true };
+    readonly ThemedButton prepareGpu = new() { Text="Preparar GPU", AutoSize=true, Enabled=false };
     HardwareReport? hardware;
     bool busy;
 
     public MainForm(Instance instance)
     {
         this.instance = instance;
-        Text = "CYSA · Centro de pruebas"; MinimumSize = new Size(1000, 800); Size = new Size(1150, 950); StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 10); BackColor = Color.FromArgb(244, 247, 251); Padding = new Padding(24);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 154)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 240)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        Controls.Add(layout);
-        layout.Controls.Add(new Label { Text = "CYSA  /  Centro de pruebas", Font = new Font("Segoe UI", 23, FontStyle.Bold), AutoSize = true, ForeColor = Color.FromArgb(24, 46, 70) });
-        layout.Controls.Add(new Label { Text = "1. Instala Docker Desktop   2. Configura esta PC   3. Prueba cada apartado\nLa primera configuración necesita internet. Cada usuario tiene sus propias cuentas y datos.", Dock = DockStyle.Fill });
-        var hardwarePanel = new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=2 };
-        hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Absolute,52)); hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-        var modes = new FlowLayoutPanel { Dock=DockStyle.Fill };
-        modes.Controls.Add(cpu); modes.Controls.Add(gpu); modes.Controls.Add(detectHardware); modes.Controls.Add(prepareGpu);
-        hardwarePanel.Controls.Add(modes); hardwarePanel.Controls.Add(hardwareDetail); layout.Controls.Add(hardwarePanel);
-        detectHardware.Click += async (_,_) => await Execute(RefreshHardware);
-        prepareGpu.Click += async (_,_) => await Execute(async()=> { await instance.PrepareGpu(); await RefreshHardware(); });
-        cpu.CheckedChanged += (_,_)=> { if (!busy && cpu.Checked) instance.SaveDevice("cpu"); };
-        gpu.CheckedChanged += (_,_)=> { if (!busy && gpu.Checked && hardware != null) instance.SaveDevice(hardware.GpuDevice); };
-        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 4 };
-        for (var i=0;i<4;i++) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
-        for (var i=0;i<4;i++) buttons.RowStyles.Add(new RowStyle(SizeType.Percent,25));
-        layout.Controls.Add(buttons);
-        Add("Configurar esta PC", async()=> { await instance.Configure(); await RefreshHardware(); });
-        Add("Iniciar sistema", instance.StartAll);
-        Add("Abrir panel", () => { Instance.Open(instance.PanelUrl); return Task.CompletedTask; });
-        Add("Credenciales", Credentials);
-        Add("Contar con cámara", () => { var device=SelectedDevice(); using var dialog = new CameraDialog(); if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.Source,device); return Task.CompletedTask; });
-        Add("Contar con video", () => { var device=SelectedDevice(); using var dialog = new OpenFileDialog { Filter="Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.FileName,device); return Task.CompletedTask; });
-        Add("Evaluaciones", () => { Instance.Open($"http://localhost:{instance.Ports.Evaluation}/swagger"); return Task.CompletedTask; });
-        Add("Decisiones", () => { Instance.Open($"http://localhost:{instance.Ports.Decision}/swagger"); return Task.CompletedTask; });
-        Add("Verificar sistema", instance.Verify);
-        Add("Ejecutar pruebas", instance.Tests);
-        Add("Tokens de demo", Tokens);
-        Add("Detener sistema", instance.StopAll);
-        Add("Simulación SUMO (demo)", instance.OpenSumo);
-        buttons.SetColumnSpan(actions[^1], 4);
-        layout.Controls.Add(status); layout.Controls.Add(log);
-        var links = new FlowLayoutPanel { Dock = DockStyle.Fill };
-        Link("Instalar Docker Desktop", "https://docs.docker.com/desktop/setup/install/windows-install/");
-        Link("Abrir mis archivos", instance.Root);
-        var logs = new LinkLabel { Text="Ver registros", AutoSize=true, Margin=new Padding(12,6,12,0) }; logs.LinkClicked += async (_,_) => await Execute(instance.ShowLogs); links.Controls.Add(logs);
-        layout.Controls.Add(links);
-        layout.Controls.Add(new Label { Text="Solo pruebas: no activa semáforos. Cámara: S guarda carriles · D cambia sentido · Q sale.", AutoSize=true, ForeColor=Color.DimGray });
-        instance.Log = text => { if (IsHandleCreated && !IsDisposed) { try { BeginInvoke(() => { if (log.TextLength > 180000) log.Clear(); log.AppendText(text + Environment.NewLine); }); } catch (InvalidOperationException) { } } };
-        Shown += async (_,_) => { instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project); if (instance.Configured && File.Exists(instance.Venv)) await Execute(async()=> { instance.Seed(); await RefreshHardware(); }); };
-        FormClosing += async (_,e) => {
-            if (closing) return;
-            if (busy) { e.Cancel=true; MessageBox.Show(this,"Espera a que termine la operación actual.","CYSA"); return; }
-            e.Cancel=true; await Execute(instance.StopAll); FormClosing -= CloseHandler;
-            closing=true; Close();
-        };
-        FormClosing += CloseHandler;
-        void Add(string text, Func<Task> action) { var button = new Button { Text=text, Dock=DockStyle.Fill, Margin=new Padding(4), FlatStyle=FlatStyle.Flat, BackColor=Color.White }; actions.Add(button); buttons.Controls.Add(button); button.Click += async (_,_)=>await Execute(action); }
-        void Link(string text,string url) { var link=new LinkLabel { Text=text,AutoSize=true,Margin=new Padding(0,6,12,0) }; link.LinkClicked+=(_,_)=>Instance.Open(url); links.Controls.Add(link); }
+        BuildInterface();
     }
     bool closing;
-    void CloseHandler(object? sender, FormClosingEventArgs e) { if (closing) e.Cancel=false; }
     string SelectedDevice()
     {
         if (hardware == null) throw new InvalidOperationException("Pulsa Detectar y recomendar después de configurar esta PC.");
@@ -427,17 +373,14 @@ internal sealed class MainForm : Form
     {
         hardwareDetail.Text="Midiendo CPU y GPU con imágenes sintéticas. El primer uso descarga el modelo…";
         hardware=null; cpu.Checked=false; gpu.Checked=false;
-        cpu.BackColor=Color.Transparent; gpu.BackColor=Color.Transparent; cpu.Text="CPU"; gpu.Text="GPU NVIDIA (CUDA)";
+        StyleRecommendation(); cpu.Text="CPU"; gpu.Text="GPU NVIDIA (CUDA)";
         try
         {
             hardware=await instance.DetectHardware();
             var recommendGpu=hardware.Recommended!="cpu" && hardware.GpuReady;
             cpu.Text=recommendGpu ? "CPU" : "CPU · Recomendado";
             gpu.Text=recommendGpu ? "GPU · Recomendado" : "GPU NVIDIA (CUDA)";
-            cpu.BackColor=recommendGpu ? Color.Transparent : Color.FromArgb(211,246,222);
-            gpu.BackColor=recommendGpu ? Color.FromArgb(211,246,222) : Color.Transparent;
-            cpu.ForeColor=recommendGpu ? Color.Black : Color.FromArgb(12,100,44);
-            gpu.ForeColor=recommendGpu ? Color.FromArgb(12,100,44) : Color.Black;
+            StyleRecommendation();
             var saved=instance.SavedDevice();
             var device=saved=="cpu" || (hardware.GpuReady && saved==hardware.GpuDevice) ? saved : hardware.Recommended;
             gpu.Checked=device!="cpu" && hardware.GpuReady; cpu.Checked=!gpu.Checked;
@@ -445,12 +388,13 @@ internal sealed class MainForm : Form
         }
         catch { hardwareDetail.Text="No se pudo medir el equipo. Revisa el registro y vuelve a detectar; el primer uso necesita internet para descargar YOLO."; throw; }
     }
-    async Task Execute(Func<Task> action)
+    async Task Execute(Func<Task> action, string category = "SISTEMA", string? title = null)
     {
         if (busy) return;
+        operation=category; failed=false; instance.Write("▶ " + (title ?? category)); status.ForeColor=theme.GreenInk;
         busy=true; actions.ForEach(b=>b.Enabled=false); cpu.Enabled=false; gpu.Enabled=false; detectHardware.Enabled=false; prepareGpu.Enabled=false; status.Text="Trabajando…"; UseWaitCursor=true;
-        try { await action(); status.Text="Operación completada"; }
-        catch (Exception error) { instance.Write("ERROR: " + error.Message); status.Text="Revisa el aviso y vuelve a intentar"; MessageBox.Show(this,error.Message,"CYSA",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
+        try { await action(); status.Text="● Operación completada"; instance.Write("Completado: " + (title ?? category)); }
+        catch (Exception error) { failed=true; status.ForeColor=theme.Danger; instance.Write("ERROR: " + error.Message); status.Text="Revisa el aviso y vuelve a intentar"; MessageBox.Show(this,error.Message,"CYSA",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
         finally { busy=false; actions.ForEach(b=>b.Enabled=true); cpu.Enabled=hardware!=null; gpu.Enabled=hardware?.GpuReady==true; detectHardware.Enabled=true; prepareGpu.Enabled=hardware?.NvidiaDetected==true && !hardware.GpuReady; UseWaitCursor=false; }
     }
     Task Credentials()
@@ -460,7 +404,7 @@ internal sealed class MainForm : Form
         using var data=JsonDocument.Parse(File.ReadAllText(path));
         using var dialog=new Form { Text="Cuentas de esta PC",Size=new Size(650,260),StartPosition=FormStartPosition.CenterParent };
         dialog.Controls.Add(new TextBox { Dock=DockStyle.Fill,Multiline=true,ReadOnly=true,Font=new Font("Consolas",11),Text="Estas contraseñas pertenecen solo a esta instalación.\r\nNo compartas capturas ni estos archivos.\r\n\r\n"+string.Join("\r\n\r\n",data.RootElement.EnumerateObject().Select(p=>p.Name+": "+p.Value.GetString())) });
-        dialog.ShowDialog(this); return Task.CompletedTask;
+        ApplyControlTheme(dialog); dialog.ShowDialog(this); return Task.CompletedTask;
     }
     async Task Tokens()
     {
