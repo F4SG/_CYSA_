@@ -1,5 +1,9 @@
 # CYSA — Sprint 1
 
+**[Descargar CYSA para Windows — ZIP con CYSA.exe](https://github.com/F4SG/_CYSA_/releases/latest/download/CYSA-Windows.zip)**
+
+Extrae todo el ZIP y abre **CYSA.exe**. Esta descarga incluye el programa ejecutable. **Code → Download ZIP** descarga solamente el código fuente; para probar el programa usa el enlace anterior.
+
 ## Probar en Windows sin escribir comandos
 
 El paquete **CYSA-Windows.zip** incluye `CYSA.exe`, un centro de pruebas con botones para configurar la PC, iniciar/detener servicios, abrir el panel y ambas APIs, elegir cámara/video, ver credenciales y ejecutar verificaciones. Extrae todo el ZIP y abre el ejecutable. La primera instalación necesita internet y Docker Desktop con contenedores Linux; el lanzador incluye los runtimes .NET y el instalador oficial de Python 3.12.
