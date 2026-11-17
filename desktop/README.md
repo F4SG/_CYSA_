@@ -22,7 +22,11 @@ El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `do
 
 Las APIs .NET funcionan como procesos locales con SQLite en el `runtime` del usuario y escuchan en localhost. Se usan sus perfiles de demostración existentes, con MFA simulado, sin modificar las reglas de las APIs ni conectar con controladores reales. Al cerrar, el lanzador detiene sus procesos y su proyecto Compose, conservando los volúmenes.
 
-El botón cámara pide un índice; el de video abre un selector de archivos. Se pasa la fuente directamente al asistente existente y se usa CPU por defecto. El marcado de carriles sigue siendo necesario. El primer uso descarga YOLO; las imágenes Docker y dependencias también se descargan durante la primera configuración. El paquete no es offline.
+El botón cámara pide un índice; el de video abre un selector de archivos. Ambos usan el modo CPU o GPU elegido en la ventana y guardado por usuario, con tamaño de inferencia 640 px. Después de configurar y al abrir una instalación existente se mide YOLO a 640 px con imágenes sintéticas: dos calentamientos y la mediana de cinco inferencias por dispositivo, sincronizando CUDA. La GPU más rápida se recomienda solo si mejora más del 10 % frente a CPU; en otro caso se recomienda CPU. La opción recomendada se marca en verde con «Recomendado», independientemente de la elección manual. La medición depende de la carga y energía actuales; se puede repetir con «Detectar y recomendar».
+
+GPU requiere NVIDIA/CUDA y superar una inferencia real. «Preparar GPU» instala los pares oficiales de PyTorch/torchvision de [las instrucciones de PyTorch](https://pytorch.org/get-started/previous-versions/), según la versión máxima CUDA que anuncia `nvidia-smi`: 2.14.1/0.29.1 con cu130 o cu126; para controladores antiguos compatibles con 11.8, 2.7.1/0.22.1 con cu118. No instala controladores ni CUDA Toolkit. La descarga puede ocupar varios GB. Si CUDA no está disponible, se recomienda CPU y GPU queda deshabilitada hasta prepararla y comprobarla. AMD/Intel usan CPU en esta versión Windows. No se cambia silenciosamente de GPU a CPU al iniciar un conteo si el dispositivo dejó de estar disponible: se muestra el error y se pide volver a detectar o elegir CPU.
+
+El marcado de carriles sigue siendo necesario. El primer uso descarga YOLO; las imágenes Docker y dependencias también se descargan durante la primera configuración. El paquete no es offline.
 
 ## Verificación
 

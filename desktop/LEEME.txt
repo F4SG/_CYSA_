@@ -10,7 +10,15 @@ CYSA - CENTRO DE PRUEBAS PARA WINDOWS X64
 
 BOTONES
 - Iniciar sistema: enciende Docker, monitoreo y las dos APIs de demostracion.
-- Camara/video: selecciona fuente sin CMD. CPU por defecto, sin exigir NVIDIA.
+- Modo del detector: elige CPU o GPU. Detectar y recomendar mide YOLO con
+  imagenes sinteticas y marca en VERDE la opcion mas rapida con Recomendado.
+  La eleccion manual se conserva para el usuario, aunque sea diferente de
+  la recomendacion. La prueba no mide precision real de conteo.
+- Preparar GPU: si hay NVIDIA pero falta CUDA en Python, instala los paquetes
+  oficiales de PyTorch compatibles y vuelve a comparar (descarga varios GB).
+  La GPU se habilita solo si supera una inferencia real. AMD/Intel utilizan
+  CPU en esta version de Windows. CPU siempre sigue siendo una alternativa.
+- Camara/video: usa el modo seleccionado y selecciona fuente sin CMD.
   Marca 4 esquinas, ajusta carriles con 1-8, D invierte sentido, S guarda, Q sale.
   YOLO descarga su modelo al primer uso; requiere internet en esa primera vez.
 - Evaluaciones/Decisiones: abre Swagger de la API correspondiente.

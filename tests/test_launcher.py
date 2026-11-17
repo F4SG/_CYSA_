@@ -3,12 +3,17 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
+import types
 
 import pytest
 
 spec = importlib.util.spec_from_file_location('desktop_runtime', Path(__file__).resolve().parents[1] / 'desktop/runtime.py')
 runtime = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runtime)
+hardware_spec = importlib.util.spec_from_file_location('launcher_hardware', Path(__file__).resolve().parents[1] / 'desktop/hardware.py')
+hardware = importlib.util.module_from_spec(hardware_spec)
+hardware_spec.loader.exec_module(hardware)
 
 
 def root_at(tmp_path, name):
@@ -70,3 +75,70 @@ def test_unknown_partial_config_is_preserved(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match='incompleta'):
         runtime.prepare(root, 'http://localhost:18080', 'http://localhost:18088', 18883)
     assert (root / 'infra/.env').read_text() == 'NO_BORRAR=secreto'
+
+
+@pytest.mark.parametrize('cpu,gpus,expected', [
+    (100, [], 'cpu'),
+    (100, [dict(Device='0', Ms=110)], 'cpu'),
+    (100, [dict(Device='0', Ms=95)], 'cpu'),
+    (100, [dict(Device='0', Ms=40)], '0'),
+    (100, [dict(Device='0', Ms=40), dict(Device='1', Ms=20)], '1'),
+    (100, [dict(Device='0', Ms=None)], 'cpu'),
+])
+def test_recommendation_uses_measured_speed_and_avoids_noise(cpu, gpus, expected):
+    assert hardware.choose(cpu, gpus)[0] == expected
+
+
+@pytest.mark.parametrize('version,index', [((13, 5), 'cu130'), ((12, 8), 'cu126'), ((11, 8), 'cu118'), ((11, 7), None), (None, None)])
+def test_gpu_packages_match_supported_driver_version(version, index):
+    result = hardware.cuda_packages(version)
+    assert (result[2] if result else None) == index
+
+
+def test_unavailable_gpu_does_not_silently_run_as_cpu(monkeypatch):
+    monkeypatch.setitem(sys.modules, 'torch', types.SimpleNamespace(cuda=types.SimpleNamespace(is_available=lambda: False)))
+    assert hardware.validate_device('cpu') == 'cpu'
+    with pytest.raises(RuntimeError, match='ya no está disponible'):
+        hardware.validate_device('0')
+    with pytest.raises(ValueError):
+        hardware.validate_device('gpu;cmd')
+
+
+def test_detect_compares_cpu_and_gpu_and_recovers_from_gpu_failure(tmp_path, monkeypatch):
+    cuda = types.SimpleNamespace(is_available=lambda: True, device_count=lambda: 2, get_device_name=lambda index: f'GPU {index}')
+    monkeypatch.setitem(sys.modules, 'torch', types.SimpleNamespace(cuda=cuda))
+    monkeypatch.setattr(hardware, 'nvidia_info', lambda: (True, (13, 0)))
+    seen = []
+    def measure(weights, device):
+        seen.append(device)
+        if device == '1':
+            raise RuntimeError('GPU no compatible')
+        return 100 if device == 'cpu' else 20
+    monkeypatch.setattr(hardware, 'benchmark', measure)
+    result = hardware.detect(tmp_path)
+    assert seen == ['cpu', '0', '1']
+    assert result['Recommended'] == '0'
+    assert result['GpuReady'] is True
+    assert result['CpuMs'] == 100 and result['GpuMs'] == 20
+
+
+@pytest.mark.parametrize('device,expected', [('cpu', 'cpu'), ('1', 1)])
+def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, expected):
+    import yaml
+    root = tmp_path / 'usuario'
+    (root / 'deteccion/config').mkdir(parents=True)
+    (root / 'deteccion/config/carriles_cristhian.yaml').write_text('device: cpu\n')
+    captured = {}
+    class Facade:
+        def iniciar(self, profile, output, **kwargs):
+            captured.update(yaml.safe_load(profile.read_text()))
+            captured['source'] = kwargs['fuente']
+            return 0
+    monkeypatch.setattr(runtime, 'ROOT', root)
+    monkeypatch.setitem(sys.modules, 'detector', types.SimpleNamespace(FachadaConteo=Facade))
+    monkeypatch.setitem(sys.modules, 'hardware', types.SimpleNamespace(validate_device=lambda _: expected))
+    monkeypatch.chdir(tmp_path)
+    assert runtime.detector('video con espacios.mp4', device) == 0
+    assert captured['device'] == expected
+    assert captured['imgsz'] == 640
+    assert captured['source'] == 'video con espacios.mp4'

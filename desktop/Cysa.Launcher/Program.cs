@@ -15,12 +15,15 @@ internal static class Program
         if (args.Contains("--self-test")) { SelfTest.Run(args.Last()); return; }
         if (args.Length == 3 && args[0] == "--integration-test") { IntegrationTest.Run(args[1], args[2]).GetAwaiter().GetResult(); return; }
         ApplicationConfiguration.Initialize();
-        using var mutex = new Mutex(true, "Local\\CYSA-" + Instance.ProjectFor(Instance.Home), out var first);
+        var root = args.Length == 2 && args[0] == "--data-dir" ? Path.GetFullPath(args[1]) : Instance.Home;
+        using var mutex = new Mutex(true, "Local\\CYSA-" + Instance.ProjectFor(root), out var first);
         if (!first) { MessageBox.Show("CYSA ya está abierto para este usuario."); return; }
-        try { Application.Run(new MainForm(new Instance())); }
+        try { Application.Run(new MainForm(new Instance(root))); }
         catch (Exception error) { MessageBox.Show(error.Message, "CYSA", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 }
+
+internal sealed record HardwareReport(string Recommended, bool GpuReady, string GpuDevice, string GpuName, double CpuMs, double? GpuMs, bool NvidiaDetected, string Reason);
 
 internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision)
 {
@@ -270,11 +273,39 @@ internal sealed class Instance
         Write("Pruebas terminadas correctamente.");
     }
 
-    public void StartDetector(string source)
+    public string? SavedDevice()
+    {
+        try { return JsonSerializer.Deserialize<Dictionary<string,string>>(File.ReadAllText(Path.Combine(Root,"detector-mode.json")))?.GetValueOrDefault("Device"); }
+        catch (Exception error) when (error is IOException or JsonException) { return null; }
+    }
+
+    public void SaveDevice(string device) => File.WriteAllText(Path.Combine(Root,"detector-mode.json"), JsonSerializer.Serialize(new { Device=device }));
+
+    void RequireDetectorStopped()
+    {
+        if (Detector is { HasExited:false }) throw new InvalidOperationException("Cierra el detector con Q antes de medir el equipo o preparar la GPU.");
+    }
+
+    public async Task<HardwareReport> DetectHardware()
+    {
+        RequireConfigured(); RequireDetectorStopped();
+        var report = Path.Combine(Root,"hardware.json");
+        await Run(Venv,["desktop/runtime.py","hardware","--out",report],timeoutMinutes:5);
+        return JsonSerializer.Deserialize<HardwareReport>(File.ReadAllText(report)) ?? throw new InvalidOperationException("No se pudo leer la prueba del equipo.");
+    }
+
+    public async Task PrepareGpu()
+    {
+        RequireConfigured(); RequireDetectorStopped();
+        await Run(Venv,["desktop/runtime.py","prepare-gpu"],timeoutMinutes:60);
+    }
+
+    public void StartDetector(string source, string device)
     {
         RequireConfigured();
         if (Detector is { HasExited: false }) throw new InvalidOperationException("Ya hay un detector abierto. Ciérralo con Q antes de iniciar otro.");
-        Detector = Start(Venv, ["desktop/runtime.py", "detector", "--source", source]);
+        SaveDevice(device);
+        Detector = Start(Venv, ["desktop/runtime.py", "detector", "--source", source,"--device",device]);
         Write("Marca cuatro esquinas, ajusta carriles con 1–8 y pulsa S. D invierte el sentido; Q termina.");
     }
 
@@ -292,30 +323,45 @@ internal sealed class MainForm : Form
     readonly TextBox log = new() { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill, Font = new Font("Consolas", 10), WordWrap = false, BackColor = Color.FromArgb(20, 29, 43), ForeColor = Color.WhiteSmoke };
     readonly Label status = new() { AutoSize = true, Text = "Listo para configurar", ForeColor = Color.FromArgb(22, 100, 80), Margin = new Padding(0, 8, 0, 8) };
     readonly List<Button> actions = [];
+    readonly RadioButton cpu = new() { Text="CPU", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
+    readonly RadioButton gpu = new() { Text="GPU NVIDIA (CUDA)", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
+    readonly Label hardwareDetail = new() { Text="Configura esta PC para medir CPU y GPU. La opción recomendada se marcará en verde.", Dock=DockStyle.Fill };
+    readonly Button detectHardware = new() { Text="Detectar y recomendar", AutoSize=true };
+    readonly Button prepareGpu = new() { Text="Preparar GPU", AutoSize=true, Enabled=false };
+    HardwareReport? hardware;
     bool busy;
 
     public MainForm(Instance instance)
     {
         this.instance = instance;
-        Text = "CYSA · Centro de pruebas"; MinimumSize = new Size(960, 720); Size = new Size(1100, 850); StartPosition = FormStartPosition.CenterScreen;
+        Text = "CYSA · Centro de pruebas"; MinimumSize = new Size(1000, 800); Size = new Size(1150, 950); StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10); BackColor = Color.FromArgb(244, 247, 251); Padding = new Padding(24);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 154)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Controls.Add(layout);
         layout.Controls.Add(new Label { Text = "CYSA  /  Centro de pruebas", Font = new Font("Segoe UI", 23, FontStyle.Bold), AutoSize = true, ForeColor = Color.FromArgb(24, 46, 70) });
         layout.Controls.Add(new Label { Text = "1. Instala Docker Desktop   2. Configura esta PC   3. Prueba cada apartado\nLa primera configuración necesita internet. Cada usuario tiene sus propias cuentas y datos.", Dock = DockStyle.Fill });
+        var hardwarePanel = new TableLayoutPanel { Dock=DockStyle.Fill,ColumnCount=1,RowCount=2 };
+        hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Absolute,52)); hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Percent,100));
+        var modes = new FlowLayoutPanel { Dock=DockStyle.Fill };
+        modes.Controls.Add(cpu); modes.Controls.Add(gpu); modes.Controls.Add(detectHardware); modes.Controls.Add(prepareGpu);
+        hardwarePanel.Controls.Add(modes); hardwarePanel.Controls.Add(hardwareDetail); layout.Controls.Add(hardwarePanel);
+        detectHardware.Click += async (_,_) => await Execute(RefreshHardware);
+        prepareGpu.Click += async (_,_) => await Execute(async()=> { await instance.PrepareGpu(); await RefreshHardware(); });
+        cpu.CheckedChanged += (_,_)=> { if (!busy && cpu.Checked) instance.SaveDevice("cpu"); };
+        gpu.CheckedChanged += (_,_)=> { if (!busy && gpu.Checked && hardware != null) instance.SaveDevice(hardware.GpuDevice); };
         var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 3 };
         for (var i=0;i<4;i++) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
         for (var i=0;i<3;i++) buttons.RowStyles.Add(new RowStyle(SizeType.Percent,33));
         layout.Controls.Add(buttons);
-        Add("Configurar esta PC", instance.Configure);
+        Add("Configurar esta PC", async()=> { await instance.Configure(); await RefreshHardware(); });
         Add("Iniciar sistema", instance.StartAll);
         Add("Abrir panel", () => { Instance.Open(instance.PanelUrl); return Task.CompletedTask; });
         Add("Credenciales", Credentials);
-        Add("Contar con cámara", () => { using var dialog = new CameraDialog(); if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.Source); return Task.CompletedTask; });
-        Add("Contar con video", () => { using var dialog = new OpenFileDialog { Filter="Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.FileName); return Task.CompletedTask; });
+        Add("Contar con cámara", () => { var device=SelectedDevice(); using var dialog = new CameraDialog(); if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.Source,device); return Task.CompletedTask; });
+        Add("Contar con video", () => { var device=SelectedDevice(); using var dialog = new OpenFileDialog { Filter="Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this)==DialogResult.OK) instance.StartDetector(dialog.FileName,device); return Task.CompletedTask; });
         Add("Evaluaciones", () => { Instance.Open($"http://localhost:{instance.Ports.Evaluation}/swagger"); return Task.CompletedTask; });
         Add("Decisiones", () => { Instance.Open($"http://localhost:{instance.Ports.Decision}/swagger"); return Task.CompletedTask; });
         Add("Verificar sistema", instance.Verify);
@@ -330,7 +376,7 @@ internal sealed class MainForm : Form
         layout.Controls.Add(links);
         layout.Controls.Add(new Label { Text="Solo pruebas: no activa semáforos. Cámara: S guarda carriles · D cambia sentido · Q sale.", AutoSize=true, ForeColor=Color.DimGray });
         instance.Log = text => { if (IsHandleCreated && !IsDisposed) { try { BeginInvoke(() => { if (log.TextLength > 180000) log.Clear(); log.AppendText(text + Environment.NewLine); }); } catch (InvalidOperationException) { } } };
-        Shown += (_,_) => instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project);
+        Shown += async (_,_) => { instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project); if (instance.Configured && File.Exists(instance.Venv)) await Execute(async()=> { instance.Seed(); await RefreshHardware(); }); };
         FormClosing += async (_,e) => {
             if (closing) return;
             if (busy) { e.Cancel=true; MessageBox.Show(this,"Espera a que termine la operación actual.","CYSA"); return; }
@@ -343,13 +389,40 @@ internal sealed class MainForm : Form
     }
     bool closing;
     void CloseHandler(object? sender, FormClosingEventArgs e) { if (closing) e.Cancel=false; }
+    string SelectedDevice()
+    {
+        if (hardware == null) throw new InvalidOperationException("Pulsa Detectar y recomendar después de configurar esta PC.");
+        return gpu.Checked && hardware.GpuReady ? hardware.GpuDevice : "cpu";
+    }
+    async Task RefreshHardware()
+    {
+        hardwareDetail.Text="Midiendo CPU y GPU con imágenes sintéticas. El primer uso descarga el modelo…";
+        hardware=null; cpu.Checked=false; gpu.Checked=false;
+        cpu.BackColor=Color.Transparent; gpu.BackColor=Color.Transparent; cpu.Text="CPU"; gpu.Text="GPU NVIDIA (CUDA)";
+        try
+        {
+            hardware=await instance.DetectHardware();
+            var recommendGpu=hardware.Recommended!="cpu" && hardware.GpuReady;
+            cpu.Text=recommendGpu ? "CPU" : "CPU · Recomendado";
+            gpu.Text=recommendGpu ? "GPU · Recomendado" : "GPU NVIDIA (CUDA)";
+            cpu.BackColor=recommendGpu ? Color.Transparent : Color.FromArgb(211,246,222);
+            gpu.BackColor=recommendGpu ? Color.FromArgb(211,246,222) : Color.Transparent;
+            cpu.ForeColor=recommendGpu ? Color.Black : Color.FromArgb(12,100,44);
+            gpu.ForeColor=recommendGpu ? Color.FromArgb(12,100,44) : Color.Black;
+            var saved=instance.SavedDevice();
+            var device=saved=="cpu" || (hardware.GpuReady && saved==hardware.GpuDevice) ? saved : hardware.Recommended;
+            gpu.Checked=device!="cpu" && hardware.GpuReady; cpu.Checked=!gpu.Checked;
+            hardwareDetail.Text=$"CPU: {hardware.CpuMs:0.0} ms/imagen"+(hardware.GpuReady ? $"  |  {hardware.GpuName}: {hardware.GpuMs:0.0} ms/imagen" : "")+"\n"+hardware.Reason+" Puedes elegir manualmente; la prueba no mide precisión de conteo.";
+        }
+        catch { hardwareDetail.Text="No se pudo medir el equipo. Revisa el registro y vuelve a detectar; el primer uso necesita internet para descargar YOLO."; throw; }
+    }
     async Task Execute(Func<Task> action)
     {
         if (busy) return;
-        busy=true; actions.ForEach(b=>b.Enabled=false); status.Text="Trabajando…"; UseWaitCursor=true;
+        busy=true; actions.ForEach(b=>b.Enabled=false); cpu.Enabled=false; gpu.Enabled=false; detectHardware.Enabled=false; prepareGpu.Enabled=false; status.Text="Trabajando…"; UseWaitCursor=true;
         try { await action(); status.Text="Operación completada"; }
         catch (Exception error) { instance.Write("ERROR: " + error.Message); status.Text="Revisa el aviso y vuelve a intentar"; MessageBox.Show(this,error.Message,"CYSA",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
-        finally { busy=false; actions.ForEach(b=>b.Enabled=true); UseWaitCursor=false; }
+        finally { busy=false; actions.ForEach(b=>b.Enabled=true); cpu.Enabled=hardware!=null; gpu.Enabled=hardware?.GpuReady==true; detectHardware.Enabled=true; prepareGpu.Enabled=hardware?.NvidiaDetected==true && !hardware.GpuReady; UseWaitCursor=false; }
     }
     Task Credentials()
     {
@@ -399,11 +472,16 @@ internal static class SelfTest
             File.WriteAllText(Path.Combine(instance.Repo,"infra",".env"),"TEST=privado");
             instance.Seed();
             if (File.ReadAllText(Path.Combine(instance.Repo,"infra",".env"))!="TEST=privado") throw new Exception("Se alteró estado privado");
+            instance.SaveDevice("cpu");
+            if (new Instance(instance.Root,package).SavedDevice()!="cpu") throw new Exception("No se conservó el modo CPU del usuario");
+            instance.SaveDevice("1");
+            if (new Instance(instance.Root,package).SavedDevice()!="1") throw new Exception("No se conservó la GPU elegida");
+            if (new Instance(Path.Combine(root,"otro usuario"),package).SavedDevice()!=null) throw new Exception("El modo se compartió entre usuarios");
             Directory.CreateDirectory(Path.Combine(package,"app","infra","runtime"));
             File.WriteAllText(Path.Combine(package,"app","infra","runtime","secreto"),"no copiar");
             var rejected=false; try { instance.Seed(); } catch (InvalidOperationException) { rejected=true; }
             if (!rejected) throw new Exception("No se rechazó un paquete con secretos");
-            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado y rechazo de secretos.");
+            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario y rechazo de secretos.");
         }
         finally { Directory.Delete(root,true); }
     }

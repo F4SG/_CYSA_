@@ -6,6 +6,8 @@ El paquete **CYSA-Windows.zip** incluye `CYSA.exe`, un centro de pruebas con bot
 
 Cada usuario genera sus propias cuentas, certificados, puertos y proyecto Docker en `%LOCALAPPDATA%\CYSA`. No necesita la cuenta GitHub ni la instancia de F4SG. Cerrar el lanzador detiene sus servicios y conserva los datos. Consulta [las instrucciones del paquete](desktop/LEEME.txt) y [cómo construirlo y verificarlo](desktop/README.md).
 
+En el lanzador puedes elegir **CPU o GPU NVIDIA/CUDA** para el conteo. Una prueba breve de inferencia detecta qué opción rinde mejor en esa PC y la marca en **verde con «Recomendado»**. Puedes cambiarla manualmente; la elección queda guardada para el usuario. Si falta el soporte CUDA, el botón **Preparar GPU** lo instala y vuelve a medir.
+
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
 **Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora dos APIs independientes de evaluación y decisiones para pruebas locales.

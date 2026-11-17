@@ -196,15 +196,18 @@ def demo_test(args):
     print('PASS: dos APIs HTTP, evaluación, rechazo/aprobación, permisos, MFA simulado e idempotencia.')
 
 
-def detector(source):
+def detector(source, device='cpu'):
     import yaml
     from detector import FachadaConteo
+    from hardware import validate_device
     os.chdir(ROOT)
     profile = yaml.safe_load((ROOT / 'deteccion/config/carriles_cristhian.yaml').read_text(encoding='utf-8'))
-    profile.update(device='cpu', configuracion_verificada=False, model='deteccion/modelos/yolo26s.pt')
-    destination = ROOT / 'resultados/launcher-cpu.yaml'
+    selected = validate_device(device)
+    profile.update(device=selected, imgsz=640, configuracion_verificada=False, model='deteccion/modelos/yolo26s.pt')
+    destination = ROOT / f'resultados/launcher-{device}.yaml'
     destination.parent.mkdir(exist_ok=True)
     destination.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding='utf-8')
+    print('Modo del detector: ' + ('CPU' if device == 'cpu' else 'GPU CUDA ' + device), flush=True)
     return FachadaConteo().iniciar(destination, ROOT / ('resultados/conteos_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv'), fuente=source, marcar='zona')
 
 
@@ -222,6 +225,10 @@ def main():
         command.add_argument('--decision', required=True)
     command = commands.add_parser('detector')
     command.add_argument('--source', required=True)
+    command.add_argument('--device', default='cpu')
+    command = commands.add_parser('hardware')
+    command.add_argument('--out', type=Path, required=True)
+    commands.add_parser('prepare-gpu')
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare(ROOT, args.identity, args.panel, args.mqtt_port)
@@ -229,8 +236,16 @@ def main():
         verify(args)
     elif args.action == 'demo-test':
         demo_test(args)
+    elif args.action == 'hardware':
+        from hardware import detect
+        result = detect(ROOT)
+        args.out.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+        print('Recomendado: ' + ('CPU' if result['Recommended'] == 'cpu' else 'GPU'))
+    elif args.action == 'prepare-gpu':
+        from hardware import prepare_gpu
+        prepare_gpu()
     else:
-        return detector(args.source)
+        return detector(args.source, args.device)
     return 0
 
 
