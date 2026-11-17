@@ -24,6 +24,7 @@ internal static class Program
 }
 
 internal sealed record HardwareReport(string Recommended, bool GpuReady, string GpuDevice, string GpuName, double CpuMs, double? GpuMs, bool NvidiaDetected, string Reason);
+internal sealed record SumoScenario(string Executable, string Config, int Expected);
 
 internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision)
 {
@@ -56,6 +57,7 @@ internal sealed class Instance
     public string Docker { get; }
     public Action<string> Log { get; set; } = _ => { };
     public Process? Detector { get; private set; }
+    public Process? SumoGui { get; private set; }
     readonly Dictionary<string, Process> apis = [];
     readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(3) };
     readonly string logPath;
@@ -249,6 +251,14 @@ internal sealed class Instance
 
     public async Task StopAll()
     {
+        if (SumoGui is { HasExited: false })
+        {
+            SumoGui.CloseMainWindow();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await SumoGui.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException) { SumoGui.Kill(true); await SumoGui.WaitForExitAsync(); }
+        }
+        SumoGui?.Dispose(); SumoGui = null;
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
         foreach (var process in apis.Values) { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } process.Dispose(); }
         apis.Clear();
@@ -309,6 +319,23 @@ internal sealed class Instance
         Write("Marca cuatro esquinas, ajusta carriles con 1–8 y pulsa S. D invierte el sentido; Q termina.");
     }
 
+    public async Task OpenSumo()
+    {
+        RequireConfigured();
+        if (SumoGui is { HasExited: false }) throw new InvalidOperationException("SUMO ya está abierto. Usa su ventana o ciérrala antes de abrir otra simulación.");
+        SumoGui?.Dispose();
+        var report = Path.Combine(Root, "sumo-scenario.json");
+        await Run(Venv, ["desktop/sumo_gui.py", "--report", report]);
+        var scenario = JsonSerializer.Deserialize<SumoScenario>(File.ReadAllText(report))
+            ?? throw new InvalidOperationException("No se pudo preparar el escenario SUMO.");
+        SumoGui = Start(scenario.Executable, ["-c", scenario.Config, "--seed", "42", "--delay", "150", "--window-size", "1100,750"], Path.GetDirectoryName(scenario.Config));
+        await Task.Delay(1000);
+        if (SumoGui.HasExited) throw new InvalidOperationException("SUMO-GUI no pudo abrirse. Revisa el registro de la ventana.");
+        Write($"SUMO-GUI abierto: DEMO sintética, plan fijo y {scenario.Expected} vehículos. No es tráfico real.");
+        Write("En SUMO pulsa ▶ (Ctrl+A) para reproducir. Puedes pausar y ajustar Delay (ms). No necesita Docker ni el modo GPU del detector.");
+        Write("Al terminar, cierra SUMO para guardar tripinfo.xml. Si lo cierras antes, los resultados son parciales. Archivos: " + Path.GetDirectoryName(scenario.Config));
+    }
+
     public async Task ShowLogs()
     {
         if (Configured) await Compose("logs", "--tail", "40", "api", "consumer", "mosquitto");
@@ -338,7 +365,7 @@ internal sealed class MainForm : Form
         Font = new Font("Segoe UI", 10); BackColor = Color.FromArgb(244, 247, 251); Padding = new Padding(24);
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 154)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 154)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 240)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Controls.Add(layout);
         layout.Controls.Add(new Label { Text = "CYSA  /  Centro de pruebas", Font = new Font("Segoe UI", 23, FontStyle.Bold), AutoSize = true, ForeColor = Color.FromArgb(24, 46, 70) });
@@ -352,9 +379,9 @@ internal sealed class MainForm : Form
         prepareGpu.Click += async (_,_) => await Execute(async()=> { await instance.PrepareGpu(); await RefreshHardware(); });
         cpu.CheckedChanged += (_,_)=> { if (!busy && cpu.Checked) instance.SaveDevice("cpu"); };
         gpu.CheckedChanged += (_,_)=> { if (!busy && gpu.Checked && hardware != null) instance.SaveDevice(hardware.GpuDevice); };
-        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 3 };
+        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 4 };
         for (var i=0;i<4;i++) buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,25));
-        for (var i=0;i<3;i++) buttons.RowStyles.Add(new RowStyle(SizeType.Percent,33));
+        for (var i=0;i<4;i++) buttons.RowStyles.Add(new RowStyle(SizeType.Percent,25));
         layout.Controls.Add(buttons);
         Add("Configurar esta PC", async()=> { await instance.Configure(); await RefreshHardware(); });
         Add("Iniciar sistema", instance.StartAll);
@@ -368,6 +395,8 @@ internal sealed class MainForm : Form
         Add("Ejecutar pruebas", instance.Tests);
         Add("Tokens de demo", Tokens);
         Add("Detener sistema", instance.StopAll);
+        Add("Simulación SUMO (demo)", instance.OpenSumo);
+        buttons.SetColumnSpan(actions[^1], 4);
         layout.Controls.Add(status); layout.Controls.Add(log);
         var links = new FlowLayoutPanel { Dock = DockStyle.Fill };
         Link("Instalar Docker Desktop", "https://docs.docker.com/desktop/setup/install/windows-install/");

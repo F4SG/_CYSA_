@@ -28,7 +28,18 @@ GPU requiere NVIDIA/CUDA y superar una inferencia real. «Preparar GPU» instala
 
 El marcado de carriles sigue siendo necesario. El primer uso descarga YOLO; las imágenes Docker y dependencias también se descargan durante la primera configuración. El paquete no es offline.
 
-## Verificación
+## Simulación visual
+
+«Simulación SUMO (demo)» abre SUMO-GUI de la venv del usuario con una red sintética,
+plan fijo y 13 vehículos. No requiere iniciar Docker. Pulsa reproducir (Ctrl+A)
+en SUMO; el retardo inicial es 150 ms para observar el movimiento. Cada apertura
+crea una carpeta nueva en `workspace/resultados/sumo_gui`, sin sobrescribir corridas.
+Al cerrar SUMO se guarda `tripinfo.xml`; cerrar antes de finalizar deja resultados
+parciales. El lanzador evita abrir dos simulaciones propias simultáneas y cierra su
+ventana al detener el sistema. No calcula Webster ni aplica planes a controladores.
+La interfaz usa las opciones oficiales de [SUMO-GUI](https://sumo.dlr.de/docs/sumo-gui.html).
+
+## Comprobaciones
 
 ```powershell
 dotnet build desktop/Cysa.Launcher/Cysa.Launcher.csproj
