@@ -28,7 +28,7 @@ async function refresh(more=false){
 function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 $('intersectionFilter').addEventListener('change',()=>refresh());$('live').addEventListener('change',()=>{$('desde').disabled=$('live').checked;$('hasta').disabled=$('live').checked;if($('live').checked)refresh();});$('search').addEventListener('input',draw);$('reload').addEventListener('click',()=>refresh());$('loadMore').addEventListener('click',()=>refresh(true));
 const login=()=>oidc.login().catch(e=>{$('status').classList.add('error');$('status').textContent=e.message;});$('login').addEventListener('click',login);$('welcomeLogin').addEventListener('click',login);$('logout').addEventListener('click',oidc.logout);
-const views={conteos:['MONITOREO','Flujo vehicular','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Inventario','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Usuarios','Gestiona tu equipo y sus permisos de acceso.']};
+const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuarios y roles','Gestiona tu equipo y sus permisos de acceso.']};
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
  const selected=button.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===button)));
  for(const id of Object.keys(views))$(id).hidden=id!==selected;
@@ -37,3 +37,6 @@ document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener(
  if(users)loadUsers();
 }));
 try{config=await (await fetch('config.json')).json();const active=await oidc.init(config);if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
+
+// Los módulos ampliados se abren en el panel Web III de la instalación local.
+document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>{const base=config?.webApiBase||'http://localhost:15183';window.open(base+'/demo#'+encodeURIComponent(button.dataset.webCase),'_blank','noopener');}));
