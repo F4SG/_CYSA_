@@ -55,7 +55,8 @@ public sealed class DecisionesController(DecisionesDb db, IHttpClientFactory cli
         // Una sola escritura transaccional conserva decisión, actor e instantánea de la evaluación.
         // Los índices únicos también protegen solicitudes concurrentes entre procesos.
         try { await db.SaveChangesAsync(ct); }
-        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 })
+        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 }
+            or Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
         {
             db.ChangeTracker.Clear();
             existente = await db.Decisiones.AsNoTracking().SingleOrDefaultAsync(d => d.SolicitudId == solicitud.SolicitudId, ct);

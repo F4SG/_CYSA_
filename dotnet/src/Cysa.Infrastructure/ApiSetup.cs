@@ -26,7 +26,7 @@ public static class ApiSetup
         return Path.Combine(directory.FullName, "runtime");
     }
 
-    public static void AddCysaApi(this WebApplicationBuilder builder, string titulo)
+    public static void AddCysaApi(this WebApplicationBuilder builder, string titulo, string? descripcion = null)
     {
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddControllers().AddJsonOptions(o =>
@@ -36,7 +36,7 @@ public static class ApiSetup
         builder.Services.AddSwaggerGen(o =>
         {
             o.SwaggerDoc("v1", new() { Title = titulo, Version = "v1", Description =
-                "Extensión de laboratorio CYSA. Solo planes de prueba; no activa semáforos ni ejecuta SUMO." });
+                descripcion ?? "Extensión de laboratorio CYSA. Solo planes de prueba; no activa semáforos ni ejecuta SUMO." });
             o.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 { Type = SecuritySchemeType.Http, Scheme = "bearer", BearerFormat = "JWT" });
             o.AddSecurityRequirement(document => new OpenApiSecurityRequirement
@@ -125,9 +125,9 @@ public static class ApiSetup
         long.TryParse(user.FindFirst("auth_time")?.Value, out var timestamp) &&
         timestamp <= ahora.ToUnixTimeSeconds() && ahora.ToUnixTimeSeconds() - timestamp <= 300;
 
-    public static void UseCysaApi(this WebApplication app)
+    public static void UseCysaApi(this WebApplication app, bool manejarErrores = true)
     {
-        app.UseExceptionHandler();
+        if (manejarErrores) app.UseExceptionHandler();
         app.UseStatusCodePages();
         // HTTP solo para la demo local. En despliegue OIDC debe terminar TLS.
         if (!app.Environment.IsDevelopment()) app.UseHttpsRedirection();

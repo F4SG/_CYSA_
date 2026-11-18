@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../Cysa.Evaluaciones.Api/Cysa.Evaluaciones.Api.csproj" />
+    <ProjectReference Include="../Cysa.Decisiones.Api/Cysa.Decisiones.Api.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.15" />
+  </ItemGroup>
+  <Target Name="ExcluirConfiguracionDeHostsHistoricos" BeforeTargets="_HandleFileConflictsForPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.RelativePath)' == 'appsettings.json' And '%(ResolvedFileToPublish.FullPath)' != '$(MSBuildProjectDirectory)\appsettings.json'" />
+    </ItemGroup>
+  </Target>
+</Project>

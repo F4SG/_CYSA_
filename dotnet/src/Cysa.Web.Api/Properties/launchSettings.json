@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "WebIII": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "demo",
+      "applicationUrl": "http://localhost:5183",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Security__Mode": "Demo",
+        "Demo__Enabled": "true"
+      }
+    }
+  }
+}

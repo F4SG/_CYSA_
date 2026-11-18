@@ -1,0 +1,146 @@
+[
+  {
+    "entidad": "Corredor",
+    "ruta": "corredores",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Interseccion",
+    "ruta": "intersecciones",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Acceso",
+    "ruta": "accesos",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Carril",
+    "ruta": "carriles",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "FuenteDeteccion",
+    "ruta": "fuentes-deteccion",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "ControladorLocal",
+    "ruta": "controladores",
+    "caso": "Gestionar infraestructura",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "ConfigTecnica",
+    "ruta": "configuraciones",
+    "caso": "Gestionar configuraciones del corredor",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Plan",
+    "ruta": "planes",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Fase",
+    "ruta": "fases",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "EstadoControl",
+    "ruta": "estados-control",
+    "caso": "Monitorear operación semafórica",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "Medicion",
+    "ruta": "mediciones",
+    "caso": "Monitorear operación semafórica",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "EventoPrioridad",
+    "ruta": "eventos-prioridad",
+    "caso": "Monitorear operación semafórica",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "Alerta",
+    "ruta": "alertas",
+    "caso": "Monitorear operación semafórica",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "ValidacionSumo",
+    "ruta": "validaciones-sumo",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "MetricaPorAcceso",
+    "ruta": "metricas-acceso",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "Recomendacion",
+    "ruta": "recomendaciones",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "Rol",
+    "ruta": "roles",
+    "caso": "Administrar usuarios y roles",
+    "operaciones": "read"
+  },
+  {
+    "entidad": "Usuario",
+    "ruta": "usuarios",
+    "caso": "Administrar usuarios y roles",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "Bitacora",
+    "ruta": "bitacoras",
+    "caso": "Gestionar configuraciones del corredor",
+    "operaciones": "read"
+  },
+  {
+    "entidad": "VersionModelo",
+    "ruta": "versiones-modelo",
+    "caso": "Gestionar configuraciones del corredor",
+    "operaciones": "read"
+  },
+  {
+    "entidad": "Reporte",
+    "ruta": "reportes",
+    "caso": "Consultar reportes de desempeño",
+    "operaciones": "read"
+  },
+  {
+    "entidad": "FaseAcceso",
+    "ruta": "fases-accesos",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "crud"
+  },
+  {
+    "entidad": "ValidacionMedicion",
+    "ruta": "validaciones-mediciones",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "append"
+  },
+  {
+    "entidad": "ValidacionEvento",
+    "ruta": "validaciones-eventos",
+    "caso": "Gestionar planes semafóricos",
+    "operaciones": "append"
+  }
+]

@@ -21,7 +21,8 @@ public sealed class EvaluacionesController(EvaluacionesDb db, EvaluadorPlanes ev
         db.Evaluaciones.Add(new() { Id = resultado.Id, PlanId = solicitud.PlanId,
             Version = solicitud.Version, Json = JsonSerializer.Serialize(resultado) });
         try { await db.SaveChangesAsync(ct); }
-        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 })
+        catch (DbUpdateException e) when (e.InnerException is SqliteException { SqliteErrorCode: 19 }
+            or Microsoft.Data.SqlClient.SqlException { Number: 2601 or 2627 })
         {
             return Problem(statusCode: 409, title: "La versión del plan ya tiene una evaluación inmutable.",
                 detail: "Envía una nueva versión para evaluar cambios; no se sobrescribe la evidencia anterior.");
