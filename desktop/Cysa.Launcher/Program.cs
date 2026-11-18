@@ -26,21 +26,21 @@ internal static class Program
 internal sealed record HardwareReport(string Recommended, bool GpuReady, string GpuDevice, string GpuName, double CpuMs, double? GpuMs, bool NvidiaDetected, string Reason);
 internal sealed record SumoScenario(string Executable, string Config, int Expected);
 
-internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision)
+internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision, int Web = 15183)
 {
-    public int[] All => [Panel, Identity, Mqtt, Evaluation, Decision];
+    public int[] All => [Panel, Identity, Mqtt, Evaluation, Decision, Web];
     public static Ports Select(Func<int, bool> free)
     {
         for (var offset = 0; offset < 20000; offset += 100)
         {
-            var ports = new Ports(18088 + offset, 18080 + offset, 18883 + offset, 15181 + offset, 15182 + offset);
+            var ports = new Ports(18088 + offset, 18080 + offset, 18883 + offset, 15181 + offset, 15182 + offset, 15183 + offset);
             if (ports.All.All(free)) return ports;
         }
         throw new InvalidOperationException("No se encontró un grupo de puertos libres.");
     }
 }
 
-internal sealed class Instance
+internal sealed partial class Instance
 {
     public static string Home => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CYSA");
     public static string ProjectFor(string path) => "cysa-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())))[..12].ToLowerInvariant();
@@ -438,7 +438,7 @@ internal static class SelfTest
             var a=Instance.ProjectFor(Path.Combine(root,"usuario a")); var b=Instance.ProjectFor(Path.Combine(root,"usuario b"));
             if (a==b || a!=Instance.ProjectFor(Path.Combine(root,"usuario a"))) throw new Exception("Aislamiento de proyectos incorrecto");
             var ports=Ports.Select(p=>p>19000);
-            if (ports.All.Distinct().Count()!=5 || ports.All.Any(p=>p<=19000)) throw new Exception("Selección de puertos incorrecta");
+            if (ports.All.Distinct().Count()!=6 || ports.All.Any(p=>p<=19000)) throw new Exception("Selección de puertos incorrecta");
             var package=Path.Combine(root,"paquete"); Directory.CreateDirectory(Path.Combine(package,"app","infra"));
             File.WriteAllText(Path.Combine(package,"app","infra","compose.yaml"),"services: {}");
             var instance=new Instance(Path.Combine(root,"usuario"),package); instance.Seed();

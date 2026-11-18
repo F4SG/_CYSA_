@@ -1,5 +1,22 @@
 CYSA - CENTRO DE PRUEBAS PARA WINDOWS X64
 
+WEB III - API CON SQL SERVER, SIN CAMARA NI DOCKER
+1. Extrae todo el ZIP y abre CYSA.exe.
+2. SQL Server local debe estar instalado y permitir la conexion del usuario
+   Windows. La base de demostracion se llama CYSA_WebIII_Demo.
+3. Pulsa Swagger (Web III): aplica migraciones, carga la semilla si falta
+   y abre Swagger. Conserva los datos existentes al iniciar nuevamente.
+4. Panel Web III abre los casos de uso con sus nombres exactos y formularios.
+5. Recrear base de pruebas BORRA CYSA_WebIII_Demo y vuelve a crearla con
+   migraciones y datos: minimo 15 filas por tabla de aplicacion, salvo los
+   dos roles. El panel web ofrece el mismo boton con la advertencia visible.
+6. En Swagger selecciona administrador, operador o evaluador para obtener
+   acceso de laboratorio. La MFA es simulada y se renueva cada 5 minutos.
+No necesitas Configurar esta PC para Web III. La API no instala SQL Server.
+Las instrucciones reproducibles estan en app/dotnet/README-WebIII.md.
+
+PROYECTO IOT COMPLETO - FLUJO ANTERIOR
+
 1. Extrae TODO el ZIP en una carpeta. No ejecutes CYSA.exe desde dentro del ZIP.
 2. Abre CYSA.exe. No necesitas Git, Visual Studio ni instalar .NET.
 3. Si falta Docker Desktop, pulsa Instalar Docker Desktop. Configuralo con
