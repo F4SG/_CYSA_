@@ -1,4 +1,10 @@
-# CYSA — Sprint 1
+# CYSA - Proyecto IoT y Web API para Web III
+
+La integración local de Web III incorpora una API modular con SQL Server, migraciones y datos de prueba. Consulta [configuración, integrantes, operaciones y pruebas](dotnet/README-WebIII.md). En el paquete actualizado, **Swagger (Web III)** prepara y abre la API sin cámara, YOLO, SUMO ni Docker. **Recrear base de pruebas** borra exclusivamente `CYSA_WebIII_Demo` y vuelve a aplicar sus migraciones y semilla. SQL Server debe estar instalado.
+
+Esta implementación se revisa en la rama `feature/webiii-sqlserver`; el enlace de descarga inferior corresponde a la distribución anterior. El despliegue IoT previo conserva su persistencia hasta completar la migración gradual documentada.
+
+## Proyecto IoT y distribución anterior
 
 **[Descargar CYSA para Windows — ZIP con CYSA.exe](https://github.com/F4SG/_CYSA_/releases/latest/download/CYSA-Windows.zip)**
 
