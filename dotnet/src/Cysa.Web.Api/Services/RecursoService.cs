@@ -13,11 +13,32 @@ public sealed class ReglaException(string message,int status=400) : Exception(me
 public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio reglas,IHttpContextAccessor accessor)
     where T:Entidad,new() where TEntrada:IEntrada<T> where TSalida:ISalida<T,TSalida>
 {
-    public async Task<List<TSalida>> Listar(int pagina,int tamano,CancellationToken ct)
+    public async Task<List<TSalida>> Listar(ConsultaRecursos consulta,CancellationToken ct)
     {
+        var pagina=consulta.Pagina; var tamano=consulta.Tamano;
         if(pagina<1 || pagina>10000 || tamano<1 || tamano>200) throw new ReglaException("Página 1..10000 y tamaño 1..200.");
-        return (await db.Set<T>().AsNoTracking().OrderBy(e=>e.Id).Skip((pagina-1)*tamano).Take(tamano).ToListAsync(ct)).Select(TSalida.Desde).ToList();
+        var query=Filtrar(consulta);
+        return (await query.AsNoTracking().OrderBy(e=>e.Id).Skip((pagina-1)*tamano).Take(tamano).ToListAsync(ct)).Select(TSalida.Desde).ToList();
     }
+    IQueryable<T> Filtrar(ConsultaRecursos c)
+    {
+        var tipo=typeof(T); var texto=c.Buscar?.Trim();
+        var inventario=tipo==typeof(Corredor)||tipo==typeof(Interseccion)||tipo==typeof(Acceso)||tipo==typeof(Carril)||tipo==typeof(FuenteDeteccion)||tipo==typeof(ControladorLocal);
+        var filtra=!string.IsNullOrEmpty(texto)||c.CorredorId.HasValue||c.InterseccionId.HasValue||c.AccesoId.HasValue||c.Activa.HasValue;
+        if(!filtra)return db.Set<T>();
+        if(!inventario)throw new ReglaException("Los filtros de infraestructura solo se aplican al inventario.");
+        if(c.InterseccionId.HasValue && tipo==typeof(Corredor) || c.AccesoId.HasValue && tipo!=typeof(Acceso)&&tipo!=typeof(Carril)&&tipo!=typeof(FuenteDeteccion) || c.Activa.HasValue && tipo!=typeof(FuenteDeteccion))
+            throw new ReglaException("Un filtro no corresponde al recurso seleccionado.");
+        var intersecciones=db.Set<Interseccion>().Where(i=>(!c.CorredorId.HasValue||i.CorredorId==c.CorredorId)&&(!c.InterseccionId.HasValue||i.Id==c.InterseccionId)).Select(i=>i.Id);
+        var accesos=db.Set<Acceso>().Where(a=>intersecciones.Contains(a.InterseccionId)&&(!c.AccesoId.HasValue||a.Id==c.AccesoId)).Select(a=>a.Id);
+        if(tipo==typeof(Corredor))return Convertir(db.Set<Corredor>().Where(e=>(!c.CorredorId.HasValue||e.Id==c.CorredorId)&&(string.IsNullOrEmpty(texto)||e.Nombre.Contains(texto)||e.Descripcion.Contains(texto))));
+        if(tipo==typeof(Interseccion))return Convertir(db.Set<Interseccion>().Where(e=>intersecciones.Contains(e.Id)&&(string.IsNullOrEmpty(texto)||e.Nombre.Contains(texto)||e.EstadoOperativo.Contains(texto))));
+        if(tipo==typeof(Acceso))return Convertir(db.Set<Acceso>().Where(e=>accesos.Contains(e.Id)&&(string.IsNullOrEmpty(texto)||e.Identificador.Contains(texto)||e.Aproximacion.Contains(texto))));
+        if(tipo==typeof(Carril))return Convertir(db.Set<Carril>().Where(e=>accesos.Contains(e.AccesoId)&&(string.IsNullOrEmpty(texto)||e.Sentido.Contains(texto))));
+        if(tipo==typeof(FuenteDeteccion))return Convertir(db.Set<FuenteDeteccion>().Where(e=>accesos.Contains(e.AccesoId)&&(!c.Activa.HasValue||e.Activa==c.Activa)&&(string.IsNullOrEmpty(texto)||e.Ubicacion.Contains(texto)||e.ModeloIa.Contains(texto)||e.TipoCamara.Contains(texto))));
+        return Convertir(db.Set<ControladorLocal>().Where(e=>intersecciones.Contains(e.InterseccionId)&&(string.IsNullOrEmpty(texto)||e.Tipo.Contains(texto)||e.Protocolo.Contains(texto)||e.Ubicacion.Contains(texto))));
+    }
+    static IQueryable<T> Convertir<TRecurso>(IQueryable<TRecurso> query) => (IQueryable<T>)(object)query;
     public async Task<TSalida?> Obtener(int id,CancellationToken ct)
     {
         var e=await db.Set<T>().AsNoTracking().SingleOrDefaultAsync(e=>e.Id==id,ct);

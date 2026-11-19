@@ -13,7 +13,7 @@ public abstract class ConsultaController<T,TEntrada,TSalida>(RecursoService<T,TE
 {
     protected readonly RecursoService<T,TEntrada,TSalida> Service=service;
     [HttpGet,ProducesResponseType(200)]
-    public async Task<ActionResult<List<TSalida>>> Listar([FromQuery]int pagina=1,[FromQuery]int tamano=50,CancellationToken ct=default) => Ok(await Service.Listar(pagina,tamano,ct));
+    public async Task<ActionResult<List<TSalida>>> Listar([FromQuery]ConsultaRecursos consulta,CancellationToken ct=default) => Ok(await Service.Listar(consulta,ct));
     [HttpGet("{id:int}"),ProducesResponseType(200),ProducesResponseType<ProblemDetails>(404)]
     public async Task<ActionResult<TSalida>> Obtener(int id,CancellationToken ct)
     {

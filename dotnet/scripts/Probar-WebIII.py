@@ -102,6 +102,29 @@ try:
     corridor=new('corredores',{'nombre':'Corredor '+marker,'descripcion':'Prueba HTTP de creación'})
     intersection=new('intersecciones',{'corredorId':corridor['id'],'nombre':'Cruce '+marker,'latitud':-17.78,'longitud':-63.18,'estadoOperativo':'activo'})
     approach=new('accesos',{'interseccionId':intersection['id'],'identificador':'N','aproximacion':'Norte','longitudCrucePeatonalMetros':18})
+    # Filtros del inventario: relaciones, texto literal y paginación estable.
+    filtered,_=call('GET',f'/api/intersecciones?corredorId={corridor["id"]}&buscar={marker}')
+    assert [row['id'] for row in filtered]==[intersection['id']]
+    filtered,_=call('GET',f'/api/accesos?corredorId={corridor["id"]}&interseccionId={intersection["id"]}&accesoId={approach["id"]}&buscar=Norte')
+    assert [row['id'] for row in filtered]==[approach['id']]
+    empty,_=call('GET','/api/intersecciones?corredorId=999999')
+    assert empty==[]
+    empty,_=call('GET','/api/corredores?buscar=%27%20OR%201%3D1--')
+    assert empty==[]
+    first,_=call('GET','/api/intersecciones?tamano=1&pagina=1&corredorId=1',profile='operador')
+    second,_=call('GET','/api/intersecciones?tamano=1&pagina=2&corredorId=1',profile='operador')
+    assert len(first)==1 and second==[]
+    camera=new('fuentes-deteccion',{'accesoId':approach['id'],'tipoCamara':'IP','ubicacion':'Prueba de filtro','protocolo':'RTSP','activa':False,'modeloIa':'demo','umbralConfianza':0.8})
+    filtered,_=call('GET',f'/api/fuentes-deteccion?corredorId={corridor["id"]}&interseccionId={intersection["id"]}&accesoId={approach["id"]}&activa=false')
+    assert [row['id'] for row in filtered]==[camera['id']]
+    empty,_=call('GET',f'/api/fuentes-deteccion?accesoId={approach["id"]}&activa=true')
+    assert empty==[]
+    call('GET','/api/intersecciones?activa=true',expect=400)
+    call('GET','/api/corredores?accesoId=1',expect=400)
+    call('GET','/api/roles?buscar=operador',expect=400)
+    call('GET','/api/accesos?corredorId=0',expect=400)
+    call('GET','/api/intersecciones?buscar='+('x'*121),expect=400)
+    call('GET','/api/fuentes-deteccion?activa=otro',expect=400)
     related,_=call('GET',f'/api/intersecciones/{intersection["id"]}/accesos')
     assert [r['id'] for r in related]==[approach['id']]
     call('PUT',f'/api/intersecciones/{intersection["id"]}',{'corredorId':corridor['id'],'nombre':'Cruce actualizado '+marker,'latitud':-17.79,'longitud':-63.19,'estadoOperativo':'activo'},expect=204)
