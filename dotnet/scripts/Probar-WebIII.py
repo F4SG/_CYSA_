@@ -89,6 +89,10 @@ try:
     assert check_counts()==baseline
     imported={'version':'1.0','mensaje_id':str(uuid.uuid4()),'interseccion':'DEMO_INT_01','acceso':'N','carril':'1','clase':'auto','cantidad':21,
               'inicio':'2026-11-18T11:59:30Z','fin':'2026-11-18T12:00:00Z','prueba':True}
+    call('POST','/api/integracion/conteos',{**imported,'version':'1x0'},profile='evaluador',expect=400)
+    call('POST','/api/integracion/conteos',{**imported,'mensaje_id':'00000000-0000-0000-0000-000000000000'},profile='evaluador',expect=400)
+    call('POST','/api/integracion/conteos',{**imported,'inicio':'2026-11-18T11:59:29Z'},profile='evaluador',expect=400)
+    call('POST','/api/integracion/conteos',{**imported,'inicio':imported['fin']},profile='evaluador',expect=400)
     call('POST','/api/integracion/conteos',imported,profile='evaluador',expect=201)
     call('POST','/api/integracion/conteos',imported,profile='evaluador',expect=200)
     imported['cantidad']=22
@@ -107,12 +111,15 @@ try:
     now='2026-11-18T12:00:00Z'
     config=new('configuraciones',{'interseccionId':intersection['id'],'version':1,'verdeMinSegundos':10,'verdeMaxSegundos':60,'ambarSegundos':3,'todoRojoSegundos':2,'extensionPrioridadSegundos':10,'responsableTecnico':'Técnico de prueba','aprobadaUtc':now,'estado':'aprobada'})
     plan=new('planes',{'interseccionId':intersection['id'],'configTecnicaId':config['id'],'version':1,'tipo':'optimizado','metodoCalculo':'Datos de prueba','cicloSegundos':60,'calculadoUtc':now,'estado':'borrador'})
+    validation_body={'planId':plan['id'],'escenario':'Escenario sintético HTTP','semilla':1,'ejecutadaUtc':now,'resultado':'aprobada','motivo':'Prueba sintética','demoraGlobalBaseSegundos':40,'demoraGlobalCandidataSegundos':32,'cumpleMinimoPeatonal':True,'cumpleDespejePeatonal':True}
+    call('POST','/api/validaciones-sumo',validation_body,expect=400) # No hay fases todavía.
     phase_body={'planId':plan['id'],'accesoId':approach['id'],'orden':1,'tipo':'peatonal','verdeSegundos':30,'ambarSegundos':3,'todoRojoSegundos':2,'tiempoPeatonalSegundos':24.9}
     call('POST','/api/fases',phase_body,expect=400)
     phase_body['tiempoPeatonalSegundos']=25
     phase=new('fases',phase_body)
     call('POST','/api/fases-accesos',{'faseId':phase['id'],'accesoId':1},expect=400)
     second_access=new('accesos',{'interseccionId':intersection['id'],'identificador':'S','aproximacion':'Sur','longitudCrucePeatonalMetros':18})
+    call('POST','/api/validaciones-sumo',validation_body,expect=400) # Sur no tiene fase habilitada.
     phase_link=new('fases-accesos',{'faseId':phase['id'],'accesoId':second_access['id']})
     call('DELETE',f'/api/fases-accesos/{phase_link["id"]}',expect=204)
     call('DELETE',f'/api/accesos/{second_access["id"]}',expect=204)
@@ -123,7 +130,20 @@ try:
     call('POST','/api/mediciones',measurement,expect=400)
     saved_event=new('eventos-prioridad',{'interseccionId':intersection['id'],'planId':plan['id'],'tipo':'emergencia','origen':'emulador','detectadoUtc':now,'atendidoUtc':'2026-11-18T12:00:08Z','resultado':'atendido','accion':'extension','extensionSegundos':8,'ciclo':1})
     new('alertas',{'interseccionId':intersection['id'],'tipo':'comunicacion','fechaUtc':now,'severidad':'informativa','descripcion':'Prueba de alerta','estado':'abierta'})
-    validation=new('validaciones-sumo',{'planId':plan['id'],'escenario':'Escenario sintético HTTP','semilla':1,'ejecutadaUtc':now,'resultado':'aprobada','motivo':'Prueba sintética','demoraGlobalBaseSegundos':40,'demoraGlobalCandidataSegundos':32,'cumpleMinimoPeatonal':True,'cumpleDespejePeatonal':True})
+    call('POST','/api/validaciones-sumo',{**validation_body,'demoraGlobalCandidataSegundos':46.0001},expect=400)
+    call('POST','/api/validaciones-sumo',{**validation_body,'cumpleMinimoPeatonal':False},expect=400)
+    validation=new('validaciones-sumo',validation_body)
+    # Una evaluación congela también el borrador antes de crear su recomendación.
+    call('PUT',f'/api/planes/{plan["id"]}',{k:v for k,v in plan.items() if k!='id'},expect=409)
+    call('PUT',f'/api/fases/{phase["id"]}',phase_body,expect=409)
+    call('DELETE',f'/api/fases/{phase["id"]}',expect=409)
+    call('POST','/api/fases',{**phase_body,'orden':2},expect=409)
+    call('POST','/api/fases-accesos',{'faseId':phase['id'],'accesoId':approach['id']},expect=409)
+    phase_links,_=call('GET','/api/fases-accesos?tamano=200')
+    principal_link=next(link for link in phase_links if link['faseId']==phase['id'])
+    call('DELETE',f'/api/fases-accesos/{principal_link["id"]}',expect=409)
+    stored_phase,_=call('GET',f'/api/fases/{phase["id"]}')
+    assert stored_phase['tiempoPeatonalSegundos']==25
     new('validaciones-mediciones',{'validacionSumoId':validation['id'],'medicionId':saved_measurement['id']})
     new('validaciones-eventos',{'validacionSumoId':validation['id'],'eventoPrioridadId':saved_event['id']})
     call('POST','/api/validaciones-mediciones',{'validacionSumoId':validation['id'],'medicionId':1},expect=400)

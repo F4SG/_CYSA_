@@ -12,7 +12,7 @@ namespace Cysa.Web.Api.Controllers;
 
 public sealed record ConteoImportado
 {
-    [Required,RegularExpression("^1.0$")] public string Version {get;init;}="1.0";
+    [Required,RegularExpression(@"^1\.0$")] public string Version {get;init;}="1.0";
     [JsonPropertyName("mensaje_id")] public Guid MensajeId {get;init;}
     [Required] public string Interseccion {get;init;}="";
     [Required] public string Acceso {get;init;}="";

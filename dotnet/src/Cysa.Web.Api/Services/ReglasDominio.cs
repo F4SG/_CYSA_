@@ -41,13 +41,14 @@ public sealed class ReglasDominio(CysaDb db)
                 if(config!.InterseccionId!=p.InterseccionId || config.Estado!="aprobada")throw new ReglaException("La configuración debe estar aprobada y pertenecer a la misma intersección.");
                 if(p.Estado!="borrador" || anterior is not null && (string)anterior[nameof(Plan.Estado)]! != "borrador")
                     throw new ReglaException("Solo se crean o editan borradores. Validación y autorización usan sus operaciones específicas.",409);
+                if(anterior is not null)await ExigirBorradorSinEvaluacion(p,ct);
                 break;
             case Fase f:
                 var plan=await db.Set<Plan>().FindAsync([f.PlanId],ct);
                 var acceso=await db.Set<Acceso>().FindAsync([f.AccesoId],ct);
                 var limits=await db.Set<ConfigTecnica>().FindAsync([plan!.ConfigTecnicaId],ct);
                 if(plan.InterseccionId!=acceso!.InterseccionId)throw new ReglaException("La fase y el acceso deben pertenecer a la misma intersección.");
-                if(plan.Estado!="borrador")throw new ReglaException("No se modifican fases de un plan evaluado o autorizado.",409);
+                await ExigirBorradorSinEvaluacion(plan,ct);
                 if(f.TiempoPeatonalSegundos<acceso.LongitudCrucePeatonalMetros/0.9m+5m)throw new ReglaException("La fase no cumple el mínimo peatonal L/0,9 + 5 segundos.");
                 var linkedLengths=await (from link in db.Set<FaseAcceso>() join a in db.Set<Acceso>() on link.AccesoId equals a.Id where link.FaseId==f.Id select a.LongitudCrucePeatonalMetros).ToListAsync(ct);
                 if(linkedLengths.Any(length=>f.TiempoPeatonalSegundos<length/0.9m+5m))throw new ReglaException("La fase no cubre el mínimo peatonal de todos sus accesos habilitados.");
@@ -76,6 +77,7 @@ public sealed class ReglasDominio(CysaDb db)
             case ValidacionSumo v:
                 if(v.Resultado=="aprobada" && (!v.CumpleMinimoPeatonal || !v.CumpleDespejePeatonal || v.DemoraGlobalCandidataSegundos>v.DemoraGlobalBaseSegundos*1.15m))
                     throw new ReglaException("No se aprueba una validación que incumple peatones o el umbral de demora.");
+                if(v.Resultado=="aprobada")await VerificarCoberturaPeatonal(v.PlanId,ct);
                 break;
             case MetricaPorAcceso m:
                 var validation=await db.Set<ValidacionSumo>().FindAsync([m.ValidacionSumoId],ct);
@@ -89,6 +91,7 @@ public sealed class ReglasDominio(CysaDb db)
                 if(approved!.Resultado!="aprobada")throw new ReglaException("Solo se recomienda un plan con validación aprobada.");
                 var relatedPlan=await db.Set<Plan>().FindAsync([approved.PlanId],ct);
                 var accessIds=await db.Set<Acceso>().Where(a=>a.InterseccionId==relatedPlan!.InterseccionId).Select(a=>a.Id).ToListAsync(ct);
+                await VerificarCoberturaPeatonal(approved.PlanId,ct);
                 var metrics=await db.Set<MetricaPorAcceso>().Where(m=>m.ValidacionSumoId==approved.Id).ToListAsync(ct);
                 foreach(var accessId in accessIds)
                 {
@@ -107,8 +110,8 @@ public sealed class ReglasDominio(CysaDb db)
                 var linkedPhase=await db.Set<Fase>().FindAsync([link.FaseId],ct);
                 var linkedAccess=await db.Set<Acceso>().FindAsync([link.AccesoId],ct);
                 var linkedPlan=await db.Set<Plan>().FindAsync([linkedPhase!.PlanId],ct);
-                if(linkedPlan!.Estado!="borrador")throw new ReglaException("No se cambian accesos de fases evaluadas.",409);
-                if(linkedPlan.InterseccionId!=linkedAccess!.InterseccionId || linkedPhase.TiempoPeatonalSegundos<linkedAccess.LongitudCrucePeatonalMetros/0.9m+5m)
+                await ExigirBorradorSinEvaluacion(linkedPlan!,ct);
+                if(linkedPlan!.InterseccionId!=linkedAccess!.InterseccionId || linkedPhase.TiempoPeatonalSegundos<linkedAccess.LongitudCrucePeatonalMetros/0.9m+5m)
                     throw new ReglaException("El acceso debe corresponder a la misma intersección y su mínimo peatonal debe estar cubierto.");
                 break;
             case ValidacionMedicion link:
@@ -128,15 +131,45 @@ public sealed class ReglasDominio(CysaDb db)
     }
     public async Task PuedeEliminar(Entidad e,CancellationToken ct)
     {
-        if(e is Plan {Estado:not "borrador"})throw new ReglaException("Se conserva el historial de planes evaluados.",409);
+        if(e is Plan removedPlan)await ExigirBorradorSinEvaluacion(removedPlan,ct);
         if(e is ConfigTecnica c && await db.Set<Plan>().AnyAsync(p=>p.ConfigTecnicaId==c.Id,ct))throw new ReglaException("La configuración tiene planes asociados.",409);
-        if(e is Fase f && await db.Set<Plan>().AnyAsync(p=>p.Id==f.PlanId && p.Estado!="borrador",ct))throw new ReglaException("Se conserva la fase de un plan evaluado.",409);
+        if(e is Fase f)await ExigirBorradorSinEvaluacion((await db.Set<Plan>().FindAsync([f.PlanId],ct))!,ct);
         if(e is Usuario {IdentificadorIdp:"administrador-demo"})throw new ReglaException("No se elimina la cuenta administradora de demostración.",409);
         if(e is FaseAcceso link)
         {
             var phase=await db.Set<Fase>().FindAsync([link.FaseId],ct);
             var plan=await db.Set<Plan>().FindAsync([phase!.PlanId],ct);
+            await ExigirBorradorSinEvaluacion(plan!,ct);
             if(plan!.Estado!="borrador" || phase.AccesoId==link.AccesoId)throw new ReglaException("Se conserva el acceso principal y las relaciones de planes evaluados.",409);
         }
+    }
+
+    async Task ExigirBorradorSinEvaluacion(Plan plan,CancellationToken ct)
+    {
+        if(plan.Estado!="borrador" || await db.Set<ValidacionSumo>().AnyAsync(v=>v.PlanId==plan.Id,ct))
+            throw new ReglaException("La versión ya fue evaluada o decidida. Cree una nueva versión; se conserva el plan y sus fases.",409);
+    }
+
+    async Task VerificarCoberturaPeatonal(int planId,CancellationToken ct)
+    {
+        var plan=await db.Set<Plan>().FindAsync([planId],ct);
+        var accesses=await db.Set<Acceso>().Where(a=>a.InterseccionId==plan!.InterseccionId).ToListAsync(ct);
+        var phases=await db.Set<Fase>().Where(f=>f.PlanId==planId).ToListAsync(ct);
+        if(accesses.Count==0 || phases.Count==0)throw new ReglaException("El plan requiere accesos y fases peatonales antes de aprobarse o recomendarse.");
+        var phaseIds=phases.Select(f=>f.Id).ToList();
+        var links=await db.Set<FaseAcceso>().Where(l=>phaseIds.Contains(l.FaseId)).ToListAsync(ct);
+        var covered=new HashSet<int>();
+        foreach(var phase in phases)
+        {
+            var ids=links.Where(l=>l.FaseId==phase.Id).Select(l=>l.AccesoId).Append(phase.AccesoId).ToHashSet();
+            foreach(var id in ids)
+            {
+                var access=accesses.SingleOrDefault(a=>a.Id==id);
+                if(access is null || phase.TiempoPeatonalSegundos<access.LongitudCrucePeatonalMetros/0.9m+5m)
+                    throw new ReglaException("Cada fase debe cubrir el mínimo peatonal de todos sus accesos de la misma intersección.");
+                covered.Add(id);
+            }
+        }
+        if(accesses.Any(a=>!covered.Contains(a.Id)))throw new ReglaException("Todos los accesos de la intersección requieren una fase que cubra su mínimo peatonal.");
     }
 }
