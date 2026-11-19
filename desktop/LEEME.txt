@@ -14,6 +14,8 @@ WEB III - API CON SQL SERVER, SIN CAMARA NI DOCKER
    acceso de laboratorio. La MFA es simulada y se renueva cada 5 minutos.
 No necesitas Configurar esta PC para Web III. La API no instala SQL Server.
 Las instrucciones reproducibles estan en app/dotnet/README-WebIII.md.
+El frontend principal incluye Swagger (Web III) en la barra superior, antes
+de iniciar sesion. Abre directamente Swagger de la API iniciada en el paso 3.
 
 PROYECTO IOT COMPLETO - FLUJO ANTERIOR
 

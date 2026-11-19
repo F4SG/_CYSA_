@@ -2,6 +2,7 @@ import * as oidc from './oidc.js';
 import {initUsers,loadUsers} from './users.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
+$('swaggerWebIII').addEventListener('click',()=>{const base=(config?.webApiBase||'http://localhost:15183').replace(/\/+$/,'');window.location.assign(base+'/swagger');});
 const fmt=s=>s?new Date(s).toLocaleString():'Pendiente';
 function cell(tr,value){const td=document.createElement('td');td.textContent=String(value??'Pendiente');tr.append(td);return td;}
 function source(tr,prueba){const td=cell(tr,''),badge=document.createElement('span');badge.textContent=prueba?'Validación':'Operación';badge.className='source-badge'+(prueba?' simulated':'');td.append(badge);}
