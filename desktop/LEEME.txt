@@ -40,6 +40,8 @@ BOTONES
   imagenes sinteticas y marca en VERDE la opcion mas rapida con Recomendado.
   La eleccion manual se conserva para el usuario, aunque sea diferente de
   la recomendacion. La prueba no mide precision real de conteo.
+  Esta medicion se inicia al pulsar Detectar y recomendar o al configurar la
+  PC; abrir el lanzador y usar Web III no ejecuta YOLO ni mide CPU/GPU.
 - Preparar GPU: si hay NVIDIA pero falta CUDA en Python, instala los paquetes
   oficiales de PyTorch compatibles y vuelve a comparar (descarga varios GB).
   La GPU se habilita solo si supera una inferencia real. AMD/Intel utilizan
@@ -48,7 +50,16 @@ BOTONES
   Marca 4 esquinas, ajusta carriles con 1-8, D invierte sentido, S guarda, Q sale.
   YOLO descarga su modelo al primer uso; requiere internet en esa primera vez.
 - Evaluaciones/Decisiones: abre Swagger de la API correspondiente.
-- Tokens de demo: renueva y abre los tokens locales para Authorize de Swagger.
+- SQL Server (Web III): selecciona localhost, SQLEXPRESS o LocalDB, prueba la
+  conexion y guarda la instancia para esta instalacion. Usa autenticacion de
+  Windows y la base fija CYSA_WebIII_Demo. Probar no crea ni borra bases.
+  Guardar detiene solo la API Web III; abrila de nuevo con Swagger o Panel.
+  Se necesita SQL Server instalado y en ejecucion, con permisos para crear la
+  base si aun no existe. No instala el motor SQL Server automaticamente.
+  webiii-sql.json se guarda en la carpeta de datos del usuario, sin contrasenas.
+  CYSA_WEBIII_CONNECTION tiene prioridad si esta definida; en ese caso el
+  dialogo no cambia la configuracion externa.
+- Tokens de demo (enlace inferior): renueva los tokens para Authorize de Swagger.
   Los tokens duran 30 minutos; las decisiones requieren MFA simulado reciente
   (5 minutos). Repite este boton cuando necesites renovar.
 - Verificar sistema: comprueba acceso por roles y un conteo sintetico completo
@@ -81,4 +92,4 @@ El ejecutable no lleva firma comercial; no se instala como servicio ni exige
 administrador. Docker/WSL pueden necesitar permisos durante su instalacion.
 
 Fuente del proyecto: https://github.com/F4SG/_CYSA_.git
-Rama: feature/integracion-completa
+Rama Web III: feature/webiii-sqlserver

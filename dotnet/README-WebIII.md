@@ -82,6 +82,30 @@ Los nombres de acceso y título coinciden literalmente con el MDJ. Las subaccion
 
 ## Pruebas reproducibles
 
+Desde el ejecutable, **SQL Server (Web III)** permite elegir la instancia local,
+probarla y guardar la configuración con autenticación de Windows. La base es
+siempre `CYSA_WebIII_Demo`. Probar no crea ni borra bases ni aplica migraciones.
+Guardar detiene la API Web III de esta instalación; volver a abrir **Swagger
+(Web III)** o **Panel Web III** aplica la configuración conservando los datos.
+El motor SQL Server debe estar instalado y en ejecución. La configuración queda
+en `%LOCALAPPDATA%\CYSA\webiii-sql.json` (o la carpeta `--data-dir` elegida), fuera
+del repositorio. Si existe `CYSA_WEBIII_CONNECTION`, tiene prioridad y el diálogo
+informa que se está usando una configuración externa.
+Abrir el lanzador permite entrar a Web III sin ejecutar la medición YOLO de
+CPU/GPU; la detección de hardware queda en su botón específico.
+
+En el proyecto API, con `ASPNETCORE_ENVIRONMENT=Development`,
+`dotnet run --no-launch-profile -- --probar-conexion` comprueba la conexión local
+sin preparar la base. Devuelve si la base existe; puede conectar correctamente
+aunque aún no exista. El código de salida es 0 si conecta y 1 si falla.
+
+La búsqueda y los filtros se describen en [Consultas de infraestructura](docs/Consultas-infraestructura.md).
+La comprobación de coherencia se ejecuta con `--verificar-demo` o
+`GET /api/demo/verificacion`; ver [Verificación de semilla](docs/Verificacion-semilla.md).
+Las reglas adicionales se detallan en [Validaciones](docs/Reglas-validacion.md).
+`python scripts/Probar-ConexionSQL.py` verifica la conexión, el rechazo de otra base
+o un servidor remoto, los errores sin credenciales y la conservación de los datos.
+
 ```powershell
 dotnet build CYSA.Web.sln
 dotnet test tests/Cysa.Api.Tests/Cysa.Api.Tests.csproj

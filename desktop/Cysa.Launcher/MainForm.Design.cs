@@ -66,7 +66,7 @@ internal sealed partial class MainForm
         Add("Decisiones", "Prueba la API de decisiones", () => { Instance.Open($"http://localhost:{instance.Ports.Decision}/swagger"); return Task.CompletedTask; }, "API");
         Add("Verificar sistema", "Revisa conexión y servicios", instance.Verify, "VERIFICACIÓN");
         Add("Ejecutar pruebas", "Comprueba los módulos", instance.Tests, "PRUEBAS");
-        Add("Tokens de demo", "Renueva el acceso a las APIs", Tokens, "ACCESO");
+        Add("SQL Server (Web III)", "Elige y prueba la instancia local", async () => { using var dialog = new SqlServerDialog(instance.SqlServerActual(), instance.SqlConnectionExterna, instance.ProbarSqlServer); ApplyControlTheme(dialog); if (dialog.ShowDialog(this) == DialogResult.OK) await instance.GuardarSqlServer(dialog.Instancia); }, "BASE DE DATOS");
         Add("Detener sistema", "Detiene y conserva tus datos", instance.StopAll, "DOCKER");
         Add("Swagger (Web III)", "Prepara SQL Server y API · Sin cámara ni SUMO", instance.OpenSwaggerWebIII, "API", primary: true);
         Add("Panel Web III", "Accesos a casos de uso y gestión de datos", instance.OpenDatabaseWebIII, "PANEL");
@@ -89,7 +89,8 @@ internal sealed partial class MainForm
         terminal.Controls.Add(legend); terminal.Controls.Add(log); layout.Controls.Add(terminal);
         var links = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 5, 0, 0) };
         Link("Instalar Docker Desktop", "https://docs.docker.com/desktop/setup/install/windows-install/"); Link("Abrir mis archivos", instance.Root);
-        var logs = new LinkLabel { Text = "Ver registros", AutoSize = true, Margin = new Padding(10, 3, 0, 0) }; logs.LinkClicked += async (_, _) => await Execute(instance.ShowLogs, "DOCKER"); links.Controls.Add(logs); layout.Controls.Add(links);
+        var logs = new LinkLabel { Text = "Ver registros", AutoSize = true, Margin = new Padding(10, 3, 0, 0) }; logs.LinkClicked += async (_, _) => await Execute(instance.ShowLogs, "DOCKER"); links.Controls.Add(logs);
+        var tokens = new LinkLabel { Text = "Tokens de demo", AutoSize = true, Margin = new Padding(10, 3, 0, 0) }; tokens.LinkClicked += async (_, _) => await Execute(Tokens, "ACCESO"); links.Controls.Add(tokens); layout.Controls.Add(links);
         layout.Controls.Add(new Label { Text = "Entorno de pruebas · No activa semáforos reales.   Cámara: S guarda · D cambia sentido · Q sale.", AutoSize = true, Tag = "muted", Font = new Font(Font.FontFamily, 8), Margin = Padding.Empty });
 
         instance.Log = text => { if (IsHandleCreated && !IsDisposed) { try { BeginInvoke(() => AppendEntry(text)); } catch (InvalidOperationException) { } } };
@@ -97,7 +98,12 @@ internal sealed partial class MainForm
         ApplyTheme();
         themeChoice.SelectedIndexChanged += (_, _) => { ApplyTheme(); SaveTheme(); };
         HandleCreated += (_, _) => ConsoleStyle.TitleBar(this, theme.Dark);
-        Shown += async (_, _) => { instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project); if (instance.Configured && File.Exists(instance.Venv)) await Execute(async () => { instance.Seed(); await RefreshHardware(); }, "EQUIPO"); };
+        Shown += async (_, _) => {
+            instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project);
+            cpu.Enabled=gpu.Enabled=false;
+            hardwareDetail.Text="Para cámara o video, pulsa Detectar y recomendar. Web III puede usarse sin medir CPU/GPU ni cargar YOLO.";
+            if (instance.Configured) await Execute(() => { instance.Seed(); return Task.CompletedTask; }, "ARCHIVOS");
+        };
         FormClosing += async (_, e) => {
             if (closing) return;
             e.Cancel = true;

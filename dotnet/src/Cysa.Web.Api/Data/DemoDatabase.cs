@@ -6,6 +6,21 @@ namespace Cysa.Web.Api.Data;
 public sealed class DemoDatabase(CysaDb db,IConfiguration config,IHostEnvironment environment)
 {
     public const string Name="CYSA_WebIII_Demo";
+    public async Task<object> ProbarConexion(CancellationToken ct=default)
+    {
+        ExigirDemo();
+        var connection=new SqlConnectionStringBuilder(db.Database.GetConnectionString())
+        {
+            InitialCatalog="master",ConnectTimeout=5,PersistSecurityInfo=false
+        };
+        await using var sql=new SqlConnection(connection.ConnectionString);
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        await sql.OpenAsync(timeout.Token);
+        await using var command=sql.CreateCommand();
+        command.CommandText="SELECT DB_ID(@nombre)";command.Parameters.AddWithValue("@nombre",Name);command.CommandTimeout=5;
+        var id=await command.ExecuteScalarAsync(timeout.Token);
+        return new{Conectada=true,Instancia=connection.DataSource,BaseDatos=Name,BaseExiste=id is not null && id!=DBNull.Value};
+    }
     public void ExigirDemo()
     {
         var connection=new SqlConnectionStringBuilder(db.Database.GetConnectionString());

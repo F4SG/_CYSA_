@@ -442,6 +442,25 @@ internal static class SelfTest
             var package=Path.Combine(root,"paquete"); Directory.CreateDirectory(Path.Combine(package,"app","infra"));
             File.WriteAllText(Path.Combine(package,"app","infra","compose.yaml"),"services: {}");
             var instance=new Instance(Path.Combine(root,"usuario"),package); instance.Seed();
+            foreach(var server in SqlServerOptions.Instancias)
+                if(!new SqlServerOptions(server).Cadena().Contains("Database=CYSA_WebIII_Demo;Integrated Security=True;"))throw new Exception("La conexión no conserva base y autenticación Windows");
+            foreach(var invalid in new[]{"servidor-remoto", "localhost;Database=otra", "localhost,1433", "localhost;Password=secreto"})
+            {
+                var blocked=false;try{new SqlServerOptions(invalid).Cadena();}catch(InvalidOperationException){blocked=true;}
+                if(!blocked)throw new Exception("Se aceptó una instancia ajena a la lista local");
+            }
+            var externalSql=Environment.GetEnvironmentVariable("CYSA_WEBIII_CONNECTION");
+            try
+            {
+                Environment.SetEnvironmentVariable("CYSA_WEBIII_CONNECTION",null);
+                instance.GuardarSqlServer(@".\SQLEXPRESS").GetAwaiter().GetResult();
+                if(new Instance(instance.Root,package).SqlServerActual()!=@".\SQLEXPRESS")throw new Exception("No se conservó la instancia SQL local");
+                if(new Instance(Path.Combine(root,"otro usuario sql"),package).SqlServerActual()!="localhost")throw new Exception("La conexión SQL se compartió entre usuarios");
+                Environment.SetEnvironmentVariable("CYSA_WEBIII_CONNECTION","configuracion-externa-de-prueba");
+                var blocked=false;try{instance.GuardarSqlServer("localhost").GetAwaiter().GetResult();}catch(InvalidOperationException){blocked=true;}
+                if(!blocked||instance.SqlServerActual()!=@".\SQLEXPRESS")throw new Exception("Se ignoró la prioridad de la configuración externa");
+            }
+            finally{Environment.SetEnvironmentVariable("CYSA_WEBIII_CONNECTION",externalSql);}
             File.WriteAllText(Path.Combine(instance.Repo,"infra",".env"),"TEST=privado");
             instance.Seed();
             if (File.ReadAllText(Path.Combine(instance.Repo,"infra",".env"))!="TEST=privado") throw new Exception("Se alteró estado privado");
@@ -454,7 +473,7 @@ internal static class SelfTest
             File.WriteAllText(Path.Combine(package,"app","infra","runtime","secreto"),"no copiar");
             var rejected=false; try { instance.Seed(); } catch (InvalidOperationException) { rejected=true; }
             if (!rejected) throw new Exception("No se rechazó un paquete con secretos");
-            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario y rechazo de secretos.");
+            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario, rechazo de secretos, conexión SQL local por usuario y prioridad de configuración externa.");
         }
         finally { Directory.Delete(root,true); }
     }

@@ -43,7 +43,8 @@ if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notm
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash
 [IO.File]::WriteAllText($installer + '.sha256',$hash)
 $commit = (& git -C $repo rev-parse HEAD).Trim()
-$manifest = @{ repositorio='https://github.com/F4SG/_CYSA_.git'; rama='feature/integracion-completa'; baseCommit=$commit; construidoUtc=[DateTimeOffset]::UtcNow.ToString('O'); pythonSha256=$hash; plataforma='Windows x64'; cambiosLocales=(@(& git -C $repo status --porcelain).Count -gt 0) }
+$branch = (& git -C $repo branch --show-current).Trim()
+$manifest = @{ repositorio='https://github.com/F4SG/_CYSA_.git'; rama=$branch; baseCommit=$commit; construidoUtc=[DateTimeOffset]::UtcNow.ToString('O'); pythonSha256=$hash; plataforma='Windows x64'; cambiosLocales=(@(& git -C $repo status --porcelain).Count -gt 0) }
 $manifest | ConvertTo-Json | Set-Content -LiteralPath "$package\version.json" -Encoding utf8
 Copy-Item -LiteralPath "$PSScriptRoot\LEEME.txt" -Destination "$package\LEEME.txt"
 Get-ChildItem -LiteralPath $package -Filter '*.pdb' -Recurse | Remove-Item

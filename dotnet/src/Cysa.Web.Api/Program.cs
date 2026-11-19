@@ -14,13 +14,29 @@ public partial class Program
 {
     public static async Task Main(string[] args)
     {
-        var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo"); var verify=args.Contains("--verificar-demo");
-        if(verify&&(prepare||reset))throw new ArgumentException("La verificación no se combina con preparación o recreación.");
-        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo")).ToArray());
-        if(prepare || reset || verify)
+        var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo"); var verify=args.Contains("--verificar-demo"); var probe=args.Contains("--probar-conexion");
+        if(new[]{prepare,reset,verify,probe}.Count(a=>a)>1)throw new ArgumentException("Usa solo una operación de preparación, recreación, verificación o prueba de conexión.");
+        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo" or "--probar-conexion")).ToArray());
+        if(prepare || reset || verify || probe)
         {
             builder.Configuration["Demo:Enabled"]="true";
             builder.Configuration["Security:Mode"]="Demo";
+        }
+        if(probe)
+        {
+            // No se inicia HTTP, se generan credenciales ni se aplican migraciones.
+            try
+            {
+                await using var db=new CysaDb(new DbContextOptionsBuilder<CysaDb>().UseSqlServer(builder.Configuration.GetConnectionString("Cysa")).Options);
+                var result=await new DemoDatabase(db,builder.Configuration,builder.Environment).ProbarConexion();
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result));
+            }
+            catch(Exception e) when(e is SqlException or InvalidOperationException or ArgumentException or OperationCanceledException)
+            {
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{Conectada=false,Error="No se pudo conectar a la instancia local de demostración. Revisa entorno Development, instancia, servicio y permisos SQL Server."}));
+                Environment.ExitCode=1;
+            }
+            return;
         }
         if(builder.Configuration["Security:Mode"]=="Demo")
         {
