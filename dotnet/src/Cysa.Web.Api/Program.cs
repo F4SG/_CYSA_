@@ -14,9 +14,10 @@ public partial class Program
 {
     public static async Task Main(string[] args)
     {
-        var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo");
-        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo")).ToArray());
-        if(prepare || reset)
+        var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo"); var verify=args.Contains("--verificar-demo");
+        if(verify&&(prepare||reset))throw new ArgumentException("La verificación no se combina con preparación o recreación.");
+        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo")).ToArray());
+        if(prepare || reset || verify)
         {
             builder.Configuration["Demo:Enabled"]="true";
             builder.Configuration["Security:Mode"]="Demo";
@@ -40,7 +41,7 @@ public partial class Program
         builder.Services.AddDbContext<CysaDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
         builder.Services.AddDbContext<EvaluacionesDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
         builder.Services.AddDbContext<DecisionesDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
-        builder.Services.AddScoped<DemoDatabase>(); builder.Services.AddScoped<ReglasDominio>();
+        builder.Services.AddScoped<DemoDatabase>(); builder.Services.AddScoped<DemoVerifier>(); builder.Services.AddScoped<ReglasDominio>();
         builder.Services.AddScoped(typeof(RecursoService<,,>)); builder.Services.AddScoped<EvaluadorPlanes>();
         // Las decisiones leen la evaluación del mismo host por HTTP; no adquieren dos veces el bloqueo de datos.
         builder.Services.AddHttpClient("evaluaciones",c=>
@@ -51,6 +52,12 @@ public partial class Program
         builder.Services.AddAuthorization(o=>o.AddPolicy("Escribir",p=>p.RequireAuthenticatedUser().RequireRole("administrador")
             .RequireAssertion(c=>ApiSetup.MfaReciente(c.User,DateTimeOffset.UtcNow))));
         var app=builder.Build();
+        if(verify)
+        {
+            await using var scope=app.Services.CreateAsyncScope();
+            var result=await scope.ServiceProvider.GetRequiredService<DemoVerifier>().Verificar();
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(result)); Environment.ExitCode=result.Cumple?0:1; return;
+        }
         if(prepare || reset)
         {
             await using var scope=app.Services.CreateAsyncScope();

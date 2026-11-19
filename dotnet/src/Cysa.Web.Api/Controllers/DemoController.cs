@@ -11,7 +11,7 @@ using Microsoft.IdentityModel.Tokens;
 namespace Cysa.Web.Api.Controllers;
 
 [ApiController,Route("api/demo"),Tags("Preparar pruebas Web III")]
-public sealed class DemoController(DemoDatabase demo,CysaDb db,IConfiguration config,IHostEnvironment env) : ControllerBase
+public sealed class DemoController(DemoDatabase demo,DemoVerifier verifier,CysaDb db,IConfiguration config,IHostEnvironment env) : ControllerBase
 {
     bool Local()=>env.IsDevelopment() && config.GetValue<bool>("Demo:Enabled") &&
         HttpContext.Connection.RemoteIpAddress is { } ip && IPAddress.IsLoopback(ip);
@@ -40,6 +40,12 @@ public sealed class DemoController(DemoDatabase demo,CysaDb db,IConfiguration co
         var pending=(await db.Database.GetPendingMigrationsAsync(ct)).ToArray();
         if(pending.Length>0)return Ok(new{baseDatos=DemoDatabase.Name,preparada=false,migracionesPendientes=pending});
         return Ok(new{baseDatos=DemoDatabase.Name,preparada=true,tablas=await demo.Conteos(ct)});
+    }
+    [HttpGet("verificacion"),Authorize(Policy="Leer"),ProducesResponseType<VerificacionDemo>(200),ProducesResponseType(404)]
+    public async Task<IActionResult> Verificar(CancellationToken ct)
+    {
+        if(!Local())return NotFound();
+        return Ok(await verifier.Verificar(ct));
     }
     [HttpPost("base"),Authorize(Policy="Escribir"),ProducesResponseType(200),ProducesResponseType(400)]
     public async Task<IActionResult> Recrear(CancellationToken ct)
