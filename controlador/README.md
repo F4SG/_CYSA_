@@ -12,6 +12,8 @@ laboratorio:
 Alcance de esta entrega: plan fijo, MMU y **modo local seguro (RF-06)**. La prioridad a emergencias (RF-09)
 y a micros (RF-08) y el envío de planes desde la plataforma quedan para la siguiente entrega.
 
+**Para probarlo todo con la placa, seguir [PRUEBA_COMPLETA.md](PRUEBA_COMPLETA.md).**
+
 ## Modos (patrón State)
 
 | Modo | Cuándo | Plan |
@@ -57,6 +59,7 @@ disponibles y pide el de la placa (Enter usa el MMU simulado). Otras formas:
 .\iniciar_controlador.ps1 -Puerto COM3 -SimularCorte 30:120  # prueba de RF-06 sin broker
 .\iniciar_controlador.ps1 -Puerto COM3 -Mqtt                 # con el stack Docker en marcha
 .\iniciar_controlador.ps1 -SinPlaca                          # sin hardware
+.\iniciar_controlador.ps1 -ProbarPlaca -Puerto COM3          # prueba automática de la placa
 ```
 
 **Prueba de RF-06 sin broker** (`-SimularCorte 30:120`): el centro simulado deja de latir a los 30 s.
@@ -87,7 +90,8 @@ USB-serial a 115200 baudios, una línea por mensaje:
 
 - PC → placa: `L:<luces>`, una letra por grupo (`G` verde, `Y` ámbar, `R` rojo), cada 0,2 s. Ejemplo: `L:GR`.
 - placa → PC: `LISTO:<n>` al encender; `FALLA:<motivo>` con `CONFLICTO`, `SIN_AMBAR`, `AMBAR_CORTO`,
-  `AMBAR_A_VERDE`, `FORMATO` o `SIN_SENAL`.
+  `AMBAR_A_VERDE`, `FORMATO` o `SIN_SENAL`. Si se pierde el puerto (cable desconectado), la PC registra
+  `FALLA:SIN_ENLACE` y el controlador pasa a `INTERMITENTE`.
 
 ## Pruebas
 

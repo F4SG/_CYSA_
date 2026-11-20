@@ -5,7 +5,8 @@
 #   .\iniciar_controlador.ps1 -SinPlaca               sin placa (MMU simulado)
 #   .\iniciar_controlador.ps1 -Mqtt                   latidos y estado por el broker (stack Docker en marcha)
 #   .\iniciar_controlador.ps1 -SimularCorte 30:120    centro simulado que se corta entre los 30 y 120 s (prueba RF-06)
-param([string]$Puerto = '', [switch]$SinPlaca, [switch]$Mqtt, [string]$SimularCorte = '',
+#   .\iniciar_controlador.ps1 -ProbarPlaca -Puerto COM3   prueba automatica de la placa (LEDs y fallas del MMU)
+param([string]$Puerto = '', [switch]$SinPlaca, [switch]$Mqtt, [string]$SimularCorte = '', [switch]$ProbarPlaca,
       [string]$Config = 'controlador/config/demo_int_01.yaml', [string]$Python = '')
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
@@ -20,6 +21,11 @@ if (-not $Puerto -and -not $SinPlaca) {
   Write-Host 'Puertos serie disponibles:' -ForegroundColor Cyan
   & $py -m serial.tools.list_ports -v
   $Puerto = Read-Host 'Puerto de la placa (ej. COM3). Enter para usar el MMU simulado'
+}
+if ($ProbarPlaca) {
+  if (-not $Puerto) { throw 'La prueba de la placa necesita el puerto (ej. -Puerto COM3).' }
+  & $py -m cysa_controlador.probar_placa --config $Config --puerto $Puerto
+  exit $LASTEXITCODE
 }
 if ($Puerto) { $argumentos += @('--puerto', $Puerto) } else { $argumentos += '--sin-placa' }
 if ($Mqtt) { $argumentos += '--mqtt' }

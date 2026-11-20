@@ -280,3 +280,85 @@ def test_acl_permite_el_latido_y_el_estado_del_emulador():
     assert 'topic write centro/latido' in usuarios['plataforma']
     assert 'topic read centro/latido' in usuarios['emulador'] and 'topic write corredor/+/estado' in usuarios['emulador']
     assert 'centro/latido' not in usuarios['deteccion']
+
+
+# ---------- prueba de la placa y desconexión del cable ----------
+
+class PlacaFalsa:
+    """Imita la placa: aplica ReglasMMU con un reloj simulado y se reinicia con DTR."""
+    def __init__(self, cruce, reloj, grupos=None):
+        self.cruce, self.reloj = cruce, reloj
+        self.n = grupos or len(cruce.grupos)
+        self._dtr = True
+        self._reiniciar()
+
+    def _reiniciar(self):
+        self.reglas = ReglasMMU(self.cruce)
+        self.salida = f'LISTO:{self.n}\n'
+
+    def read(self, n):
+        falla = self.reglas.vigilar(self.reloj())
+        if falla:
+            self.salida += falla + '\n'
+        datos, self.salida = self.salida[:n], self.salida[n:]
+        return datos.encode()
+
+    def write(self, datos):
+        for linea in datos.decode().splitlines():
+            falla = self.reglas.recibir(tuple(linea[2:]), self.reloj())
+            if falla:
+                self.salida += falla + '\n'
+
+    @property
+    def dtr(self): return self._dtr
+    @dtr.setter
+    def dtr(self, valor):
+        if valor and not self._dtr:
+            self._reiniciar()
+        self._dtr = valor
+
+    def close(self): pass
+
+
+def test_prueba_de_placa_completa_con_placa_simulada(demo):
+    from cysa_controlador.probar_placa import Placa, probar
+    reloj = Reloj()
+    falsa = PlacaFalsa(demo[0], reloj)
+    placa = Placa('COM9', 2, serial_factory=lambda *a, **k: falsa, reloj=reloj, dormir=reloj.dormir,
+                  preguntar=lambda *_: '')
+    resultados = probar(placa, demo[0], imprimir=lambda *_: None)
+    assert [r[0] for r in resultados] == ['La placa responde LISTO', 'Ciclo seguro sin fallas', 'Detecta la pérdida de señal',
+                                          'Se reinicia', 'Detecta el conflicto', 'Se reinicia', 'Detecta el ámbar corto', 'Se reinicia']
+    assert all(ok for _, ok, _ in resultados), resultados
+
+
+def test_prueba_de_placa_avisa_si_tiene_otros_grupos(demo):
+    from cysa_controlador.probar_placa import Placa, probar
+    reloj = Reloj()
+    falsa = PlacaFalsa(demo[0], reloj, grupos=4)
+    placa = Placa('COM9', 2, serial_factory=lambda *a, **k: falsa, reloj=reloj, dormir=reloj.dormir)
+    resultados = probar(placa, demo[0], imprimir=lambda *_: None)
+    assert resultados == [('La placa responde LISTO', False, 'LISTO:4')]
+
+
+def test_cable_desconectado_pone_el_controlador_en_intermitente(demo):
+    class SerialQueSeDesconecta(SerialFalso):
+        conectado = True
+        def read(self, n):
+            if not self.conectado:
+                raise OSError('dispositivo desconectado')
+            return super().read(n)
+        def write(self, datos):
+            if not self.conectado:
+                raise OSError('dispositivo desconectado')
+            super().write(datos)
+
+    puerto = SerialQueSeDesconecta()
+    mmu = MMUSerial('COM9', demo[0], serial_factory=lambda *a, **k: puerto)
+    c = nuevo(demo)
+    mmu.enviar(c.luces, 0)
+    puerto.conectado = False
+    mmu.enviar(c.luces, 0.2)
+    for mensaje in mmu.mensajes(0.2):
+        c.falla_mmu(mensaje, 0.2)
+    assert c.intermitente and c.modo.motivo == 'FALLA:SIN_ENLACE'

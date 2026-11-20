@@ -7,6 +7,7 @@ Protocolo por USB-serial, 115200 baudios, una línea por mensaje:
   PC -> placa   L:<luces>   una letra por grupo (G verde, Y ámbar, R rojo), p. ej. L:GR
   placa -> PC   LISTO:<n>   al encender, con el número de grupos
                 FALLA:<motivo>  CONFLICTO, SIN_AMBAR, AMBAR_CORTO, AMBAR_A_VERDE, FORMATO o SIN_SENAL
+La PC agrega FALLA:SIN_ENLACE si se pierde el puerto (cable desconectado).
 Ante una falla la placa pone todo en rojo intermitente y no vuelve a obedecer hasta reiniciarla.
 """
 import time
@@ -103,16 +104,25 @@ class MMUSerial:
 
     def _leer(self):
         datos = self.puerto.read(256)
+        if datos is None:
+            datos = b''
         if datos:
             self._buffer += datos.decode('ascii', errors='replace')
         *lineas, self._buffer = self._buffer.split('\n')
         return [l.strip() for l in lineas if l.strip()]
 
     def enviar(self, luces, ahora):
-        self.puerto.write(f'L:{"".join(luces)}\n'.encode('ascii'))
+        try:
+            self.puerto.write(f'L:{"".join(luces)}\n'.encode('ascii'))
+        except OSError:                       # SerialException hereda de OSError
+            self._pendientes.append('FALLA:SIN_ENLACE')
 
     def mensajes(self, ahora):
-        salida, self._pendientes = self._pendientes + self._leer(), []
+        try:
+            nuevos = self._leer()
+        except OSError:                       # cable desconectado: la placa se apaga sola en 1 s
+            nuevos = ['FALLA:SIN_ENLACE']
+        salida, self._pendientes = self._pendientes + nuevos, []
         return salida
 
     def cerrar(self):
