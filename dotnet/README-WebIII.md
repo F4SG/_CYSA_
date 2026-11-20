@@ -91,6 +91,16 @@ Inventario y perfiles admiten CRUD según permisos y dependencias. Mediciones, e
 
 Los nombres de acceso y título coinciden literalmente con el MDJ. Las subacciones tienen nombres específicos, como Crear registro o Autorizar plan. Las funciones Reporte y VersionModelo conservan su estado futuro; quince filas de ejemplo no equivalen a implementar generación de reportes o gobernanza de modelos. Las validaciones de la semilla explicitan que no provienen de ejecutar SUMO.
 
+## Evidencias incluidas en la entrega
+
+En la raíz del ZIP **CYSA_WebAPI.zip** están el README y **Evidencias_WebIII.pdf**.
+El PDF contiene capturas de Swagger UI con los endpoints y resultados identificados
+por operación y código HTTP: GET 200, POST 201 con Location, PUT 204, DELETE 204,
+errores 400/404 y GET 200 del mismo registro antes y después de reiniciar la API,
+sin recrear la base. **Resultados_pruebas_WebIII.json** acompaña el registro de las
+151 comprobaciones HTTP con SQL Server. Estos archivos de entrega se distribuyen
+en el ZIP para Teams; no se descargan como documentos desde el historial Git.
+
 ## Pruebas reproducibles
 
 La conexión utiliza la variable `ConnectionStrings__Cysa` de los pasos anteriores.
@@ -115,6 +125,8 @@ dotnet build CYSA.Web.sln
 dotnet test tests/Cysa.Api.Tests/Cysa.Api.Tests.csproj
 python scripts/Probar-WebIII.py
 ```
+
+Python 3 es opcional y se necesita únicamente para estos scripts de pruebas; no para iniciar la API. Las pruebas de la interfaz Swagger se ejecutan con `node --test tests/swagger-demo.test.mjs` desde `dotnet`, si Node.js está instalado.
 
 El script Python usa solo biblioteca estándar, arranca la API en un puerto de pruebas y utiliza SQL Server real. Recrea **CYSA_WebIII_Demo** y prueba recursos, CRUD, 201/Location, PUT/DELETE, referencias inválidas, 400/404, 401/403, mínimo peatonal, auditoría protegida, decisiones con MFA, reintentos y persistencia después de reiniciar. Genera `runtime/webiii-integration/evidencias.json` sin tokens. No ejecutarlo contra una sesión de demostración cuyos datos se quieran conservar.
 

@@ -1,6 +1,10 @@
 # CYSA
 
-## Web III — entrega de la Web API
+[Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i)
+
+## Web III
+
+Entrega de la Web API con SQL Server.
 
 **Proyecto:** CYSA — Web API para gestión semafórica. Desarrollado en **C# y
 ASP.NET Core sobre .NET 10**, con **Entity Framework Core 10 y SQL Server**.
@@ -89,19 +93,22 @@ Web III se prueba sin Docker, Python, cámara, YOLO ni SUMO. La
 [guía técnica de Web III](dotnet/README-WebIII.md) detalla DTO, recursos, reglas,
 pruebas reproducibles e integración gradual con el resto del sistema.
 
-## Proyecto de Sistemas I — monitoreo IoT y conteo vehicular
+## Proyecto de Sistemas I
+
+Monitoreo IoT y conteo vehicular.
 
 Desde aquí se documenta el proyecto de **Sistemas I**: cámara o video, detección,
 MQTT, FastAPI, identidad, panel y simulación. Sus requisitos e instrucciones
 corresponden a ese flujo; para revisar la entrega de **Web III**, usa la sección
-anterior. El despliegue IoT conserva su persistencia PostgreSQL/SQLite mientras
+anterior. Para estos comandos, abre una terminal en la raíz del repositorio, no
+en la carpeta `dotnet`. El despliegue IoT conserva su persistencia PostgreSQL/SQLite mientras
 se completa la integración gradual documentada.
 
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
 **Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora la Web API integrada con SQL Server y conserva los dos servicios históricos de evaluación y decisiones para compatibilidad.
 
-## Qué puedes demostrar
+### Qué puedes demostrar
 
 - Detectar y contar autos, motos y micros por carril.
 - Elegir una cámara o un archivo de video desde el asistente.
@@ -112,7 +119,7 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 
 [Uso de los patrones creacionales y de los entornos de prueba](casos_estudio/README.md).
 
-## 1. Antes de instalar
+### 1. Antes de instalar
 
 Esta guía usa **Windows y PowerShell**. Ejecuta los comandos desde la carpeta del repositorio.
 
@@ -135,9 +142,9 @@ docker info
 
 Si `docker info` falla, abre Docker Desktop y espera a que termine de iniciar. Deja libres los puertos **8088**, **8080** y **8883**. Para probar sin GPU usa el perfil CPU indicado en la sección 4; será más lento. El perfil de video a 960 px usa una GPU NVIDIA y necesita PyTorch con CUDA compatible.
 
-## 2. Instalar por primera vez
+### 2. Instalar por primera vez
 
-### Descargar y crear el entorno
+#### Descargar y crear el entorno
 
 ```powershell
 git clone https://github.com/F4SG/_CYSA_.git CYSA
@@ -149,7 +156,7 @@ $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
 
 Usar `$py` evita tener que activar el entorno virtual. En cada PowerShell nueva, entra a `CYSA` y vuelve a definir `$py` con el comando anterior.
 
-### Generar la configuración local
+#### Generar la configuración local
 
 Con Docker Desktop funcionando:
 
@@ -161,7 +168,7 @@ Este paso genera automáticamente las contraseñas, certificados MQTT, configura
 
 No copies `.env.example` sobre el `.env` generado. No subas `infra/runtime`, contraseñas ni certificados privados a GitHub.
 
-### Levantar los servicios
+#### Levantar los servicios
 
 ```powershell
 docker compose --env-file infra/.env -f infra/compose.yaml up -d --build
@@ -186,7 +193,7 @@ Invoke-RestMethod http://localhost:8088/health
 
 **Resultado esperado:** `status` igual a `ok` y `activacion_planes` igual a `false`. Esto comprueba que la API responde; la prueba de conteo de la sección 5 comprueba el recorrido de los datos.
 
-## 3. Entrar al panel
+### 3. Entrar al panel
 
 Abre **http://localhost:8088/** y pulsa **Ingresar**.
 
@@ -205,11 +212,11 @@ Las contraseñas son diferentes en cada instalación. No muestres este archivo d
 
 Para cambiar entre roles, cierra sesión antes de ingresar con la otra cuenta.
 
-## 4. Configurar y ejecutar el conteo
+### 4. Configurar y ejecutar el conteo
 
 Primero levanta Docker y entra al panel. El detector se ejecuta en Windows; Docker no abre la cámara.
 
-### Si tienes GPU NVIDIA configurada
+#### Si tienes GPU NVIDIA configurada
 
 Haz doble clic en **`iniciar_conteo.bat`**, o ejecuta desde PowerShell:
 
@@ -225,7 +232,7 @@ Usa `deteccion/config/video_santa_cruz.yaml`, con GPU `device: 0` y tamaño de i
 
 Si devuelve `False`, usa la opción CPU para esta prueba.
 
-### Si usarás CPU
+#### Si usarás CPU
 
 ```powershell
 .\iniciar_conteo.ps1 -Perfil deteccion/config/carriles_cristhian.yaml
@@ -237,7 +244,7 @@ Si PowerShell bloquea los scripts, usa esta alternativa directa con Python:
 & $py tools/cristhian/detector.py iniciar --config deteccion/config/carriles_cristhian.yaml --fuente --marcar zona --salida resultados/conteos_demo.csv
 ```
 
-### Pasos del asistente
+#### Pasos del asistente
 
 1. Elige **1: cámara** o **2: archivo de video**. El video de la evidencia no está incluido; prepara tu propio archivo antes de presentar.
 2. Selecciona la cámara por nombre o elige el archivo en la ventana.
@@ -250,7 +257,7 @@ Para marcar únicamente una línea de dos puntos por carril, agrega `-Linea` al 
 
 Los pesos YOLO `.pt` no vienen en Git. Prepara `deteccion/modelos/yolo26s.pt` antes de la presentación; Ultralytics puede descargarlo al primer uso con internet. Si la descarga automática falla, coloca el peso en esa ruta y vuelve a iniciar.
 
-### Dónde queda cada resultado
+#### Dónde queda cada resultado
 
 | Resultado | Dónde verlo |
 | --- | --- |
@@ -261,7 +268,7 @@ Los pesos YOLO `.pt` no vienen en Git. Prepara `deteccion/modelos/yolo26s.pt` an
 
 Los perfiles de demostración usan **`prueba: true`** e intersección **`DEMO_INT_01`**. En el panel consulta ese contexto de validación y la última hora. Cada intervalo dura unos **30 segundos** y el panel consulta cada **15 segundos**: los resultados no aparecen cuadro a cuadro.
 
-## 5. Probar el software para el sprint
+### 5. Probar el software para el sprint
 
 Haz este ensayo completo antes de presentar. Usa un video con vehículos visibles y deja al menos un minuto para observar publicaciones.
 
@@ -278,7 +285,7 @@ Haz este ensayo completo antes de presentar. Usa un video con vehículos visible
 
 Un inventario vacío en una instalación nueva es posible: se carga por separado. La vista Comunicación necesita un publicador de estados; ejecutar solo el detector no genera estados de un controlador.
 
-### Pruebas automáticas
+#### Pruebas automáticas
 
 Desde la raíz, con las dependencias instaladas:
 
@@ -290,7 +297,7 @@ node --test tests/franco/oidc.test.mjs
 
 El segundo comando requiere Node.js. Estas pruebas validan el software; no sustituyen el ensayo con Docker, cámara y panel ni la medición de precisión en campo.
 
-### Guion breve de presentación
+#### Guion breve de presentación
 
 1. Explica el objetivo: monitorear y contar vehículos sin intervenir los semáforos.
 2. Muestra el ingreso como operador y las vistas principales.
@@ -301,7 +308,7 @@ El segundo comando requiere Node.js. Estas pruebas validan el software; no susti
 
 **Evidencia disponible:** en un video de 10:49 min se reportaron 197 vehículos frente a 194 manuales con marcado por línea (diferencia total de +1,5 %). La clase micro tuvo 57,1 % de error en esa corrida. Es una prueba ajustada sobre un solo video: no demuestra cumplimiento general de RF-03. Consulta la [evidencia completa](docs/cristhian/evidencia_conteo_video.md), incluida la corrida con marcado por zona.
 
-## 6. Encender y apagar otro día
+### 6. Encender y apagar otro día
 
 En PowerShell, dentro de la carpeta `CYSA`:
 
@@ -318,13 +325,14 @@ docker compose --env-file infra/.env -f infra/compose.yaml stop
 
 Esto conserva los datos. **No uses `down -v`: elimina los volúmenes.** No vuelvas a generar secretos para encender el sistema.
 
-## 7. Actualizar una instalación existente
+### 7. Actualizar una instalación existente
 
-Guarda tus cambios locales y respalda los datos antes de actualizar. Conserva `infra/.env`, `infra/runtime` y los volúmenes. La rama principal actual se llama **`master`**.
+Guarda tus cambios locales y respalda los datos antes de actualizar. Conserva `infra/.env`, `infra/runtime` y los volúmenes. La rama principal actual se llama **`main`**.
 
 ```powershell
-git switch master
-git pull --ff-only origin master
+git fetch origin
+git switch main
+git pull --ff-only origin main
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
 & $py -m pip install -r backend/requirements.txt -r deteccion/requirements.txt -r simulacion/requirements.txt -r tests/requirements.txt
 & $py tools/franco/configurar_usuarios_local.py --solo-archivos
@@ -333,7 +341,7 @@ docker compose --env-file infra/.env -f infra/compose.yaml up -d --build
 
 Cuando Keycloak responda, ejecuta los tres configuradores y recrea `api`, como al final de la sección 2. No ejecutes `preparar_local.py` otra vez. Antes de actualizar Keycloak, consulta el respaldo de identidad en la guía técnica: el respaldo de PostgreSQL no incluye sus cuentas.
 
-## 8. Problemas frecuentes
+### 8. Problemas frecuentes
 
 | Problema | Qué hacer |
 | --- | --- |
@@ -355,9 +363,9 @@ Para revisar el recorrido de datos:
 docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consumer mosquitto api
 ```
 
-## Arquitectura y documentación
+### Arquitectura y documentación
 
-**Cámara/video → YOLO + ByteTrack → conteos → MQTT/TLS → consumidor → PostgreSQL/TimescaleDB → FastAPI → panel web.** Keycloak controla acceso y roles. SUMO se ejecuta aparte mediante herramientas de consola o desde «Simulación SUMO (demo)» del lanzador Windows, que abre su interfaz gráfica con un escenario sintético de plan fijo. No existe todavía una evaluación automática de planes desde el panel.
+**Cámara/video → YOLO + ByteTrack → conteos → MQTT/TLS → consumidor → PostgreSQL/TimescaleDB → FastAPI → panel web.** Keycloak controla acceso y roles. SUMO se ejecuta aparte mediante herramientas de consola o desde «Simulación SUMO (demo)» del lanzador Windows, que abre su interfaz gráfica con un escenario sintético de plan fijo. El panel de monitoreo IoT no ejecuta automáticamente evaluaciones SUMO. El panel de laboratorio Web III permite registrar métricas suministradas y evaluar planes con sus reglas, sin ejecutar el simulador ni activar semáforos.
 
 - [Guía técnica completa](docs/guia_tecnica_s1.md): arquitectura, endpoints, contratos, simulación, seguridad y respaldos.
 - [Gestión de usuarios](docs/franco/gestion_usuarios_local.md).
@@ -365,11 +373,11 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 - [Calibración de la vía](docs/cristhian/calibrar_solo_via_inferior.md).
 - [Evidencia de conteo con video](docs/cristhian/evidencia_conteo_video.md).
 
-Esta configuración es de laboratorio local. La validación en campo, MFA, auditoría integral y activación de planes corresponden a etapas posteriores.
+Esta configuración IoT es de laboratorio local. La validación en campo, MFA real, auditoría integral del corredor y activación física de planes corresponden a etapas posteriores. La MFA simulada y la auditoría de operaciones del laboratorio Web III se describen en su guía.
 
 Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 
-## Patrones de diseño implementados
+### Patrones de diseño implementados
 
 | Patrón | Tipo | Cómo se usa en CYSA |
 | --- | --- | --- |
