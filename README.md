@@ -282,15 +282,7 @@ conectado por COM3.
 | Confirmación y consulta | Panel **Operación semafórica (S2)** con planes, evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
 | Prioridades del banco | Comparación de prioridad para micros y eventos de emergencia definidos por fecha/hora, conservando los tiempos de seguridad. |
 
-**Configuración para probarlo:** cada instalación debe habilitar y enrolar el OTP
-del operador antes de autorizar planes. La prueba integrada con OTP real se
-realizó en el entorno aislado.
-
-**Validación pendiente:**
-Los eventos de emergencia del banco no equivalen a detección automática de
-ambulancias; esa detección y la precisión por clase requieren validación con
-videos etiquetados. Descargar el ZIP no instala los servicios, no configura las
-cuentas ni programa la placa automáticamente.
+Los [pendientes del Sprint 2](#pendientes-del-sprint-2) están al final de este README.
 
 Consultar la [guía base del controlador](controlador/README.md), la
 [integración paso a paso](controlador/INTEGRACION.md) y los
@@ -591,3 +583,15 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 | State | Comportamiento | El [controlador emulado](controlador/README.md) cambia entre `CENTRO`, `LOCAL_SEGURO` (RF-06) e `INTERMITENTE`; cada modo decide qué hacer con los latidos y las fallas del MMU. |
 
 Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. Command tiene una prueba de concepto para RF-02 y RF-16 en [`casos_comportamiento`](casos_comportamiento/README.md).
+
+### Pendientes del Sprint 2
+
+- **Configurar OTP en cada instalación:** habilitar y enrolar el autenticador del
+  operador antes de autorizar planes. La prueba integrada con OTP real ya se
+  realizó en el entorno aislado.
+- **Validar la detección automática:** los eventos de emergencia del banco son
+  predefinidos. La detección automática de ambulancias y la precisión por clase
+  requieren validación con videos etiquetados.
+- **Preparar el equipo para las pruebas:** descargar el ZIP no instala los
+  servicios, no configura las cuentas ni programa la placa automáticamente.
+  Seguir la [guía de integración](controlador/INTEGRACION.md).
