@@ -324,6 +324,11 @@ La base `CYSA_WebIII_Demo` contiene 21 entidades principales, tres tablas interm
 
 **Inicio rápido:** usa el lanzador indicado al principio o sigue los comandos de [ejecución, conexión SQL Server y migraciones](dotnet/README-WebIII.md#ejecutar-desde-el-código). Con esos comandos, Swagger abre en `http://localhost:5183/swagger`; el lanzador asigna su puerto local. Web III no requiere Docker, Python, cámara, YOLO ni SUMO.
 
+En la demostración local, Swagger inicia automáticamente con el perfil
+**administrador** y lo renueva durante la revisión para consultar todos los recursos
+y probar el CRUD. Los botones permiten cambiar a evaluador u operador para las
+operaciones específicas de esos perfiles y comprobar los errores de permisos.
+
 Los ejecutables históricos `Cysa.Evaluaciones.Api` (5181) y `Cysa.Decisiones.Api` (5182) conservan sus bases SQLite separadas y su [guía de compatibilidad](dotnet/README.md). El despliegue IoT de FastAPI mantiene PostgreSQL/SQLite donde corresponde; la migración completa de ese despliegue sigue pendiente. Esto no afecta a la persistencia SQL Server del host Web III.
 
 [Guía actual de Web III y pruebas reproducibles](dotnet/README-WebIII.md) · Verificaciones realizadas: 151 pruebas HTTP con SQL Server, 31 pruebas .NET, 242 Python y 3 JavaScript. El PDF y los resultados de entrega se distribuyen dentro del ZIP para Teams.

@@ -29,7 +29,16 @@ El paquete Windows completo ya incluye los servicios compilados y no necesita el
 
 No se necesita ejecutar Configurar esta PC, Docker, cámara, YOLO, MQTT, SUMO ni el controlador para probar Web III. Los otros botones conservan el flujo del proyecto IoT. El primer arranque requiere conexión válida a SQL Server; no instala el motor automáticamente.
 
-En Swagger, los botones de perfil locales permiten probar administrador, operador, evaluador y operador sin MFA. Son identidades sintéticas disponibles solo en Development, con Demo:Enabled y desde loopback; no son las cuentas GitHub ni cuentas reales de Keycloak. La MFA de laboratorio es simulada, dura cinco minutos y se renueva pulsando otra vez el perfil. Los tokens duran treinta minutos y no se incluyen en la entrega.
+En Swagger, los botones de perfil locales permiten probar administrador, operador, evaluador y operador sin MFA. Son identidades sintéticas disponibles solo en Development, con Demo:Enabled y desde loopback; no son las cuentas GitHub ni cuentas reales de Keycloak. La MFA de laboratorio es simulada y dura cinco minutos. El administrador se renueva automáticamente cada cuatro minutos; en los otros perfiles se puede renovar pulsando otra vez su botón. Los tokens duran treinta minutos y no se incluyen en la entrega.
+
+Swagger activa automáticamente **administrador** al cargar su esquema y renueva ese
+perfil cada cuatro minutos mientras permanezca seleccionado. El docente puede
+consultar todos los recursos y probar el CRUD sin copiar tokens. Los botones
+conservan el cambio manual de perfil para comprobar permisos y errores: usar
+**evaluador** para importar evaluaciones y **operador** para registrar decisiones,
+según las reglas del dominio. Si se selecciona otro perfil, no se sustituye por
+administrador durante la revisión. El acceso automático solo funciona cuando
+el servidor permite la demostración local; no concede permisos en modo OIDC.
 
 ## Ejecutar desde el código
 
