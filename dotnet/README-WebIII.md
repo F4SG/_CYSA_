@@ -17,6 +17,12 @@ La participación individual se acredita con aportes y commits reales de cada in
 
 Extraer todo el paquete antes de abrir `CYSA.exe`. SQL Server debe estar instalado y su instancia debe aceptar la conexión del usuario Windows, con permiso para crear y administrar la base de demostración.
 
+Si se ejecuta el proyecto del lanzador desde Visual Studio o desde este ZIP de fuentes,
+detecta el repositorio y compila la API automáticamente al pulsar Swagger, Panel Web III
+o Probar conexión. Ese modo requiere SDK .NET 10; la primera compilación puede restaurar
+dependencias de NuGet. No hace falta preparar manualmente carpetas `app` o `services`.
+El paquete Windows completo ya incluye los servicios compilados y no necesita el SDK.
+
 * **Swagger (Web III)** aplica las migraciones pendientes, carga la semilla si falta y abre Swagger. El arranque conserva los datos que ya existan.
 * **Panel Web III** abre las pantallas y formularios de laboratorio.
 * **Recrear base de pruebas** borra exclusivamente `CYSA_WebIII_Demo`, la crea mediante migraciones y vuelve a cargar los datos. En el panel web también está el botón **Crear o recrear base y datos de prueba**, con la misma advertencia visible.

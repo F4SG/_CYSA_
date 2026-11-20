@@ -14,6 +14,7 @@ internal static class Program
     {
         if (args.Contains("--self-test")) { SelfTest.Run(args.Last()); return; }
         if (args.Length == 3 && args[0] == "--integration-test") { IntegrationTest.Run(args[1], args[2]).GetAwaiter().GetResult(); return; }
+        if (args.Length == 4 && args[0] == "--webiii-startup-test") { WebStartupTest.Run(args[1],args[2],args[3]).GetAwaiter().GetResult(); return; }
         ApplicationConfiguration.Initialize();
         var root = args.Length == 2 && args[0] == "--data-dir" ? Path.GetFullPath(args[1]) : Instance.Home;
         using var mutex = new Mutex(true, "Local\\CYSA-" + Instance.ProjectFor(root), out var first);
@@ -46,6 +47,7 @@ internal sealed partial class Instance
     public static string ProjectFor(string path) => "cysa-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())))[..12].ToLowerInvariant();
     public string Root { get; }
     public string Package { get; }
+    public string? SourceRoot { get; }
     public string Repo => Path.Combine(Root, "workspace");
     public string Python => FindPython() ?? Path.Combine(Root, "python", "python.exe");
     public string Venv => Path.Combine(Repo, ".venv", "Scripts", "python.exe");
@@ -66,6 +68,7 @@ internal sealed partial class Instance
     {
         Root = root ?? Home;
         Package = package ?? AppContext.BaseDirectory;
+        SourceRoot=SourceLayout.FindRoot(Package);
         Directory.CreateDirectory(Root);
         Directory.CreateDirectory(Path.Combine(Root, "logs"));
         logPath = Path.Combine(Root, "logs", "lanzador.log");
@@ -146,9 +149,10 @@ internal sealed partial class Instance
     public void Seed()
     {
         var source = Path.Combine(Package, "app");
-        if (!File.Exists(Path.Combine(source, "infra", "compose.yaml"))) throw new InvalidOperationException("Extrae todo el ZIP antes de abrir CYSA.exe. Falta la carpeta app.");
+        var fromSources=!File.Exists(Path.Combine(source,"infra","compose.yaml"));
+        if(fromSources)source=SourceRoot??throw new InvalidOperationException("Faltan las fuentes y la carpeta app. Extrae el ZIP Windows completo; el archivo CYSA.exe aislado no contiene el proyecto.");
         Directory.CreateDirectory(Repo);
-        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        foreach (var file in fromSources?SourceLayout.Files(source):Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, file);
             // El paquete no debe contener estado local. Defensa adicional frente a un ZIP mal armado.
@@ -473,6 +477,23 @@ internal static class SelfTest
             File.WriteAllText(Path.Combine(package,"app","infra","runtime","secreto"),"no copiar");
             var rejected=false; try { instance.Seed(); } catch (InvalidOperationException) { rejected=true; }
             if (!rejected) throw new Exception("No se rechazó un paquete con secretos");
+            var sources=Path.Combine(root,"fuentes");
+            var sourceBin=Path.Combine(sources,"desktop","Cysa.Launcher","bin","Debug","net10.0-windows","win-x64");
+            Directory.CreateDirectory(sourceBin);Directory.CreateDirectory(Path.Combine(sources,"dotnet","src","Cysa.Web.Api"));Directory.CreateDirectory(Path.Combine(sources,"infra"));
+            File.WriteAllText(Path.Combine(sources,"desktop","Cysa.Launcher","Cysa.Launcher.csproj"),"<Project />");
+            File.WriteAllText(Path.Combine(sources,"dotnet","src","Cysa.Web.Api","Cysa.Web.Api.csproj"),"<Project />");
+            File.WriteAllText(Path.Combine(sources,"infra","compose.yaml"),"services: {}");
+            File.WriteAllText(Path.Combine(sources,"infra",".env"),"NO_COPIAR=privado");
+            File.WriteAllText(Path.Combine(sources,"infra",".env.example"),"EJEMPLO=sin-secretos");
+            Directory.CreateDirectory(Path.Combine(sources,"dotnet","runtime"));File.WriteAllText(Path.Combine(sources,"dotnet","runtime","token.json"),"privado");
+            File.WriteAllText(Path.Combine(sourceBin,"secreto.key"),"privado");
+            var sourceInstance=new Instance(Path.Combine(root,"usuario fuentes"),sourceBin);sourceInstance.Seed();
+            if(sourceInstance.SourceRoot!=sources || !File.Exists(Path.Combine(sourceInstance.Repo,"infra",".env.example")))throw new Exception("No se preparó una ejecución desde fuentes");
+            if(File.Exists(Path.Combine(sourceInstance.Repo,"infra",".env")) || Directory.Exists(Path.Combine(sourceInstance.Repo,"desktop","Cysa.Launcher","bin")) || Directory.Exists(Path.Combine(sourceInstance.Repo,"dotnet","runtime")))throw new Exception("Se copió estado privado desde las fuentes");
+            var fingerprint=SourceLayout.WebFingerprint(sources);File.WriteAllText(Path.Combine(sourceBin,"irrelevante.txt"),"compilación");
+            if(SourceLayout.WebFingerprint(sources)!=fingerprint)throw new Exception("Una compilación invalidó la caché de fuentes");
+            File.WriteAllText(Path.Combine(sources,"dotnet","src","Cysa.Web.Api","Cambio.cs"),"// fuente nueva");
+            if(SourceLayout.WebFingerprint(sources)==fingerprint)throw new Exception("Un cambio fuente no invalidó la caché");
             File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario, rechazo de secretos, conexión SQL local por usuario y prioridad de configuración externa.");
         }
         finally { Directory.Delete(root,true); }

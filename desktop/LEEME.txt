@@ -14,6 +14,11 @@ WEB III - API CON SQL SERVER, SIN CAMARA NI DOCKER
    acceso de laboratorio. La MFA es simulada y se renueva cada 5 minutos.
 No necesitas Configurar esta PC para Web III. La API no instala SQL Server.
 Las instrucciones reproducibles estan en app/dotnet/README-WebIII.md.
+Desde Visual Studio o el proyecto fuente, el lanzador detecta las fuentes y
+compila automaticamente la API al abrir Swagger o Panel Web III. Requiere
+SDK .NET 10 y NuGet para la primera compilacion. Reutiliza la version creada.
+SQL Server debe estar instalado. Un CYSA.exe aislado, sin las fuentes ni
+las carpetas app y services, necesita el ZIP Windows completo.
 El frontend principal incluye Swagger (Web III) en la barra superior, antes
 de iniciar sesion. Abre directamente Swagger de la API iniciada en el paso 3.
 

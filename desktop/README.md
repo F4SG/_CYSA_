@@ -1,6 +1,22 @@
 # Lanzador de pruebas CYSA para Windows
 
-`CYSA.exe` usa WinForms y .NET 10. El ZIP incluye dos APIs autocontenidas de Windows y el instalador de Python firmado por Python Software Foundation. No necesita Git, Visual Studio ni un SDK .NET en la PC de destino. Docker Desktop con WSL 2 y contenedores Linux se instala por separado desde el enlace de la ventana.
+`CYSA.exe` usa WinForms y .NET 10. El ZIP Windows incluye las tres APIs autocontenidas y el instalador de Python firmado por Python Software Foundation. No necesita Git, Visual Studio ni un SDK .NET en la PC de destino. Docker Desktop con WSL 2 y contenedores Linux se instala por separado para el proyecto IoT.
+
+## Ejecutar desde Visual Studio o desde las fuentes
+
+Al iniciar el proyecto `desktop/Cysa.Launcher`, el lanzador localiza el repositorio
+desde su carpeta de compilación. Si faltan `app` y los servicios publicados, prepara
+las fuentes locales y publica automáticamente la API al pulsar **Swagger (Web III)**,
+**Panel Web III**, **Recrear base de pruebas** o **Probar conexión** en el diálogo SQL.
+La primera compilación requiere SDK .NET 10 y acceso a NuGet si faltan dependencias.
+Los siguientes arranques reutilizan la API mientras no cambien sus fuentes.
+
+SQL Server debe estar instalado y accesible. Después de compilar la API, el lanzador
+aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.
+No requiere Docker, Python, cámara ni YOLO para Web III.
+
+El archivo `CYSA.exe` copiado por separado no contiene todo el proyecto. Para usarlo
+sin fuentes ni SDK, extraer completo el ZIP Windows, con `app` y `services` junto al EXE.
 
 ## Construcción
 
@@ -10,7 +26,7 @@ Desde PowerShell 7, con Git y SDK .NET 10:
 ./desktop/Crear-Paquete.ps1
 ```
 
-La salida se crea en un directorio nuevo de `artifacts/desktop/`, excluido de Git. El script publica el lanzador y ambas APIs para `win-x64`, copia únicamente fuentes rastreadas y los archivos nuevos de esta entrega, descarga Python 3.12.10 de python.org, verifica su firma y escribe manifiesto y huellas SHA-256. El ZIP contiene una carpeta `CYSA-Windows` con `CYSA.exe`, `app`, `services`, `dependencies` y `LEEME.txt`.
+La salida se crea en un directorio nuevo de `artifacts/desktop/`, excluido de Git. El script publica el lanzador y las tres APIs para `win-x64`, copia únicamente fuentes rastreadas y los archivos nuevos de esta entrega, descarga Python 3.12.10 de python.org, verifica su firma y escribe manifiesto y huellas SHA-256. El ZIP contiene una carpeta `CYSA-Windows` con `CYSA.exe`, `app`, `services`, `dependencies` y `LEEME.txt`.
 
 No se empaquetan `.git`, entornos virtuales, modelos, videos, bases, claves, tokens, `.env`, `runtime`, resultados ni respaldos. El estado del equipo que construye el ZIP no se reutiliza. El manifiesto distingue un paquete construido con cambios locales pendientes de commit.
 
@@ -18,11 +34,11 @@ No se empaquetan `.git`, entornos virtuales, modelos, videos, bases, claves, tok
 
 El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Python por usuario solo si no encuentra Python 3.12; crea un entorno virtual propio. Genera secretos mediante el configurador existente, en un directorio temporal local, y promueve el resultado de forma reanudable. No vuelve a generar credenciales al reintentar ni reiniciar.
 
-El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige cinco puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.
+El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.
 
 Las APIs .NET funcionan como procesos locales con SQLite en el `runtime` del usuario y escuchan en localhost. Se usan sus perfiles de demostración existentes, con MFA simulado, sin modificar las reglas de las APIs ni conectar con controladores reales. Al cerrar, el lanzador detiene sus procesos y su proyecto Compose, conservando los volúmenes.
 
-El botón cámara pide un índice; el de video abre un selector de archivos. Ambos usan el modo CPU o GPU elegido en la ventana y guardado por usuario, con tamaño de inferencia 640 px. Después de configurar y al abrir una instalación existente se mide YOLO a 640 px con imágenes sintéticas: dos calentamientos y la mediana de cinco inferencias por dispositivo, sincronizando CUDA. La GPU más rápida se recomienda solo si mejora más del 10 % frente a CPU; en otro caso se recomienda CPU. La opción recomendada se marca en verde con «Recomendado», independientemente de la elección manual. La medición depende de la carga y energía actuales; se puede repetir con «Detectar y recomendar».
+El botón cámara pide un índice; el de video abre un selector de archivos. Ambos usan el modo CPU o GPU elegido en la ventana y guardado por usuario, con tamaño de inferencia 640 px. Después de configurar o pulsar «Detectar y recomendar» se mide YOLO a 640 px con imágenes sintéticas: dos calentamientos y la mediana de cinco inferencias por dispositivo, sincronizando CUDA. La GPU más rápida se recomienda solo si mejora más del 10 % frente a CPU; en otro caso se recomienda CPU. La opción recomendada se marca en verde con «Recomendado», independientemente de la elección manual. La medición depende de la carga y energía actuales; se puede repetir con «Detectar y recomendar».
 
 GPU requiere NVIDIA/CUDA y superar una inferencia real. «Preparar GPU» instala los pares oficiales de PyTorch/torchvision de [las instrucciones de PyTorch](https://pytorch.org/get-started/previous-versions/), según la versión máxima CUDA que anuncia `nvidia-smi`: 2.14.1/0.29.1 con cu130 o cu126; para controladores antiguos compatibles con 11.8, 2.7.1/0.22.1 con cu118. No instala controladores ni CUDA Toolkit. La descarga puede ocupar varios GB. Si CUDA no está disponible, se recomienda CPU y GPU queda deshabilitada hasta prepararla y comprobarla. AMD/Intel usan CPU en esta versión Windows. No se cambia silenciosamente de GPU a CPU al iniciar un conteo si el dispositivo dejó de estar disponible: se muestra el error y se pide volver a detectar o elegir CPU.
 

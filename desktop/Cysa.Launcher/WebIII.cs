@@ -14,7 +14,7 @@ internal sealed partial class Instance
     }
     public async Task ProbarSqlServer(string instancia)
     {
-        var exe=WebExecutable();var env=WebEnvironment();
+        var exe=await EnsureWebExecutable();var env=WebEnvironment();
         env["ConnectionStrings__Cysa"]=new SqlServerOptions(SqlServerOptions.Validar(instancia)).Cadena();
         Write("Probando SQL Server local con autenticación de Windows. No se aplican migraciones.");
         await Run(exe,["--probar-conexion"],Path.GetDirectoryName(exe),env,timeoutMinutes:1);
@@ -23,20 +23,43 @@ internal sealed partial class Instance
     {
         if(SqlConnectionExterna)throw new InvalidOperationException("CYSA_WEBIII_CONNECTION tiene prioridad sobre la configuración local.");
         var options=new SqlServerOptions(SqlServerOptions.Validar(instancia));
-        if(apis.TryGetValue("Cysa.Web.Api",out var process))
-        {
-            if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}
-            process.Dispose();apis.Remove("Cysa.Web.Api");
-        }
+        await StopWebIII();
         if(!IsFree(Ports.Web))throw new InvalidOperationException("Otro proceso usa el puerto Web III. Detén esa instancia antes de cambiar la conexión.");
         var temporary=SqlSettingsPath+".tmp";
         await File.WriteAllTextAsync(temporary,JsonSerializer.Serialize(options));File.Move(temporary,SqlSettingsPath,true);
         Write("Configuración local SQL Server guardada. Abre Swagger (Web III) o Panel Web III para iniciar la API.");
     }
-    string WebExecutable()
+    internal async Task StopWebIII()
+    {
+        if(apis.TryGetValue("Cysa.Web.Api",out var process))
+        {
+            if(!process.HasExited){process.Kill(true);await process.WaitForExitAsync();}
+            process.Dispose();apis.Remove("Cysa.Web.Api");
+        }
+    }
+    internal async Task<string> EnsureWebExecutable()
     {
         var exe=Path.Combine(Package,"services","Cysa.Web.Api","Cysa.Web.Api.exe");
-        if(!File.Exists(exe))throw new InvalidOperationException("Falta el servicio Web III. Extrae el paquete actualizado completo.");
+        if(File.Exists(exe))return exe;
+        var source=SourceRoot??throw new InvalidOperationException("No se encontró la API ni el proyecto fuente. Extrae el ZIP Windows completo, incluidas app y services, o ejecuta el proyecto dentro del ZIP de fuentes.");
+        var output=Path.Combine(Root,"webiii-services",SourceLayout.WebFingerprint(source));
+        exe=Path.Combine(output,"Cysa.Web.Api.exe");
+        var ready=Path.Combine(output,"preparado.txt");
+        if(File.Exists(exe)&&File.Exists(ready)&&File.Exists(Path.Combine(output,"wwwroot","demo.html")))return exe;
+        Write("Ejecución desde fuentes detectada. Preparando automáticamente la API Web III con el SDK .NET.");
+        try
+        {
+            if(await Run("dotnet",["--version"],source,check:false,output:false,timeoutMinutes:1)!=0)
+                throw new InvalidOperationException("Para ejecutar desde Visual Studio o las fuentes necesitas el SDK .NET 10. El ZIP Windows completo funciona sin instalar el SDK.");
+        }
+        catch(System.ComponentModel.Win32Exception)
+        {throw new InvalidOperationException("No se encontró el SDK .NET. Instala el SDK .NET 10 para ejecutar las fuentes o utiliza el ZIP Windows completo.");}
+        Directory.CreateDirectory(output);
+        await Run("dotnet",["publish",Path.Combine(source,"dotnet","src","Cysa.Web.Api","Cysa.Web.Api.csproj"),
+            "-c","Release","-r","win-x64","--self-contained","true","-p:PublishSingleFile=true","-p:IncludeNativeLibrariesForSelfExtract=true","--disable-build-servers","-o",output,"--nologo"],source,timeoutMinutes:10);
+        if(!File.Exists(exe)||!File.Exists(Path.Combine(output,"wwwroot","demo.html")))throw new InvalidOperationException("No se completó la preparación de la API. Revisa el registro de compilación.");
+        await File.WriteAllTextAsync(ready,"API Web III preparada desde las fuentes.");
+        Write("API Web III preparada. Los siguientes arranques reutilizan esta versión mientras no cambien sus fuentes.");
         return exe;
     }
     public string WebUrl => $"http://localhost:{Ports.Web}";
@@ -53,7 +76,7 @@ internal sealed partial class Instance
         const string name="Cysa.Web.Api";
         if(apis.TryGetValue(name,out var process) && !process.HasExited)return;
         if(!IsFree(Ports.Web))throw new InvalidOperationException("El puerto de Web III está ocupado. Cierra la otra instancia o revisa puertos.json.");
-        var exe=WebExecutable();
+        var exe=await EnsureWebExecutable();
         var env=WebEnvironment();
         Write("Preparando SQL Server: CYSA_WebIII_Demo. El arranque conserva los datos existentes.");
         // No configura Docker, cámara, Python, YOLO, SUMO ni cuentas del sistema principal.
