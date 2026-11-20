@@ -1,36 +1,18 @@
-"""Persistencia transaccional del flujo IoT existente en PostgreSQL.
-
-La Web API académica conserva sus migraciones SQL Server; estas tablas pertenecen
-al despliegue IoT, que ya usa PostgreSQL. No se modifica su inventario ni sus conteos.
-"""
+"""Persistencia transaccional del banco S2 en SQL Server; independiente de Web III."""
 import json,time
-from uuid import uuid4
-from psycopg.types.json import Jsonb
+from pathlib import Path
 from .planes import huella
+from .sqlserver import connection as sql_connection,crear_base
 
-DDL='''
-CREATE TABLE IF NOT EXISTS control_planes(
- id uuid PRIMARY KEY, documento jsonb NOT NULL, validacion jsonb NOT NULL,
- origen jsonb NOT NULL, estado text NOT NULL, creado timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS control_decisiones(
- solicitud_id uuid PRIMARY KEY, plan_id uuid NOT NULL UNIQUE REFERENCES control_planes(id),
- usuario text NOT NULL, accion text NOT NULL, motivo text NOT NULL, mfa jsonb NOT NULL,
- creado timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS control_envios(
- solicitud_id uuid PRIMARY KEY REFERENCES control_decisiones(solicitud_id), payload jsonb NOT NULL,
- estado text NOT NULL DEFAULT 'pendiente', intentos integer NOT NULL DEFAULT 0,
- detalle text NOT NULL DEFAULT '', actualizado timestamptz NOT NULL DEFAULT now());
-CREATE TABLE IF NOT EXISTS control_auditoria(
- id bigserial PRIMARY KEY, plan_id uuid, usuario text NOT NULL, operacion text NOT NULL,
- motivo text NOT NULL, anterior jsonb NOT NULL, nuevo jsonb NOT NULL,
- creado timestamptz NOT NULL DEFAULT now());
-'''
+def Jsonb(value):return json.dumps(value,ensure_ascii=True,allow_nan=False)
+DDL=(Path(__file__).parent/'sql/001_operacion.sql').read_text(encoding='utf-8')
 
 class EstadoInvalido(ValueError):pass
 
 class Almacen:
-    def __init__(self,connection):self.connection=connection
+    def __init__(self,connection=None):self.connection=connection or sql_connection
     def ready(self):
+        crear_base()
         with self.connection() as c:c.execute(DDL)
     def guardar(self,id,documento,validacion,origen,usuario):
         estado='validado' if validacion['aprobada'] else 'no_aprobado'
@@ -81,7 +63,7 @@ class Almacen:
     def confirmar(self,d):
         if d.get('estado') not in ('aplicado','rechazado'):raise ValueError('Confirmación inválida')
         with self.connection() as c:
-            row=c.execute('SELECT e.*,p.plan_id FROM control_envios e JOIN control_decisiones p USING(solicitud_id) WHERE solicitud_id=%s FOR UPDATE',(d['solicitud_id'],)).fetchone()
+            row=c.execute('SELECT e.*,p.plan_id FROM control_envios e JOIN control_decisiones p ON p.solicitud_id=e.solicitud_id WHERE e.solicitud_id=%s FOR UPDATE',(d['solicitud_id'],)).fetchone()
             if not row:return
             if d.get('huella_plan')!=row['payload']['huella_plan']:raise ValueError('Confirmación de otra versión')
             if row['estado'] in ('aplicado','rechazado','caducado'):return
@@ -90,6 +72,31 @@ class Almacen:
             self.audit(c,row['plan_id'],'controlador','confirmar',str(d.get('detalle',''))[:500],dict(estado=row['estado']),dict(estado=d['estado']))
     def auditoria(self,id):
         with self.connection() as c:return c.execute('SELECT * FROM control_auditoria WHERE plan_id=%s ORDER BY id',(id,)).fetchall()
+    def counts(self,desde,hasta,interseccion=None,carril=None,prueba=None,limit=1000,offset=0):
+        with self.connection() as c:
+            return c.execute('''SELECT * FROM control_conteos WHERE inicio>=%s AND inicio<%s
+                AND (%s IS NULL OR interseccion=%s) AND (%s IS NULL OR carril=%s)
+                AND (%s IS NULL OR prueba=%s) ORDER BY inicio,mensaje_id OFFSET %s ROWS FETCH NEXT %s ROWS ONLY''',
+                (desde,hasta,interseccion,interseccion,carril,carril,prueba,prueba,offset,limit)).fetchall()
+    def states(self):
+        with self.connection() as c:return c.execute('SELECT * FROM control_estados ORDER BY interseccion').fetchall()
+    def save(self,event):
+        from cysa.contracts import Conteo,Estado
+        d=event.model_dump()
+        with self.connection() as c:
+            if isinstance(event,Conteo):
+                old=c.execute('SELECT * FROM control_conteos WHERE mensaje_id=%s FOR UPDATE',(event.mensaje_id,)).fetchone()
+                if old:
+                    for k in ('interseccion','acceso','carril','clase','cantidad','inicio','fin','prueba'):
+                        if old[k]!=d[k]:raise ValueError('Mensaje de conteo reutilizado con otro contenido')
+                    return
+                c.execute('INSERT INTO control_conteos(mensaje_id,interseccion,acceso,carril,clase,cantidad,inicio,fin,prueba) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)',tuple(d[k] for k in ('mensaje_id','interseccion','acceso','carril','clase','cantidad','inicio','fin','prueba')))
+            elif isinstance(event,Estado):
+                old=c.execute('SELECT * FROM control_estados WHERE interseccion=%s FOR UPDATE',(event.interseccion,)).fetchone()
+                if old and old['timestamp']>=event.timestamp:return
+                if old:
+                    c.execute('UPDATE control_estados SET mensaje_id=%s,fase_actual=%s,plan_activo=%s,estado_controlador=%s,timestamp=%s,prueba=%s WHERE interseccion=%s',tuple(d[k] for k in ('mensaje_id','fase_actual','plan_activo','estado_controlador','timestamp','prueba','interseccion')))
+                else:c.execute('INSERT INTO control_estados(interseccion,mensaje_id,fase_actual,plan_activo,estado_controlador,timestamp,prueba) VALUES(%s,%s,%s,%s,%s,%s,%s)',tuple(d[k] for k in ('interseccion','mensaje_id','fase_actual','plan_activo','estado_controlador','timestamp','prueba')))
     @staticmethod
     def audit(c,id,usuario,operacion,motivo,anterior,nuevo):
         c.execute('INSERT INTO control_auditoria(plan_id,usuario,operacion,motivo,anterior,nuevo) VALUES(%s,%s,%s,%s,%s,%s)',

@@ -62,6 +62,7 @@ def proponer(filas,modo='webster',grupo=None):
        'interseccion':'DEMO_INT_01','prueba':True,'modo':modo,'primero':grupo if modo=='emergencia' else 'NS',
        'verdes':verdes,'extension_micro_s':10 if modo=='micros' else 0,
        'geometria_m':LONGITUDES,'metodo':'Webster','version':1}
+    d['grupo_prioridad']=grupo
     validar(d)
     return d
 

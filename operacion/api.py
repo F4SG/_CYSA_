@@ -34,7 +34,7 @@ def mfa_operador(claims=Depends(require_roles('operador'))):
     return claims
 
 def router(repo,store=None,simulator=None):
-    store=store or Almacen(lambda:repo.connection());lock=threading.Lock()
+    store=store or Almacen();lock=threading.Lock()
     r=APIRouter(prefix='/api/operacion',tags=['Operación semafórica S2'])
     def habilitado():
         if os.environ.get('CYSA_CONTROL_ENABLED')!='true':raise HTTPException(503,'Habilita el banco S2 siguiendo controlador/INTEGRACION.md')
@@ -49,8 +49,8 @@ def router(repo,store=None,simulator=None):
             p=proponer(filas,solicitud.modo,solicitud.grupo);id=uuid4();p['plan_id']='OP_'+id.hex
             if simulator:v=simulator(filas,p)
             else:
-                from .simular import evaluar
-                v=evaluar(filas,p)
+                from .simular import buscar
+                p,v=buscar(filas,p)
             return store.guardar(id,p,v,dict(desde=solicitud.desde.isoformat(),hasta=solicitud.hasta.isoformat(),
                 mensajes=[str(x['mensaje_id']) for x in filas]),claims['sub'])
         except (ValueError,TimeoutError) as e:raise HTTPException(400,str(e)) from None

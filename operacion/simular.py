@@ -52,7 +52,7 @@ def evaluar(filas,plan):
         b,m=_ejecutar(filas,plan,Path(temp)/'candidato')
     motivos=[]
     mejora=100*(a['total']-b['total'])/max(a['total'],.001)
-    if mejora<10:motivos.append('No alcanza reducción global de demora del 10 %')
+    if plan['modo']=='webster' and mejora<10:motivos.append('No alcanza reducción global de demora del 10 %')
     for acceso in ACCESOS:
         if acceso in a and b[acceso]>a[acceso]*1.15+.001:motivos.append('Aumento superior al 15 % en '+acceso)
     if plan['modo']=='micros':
@@ -63,3 +63,18 @@ def evaluar(filas,plan):
             'mejora_porcentaje':mejora,'vehiculos':n,'semilla':42,'sumo_real':True,
             'huella_plan':huella(plan),'minimo_peatonal':True,
             'prioridad_emergencia':'se aplica solo en un todo rojo seguro; se rechaza si la espera supera 10 s' if plan['modo']=='emergencia' else None}
+
+def buscar(filas,plan):
+    """Extensión condicional 1..10 s; no recomendar la primera que perjudique al resto."""
+    if plan['modo']!='micros':return plan,evaluar(filas,plan)
+    from copy import deepcopy
+    grupo=plan['grupo_prioridad'];otro='EO' if grupo=='NS' else 'NS'
+    base=plan['verdes'][grupo]-plan['extension_micro_s'];mejor=None
+    for extension in (1,4,7,10):
+        for ajuste in (0,4,8):
+            candidato=deepcopy(plan);candidato['verdes'][grupo]=base+extension
+            candidato['verdes'][otro]+=ajuste;candidato['extension_micro_s']=extension
+            validacion=evaluar(filas,candidato)
+            if mejor is None or (validacion['aprobada'],validacion['mejora_porcentaje'])>(mejor[1]['aprobada'],mejor[1]['mejora_porcentaje']):
+                mejor=candidato,validacion
+    return mejor

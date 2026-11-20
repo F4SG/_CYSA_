@@ -1,8 +1,8 @@
 import os, ssl, threading
 import paho.mqtt.client as mqtt
 
-def client(client_id, *, manual_ack=False):
-    c=mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, manual_ack=manual_ack)
+def client(client_id, *, manual_ack=False,persistent=False):
+    c=mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id, manual_ack=manual_ack,clean_session=not persistent)
     context=ssl.create_default_context(cafile=os.environ['MQTT_CA'])
     context.minimum_version=ssl.TLSVersion.TLSv1_2
     c.tls_set_context(context)

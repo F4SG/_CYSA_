@@ -5,7 +5,7 @@ from .mensajes import clave,firmar,verificar
 log=logging.getLogger('cysa.control')
 
 def iniciar(c,repo):
-    store=Almacen(repo.connection);store.ready()
+    store=Almacen();store.ready()
     key=clave(os.environ['CYSA_PLAN_KEY_FILE']);stop=threading.Event()
     def loop():
         while not stop.wait(2):

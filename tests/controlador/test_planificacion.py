@@ -34,3 +34,11 @@ def test_sumo_real_completa_demanda_y_mide_reduccion_sin_perjudicar_accesos():
     assert v['sumo_real'] and v['aprobada'] and v['mejora_porcentaje']>=10
     assert v['vehiculos']==240 and v['huella_plan']==huella(p)
     assert all(v['candidato'][a]<=v['referencia'][a]*1.15+.001 for a in ('N','S','E','W'))
+
+@pytest.mark.skipif(importlib.util.find_spec('sumolib') is None,reason='SUMO no instalado')
+def test_prioridad_micros_elige_extension_condicional_sin_perjudicar_resto():
+    from operacion.simular import buscar
+    r=demanda(40,40,True);p,v=buscar(r,proponer(r,'micros','NS'))
+    assert v['aprobada'] and 0<p['extension_micro_s']<=10
+    assert v['candidato']['micro']<=v['referencia']['micro']*.9
+    assert v['candidato']['resto']<=v['referencia']['resto']*1.1+.001
