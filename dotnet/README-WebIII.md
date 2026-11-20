@@ -2,7 +2,7 @@
 
 ASP.NET Core sobre **.NET 10**, Entity Framework Core 10 y SQL Server. La instancia comprobada en el equipo de desarrollo es SQL Server 2025 Developer, versión 17.0.1155.3. La conexión utiliza autenticación integrada de Windows; el ZIP no incluye contraseñas, tokens ni bases locales.
 
-Repositorio: https://github.com/F4SG/_CYSA_.git. Rama de origen: `feature/integracion-completa`. Rama de integración: [`feature/webiii-sqlserver`](https://github.com/F4SG/_CYSA_/tree/feature/webiii-sqlserver).
+Repositorio: https://github.com/F4SG/_CYSA_.git. Rama principal actual: [`main`](https://github.com/F4SG/_CYSA_/tree/main). La integración SQL Server y el lanzador actualizado están publicados en esta rama.
 
 | Integrante | Usuario GitHub |
 |---|---|

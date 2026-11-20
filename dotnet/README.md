@@ -1,4 +1,6 @@
-# APIs de evaluación y decisiones de CYSA
+# APIs históricas de evaluación y decisiones de CYSA
+
+Esta guía describe los dos servicios independientes con SQLite que se conservan para compatibilidad. Para la entrega actual de **Web III**, utiliza **Cysa.Web.Api con SQL Server** y sigue la [guía de ejecución, migraciones y pruebas de Web III](README-WebIII.md). El perfil **CYSA dos APIs** de esta guía corresponde al modo histórico.
 
 Solución para Visual Studio Community 2026 y .NET 10. Incluye **dos APIs ejecutables independientes**, controladores escritos manualmente, reglas en C#, autenticación JWT, documentación Swagger y persistencia con EF Core y SQLite. Es una extensión de laboratorio: no modifica el detector, FastAPI, el panel, MQTT, Docker Compose ni la base de datos de Sprint 1.
 

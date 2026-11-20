@@ -2,13 +2,15 @@
 
 La integración local de Web III incorpora una API modular con SQL Server, migraciones y datos de prueba. Consulta [configuración, integrantes, operaciones y pruebas](dotnet/README-WebIII.md). En el paquete actualizado, **Swagger (Web III)** prepara y abre la API sin cámara, YOLO, SUMO ni Docker. **Recrear base de pruebas** borra exclusivamente `CYSA_WebIII_Demo` y vuelve a aplicar sus migraciones y semilla. SQL Server debe estar instalado.
 
-Esta implementación se revisa en la rama `feature/webiii-sqlserver`; el enlace de descarga inferior corresponde a la distribución anterior. El despliegue IoT previo conserva su persistencia hasta completar la migración gradual documentada.
+La versión integrada está publicada en la rama principal [`main`](https://github.com/F4SG/_CYSA_/tree/main). El enlace de descarga inferior corresponde a la distribución anterior. El despliegue IoT previo conserva su persistencia hasta completar la migración gradual documentada.
+
+Para probar **Web III desde GitHub**, descarga y extrae todo el repositorio de `main`. Necesitas SDK .NET 10, SQL Server local instalado y permisos para crear la base de demostración. Desde la raíz ejecuta `dotnet run --project desktop/Cysa.Launcher` y pulsa **Swagger (Web III)**. El lanzador detecta las fuentes, publica automáticamente la API, aplica las migraciones pendientes y carga los datos de prueba si faltan. La primera compilación necesita acceso a NuGet. Usa **SQL Server (Web III)** para elegir y comprobar la instancia local; el motor no se instala automáticamente. También puedes [ejecutar directamente la API desde el código](dotnet/README-WebIII.md#ejecutar-desde-el-código).
 
 ## Proyecto IoT y distribución anterior
 
 **[Descargar CYSA para Windows — ZIP con CYSA.exe](https://github.com/F4SG/_CYSA_/releases/latest/download/CYSA-Windows.zip)**
 
-Extrae todo el ZIP y abre **CYSA.exe**. Esta descarga incluye el programa ejecutable. **Code → Download ZIP** descarga solamente el código fuente; para probar el programa usa el enlace anterior.
+Extrae todo el ZIP y abre **CYSA.exe**. Esta descarga anterior incluye el programa ejecutable del flujo IoT. **Code → Download ZIP** descarga el código fuente actualizado; para probar Web III desde esas fuentes sigue el inicio indicado arriba.
 
 ## Probar en Windows sin escribir comandos
 
@@ -20,7 +22,7 @@ En el lanzador puedes elegir **CPU o GPU NVIDIA/CUDA** para el conteo. Una prueb
 
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
-**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora dos APIs independientes de evaluación y decisiones para pruebas locales.
+**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora la Web API integrada con SQL Server y conserva los dos servicios históricos de evaluación y decisiones para compatibilidad.
 
 ## Qué puedes demostrar
 
@@ -306,17 +308,22 @@ Equipo: **Franco, Cristhian, Leonardo y Fabrizio**.
 
 Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; está relacionado con Observer, pero no es un Observer local clásico. State y Command tienen pruebas de concepto en [`casos_comportamiento`](casos_comportamiento/README.md).
 
-## Dos APIs propias en .NET
+## Web API integrada en .NET y SQL Server
 
-Desarrollamos dos APIs independientes en **C# y ASP.NET Core 10**, con controladores escritos manualmente, Swagger y persistencia en bases SQLite separadas. Se organizan en la solución [CYSA.Web.sln](dotnet/CYSA.Web.sln) para **Visual Studio Community 2026**.
+La entrega Web III utiliza **Cysa.Web.Api**, una API modular en **C# y ASP.NET Core 10**, con controladores escritos manualmente, DTO, operaciones asíncronas, Swagger y persistencia mediante **EF Core 10 y SQL Server**. Se organiza en la solución [CYSA.Web.sln](dotnet/CYSA.Web.sln), que puede abrirse en **Visual Studio Community 2026**. Integra los controladores de evaluación y decisiones en el mismo host.
 
-| API | Acción principal | Qué hace |
+| Recurso o módulo | Operación de ejemplo | Qué hace |
 | --- | --- | --- |
-| Evaluaciones · puerto 5181 | `POST /api/evaluaciones` | Compara las demoras de un plan con su referencia, rechaza aumentos mayores al 15 % y comprueba el mínimo peatonal `longitud / 0,9 + 5`. Guarda el resultado y sus motivos por versión. |
-| Decisiones · puerto 5182 | `POST /api/planes/{planId}/decisiones` | Consulta la evaluación por HTTP y permite al operador autorizar o rechazar un plan aprobado y vigente. Registra usuario, fecha y motivo; los reintentos no duplican la decisión. |
+| Infraestructura | `GET /api/intersecciones` | Listado, consulta por ID y CRUD de infraestructura con validación de campos y referencias. Swagger documenta las operaciones disponibles de cada recurso. |
+| Evaluaciones | `POST /api/evaluaciones` | Compara las demoras de un plan con su referencia, rechaza aumentos mayores al 15 % y comprueba el mínimo peatonal `longitud / 0,9 + 5`. Guarda el resultado y sus motivos por versión. |
+| Decisiones | `POST /api/planes/{planId}/decisiones` | Consulta la evaluación por HTTP y permite al operador autorizar o rechazar un plan aprobado y vigente. Registra usuario, fecha y motivo; los reintentos no duplican la decisión. |
 
-El historial se consulta con `GET /api/planes/{planId}/historial`. Las APIs usan autenticación JWT y permisos; **la MFA del modo demo es simulada**. Trabajan con métricas suministradas: no ejecutan SUMO ni activan semáforos. El backend FastAPI y los servicios anteriores mantienen su funcionamiento.
+El historial se consulta con `GET /api/planes/{planId}/historial`. La API usa autenticación JWT y permisos; **la MFA del modo demo es simulada**. Trabaja con métricas suministradas: no ejecuta SUMO ni activa semáforos. Las rutas auxiliares `/health`, `/` y `/demo` siguen funcionando y están ocultas en Swagger.
 
-**Inicio rápido:** abre la solución, ejecuta `scripts/Preparar-Demo.ps1` desde la carpeta `dotnet`, selecciona **CYSA dos APIs** con el perfil **Demo local** y pulsa F5. Prueba las peticiones de `runtime/Demo.http` o utiliza Swagger.
+La base `CYSA_WebIII_Demo` contiene 21 entidades principales, tres tablas intermedias y dos tablas de compatibilidad: **26 tablas de aplicación y tres migraciones**. La semilla incluye al menos 15 registros por tabla, salvo los dos roles del modelo. El arranque normal conserva los datos; **Recrear base de pruebas** los borra deliberadamente y vuelve a cargar la semilla.
 
-[Guía de ejecución y ejemplos](dotnet/README.md) · [Verificación: 31 pruebas .NET, 206 Python y 3 JavaScript aprobadas](dotnet/VERIFICACION.md).
+**Inicio rápido:** usa el lanzador indicado al principio o sigue los comandos de [ejecución, conexión SQL Server y migraciones](dotnet/README-WebIII.md#ejecutar-desde-el-código). Con esos comandos, Swagger abre en `http://localhost:5183/swagger`; el lanzador asigna su puerto local. Web III no requiere Docker, Python, cámara, YOLO ni SUMO.
+
+Los ejecutables históricos `Cysa.Evaluaciones.Api` (5181) y `Cysa.Decisiones.Api` (5182) conservan sus bases SQLite separadas y su [guía de compatibilidad](dotnet/README.md). El despliegue IoT de FastAPI mantiene PostgreSQL/SQLite donde corresponde; la migración completa de ese despliegue sigue pendiente. Esto no afecta a la persistencia SQL Server del host Web III.
+
+[Guía actual de Web III y pruebas reproducibles](dotnet/README-WebIII.md) · Verificaciones realizadas: 151 pruebas HTTP con SQL Server, 31 pruebas .NET, 242 Python y 3 JavaScript. El PDF y los resultados de entrega se distribuyen dentro del ZIP para Teams.
