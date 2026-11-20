@@ -123,17 +123,73 @@ El perfil se renueva durante la revisión. Los botones de operador y evaluador
 siguen disponibles para las operaciones específicas y las pruebas de permisos;
 la MFA de este laboratorio es simulada.
 
-**11. Probar una consulta.** Despliega **GET /api/intersecciones**, pulsa
-**Try it out** y después **Execute**. Debes obtener **200** y los datos sintéticos.
-Desde Swagger puedes continuar con las demás operaciones y sus formularios.
+**11. Probar los endpoints de Administrar usuarios y roles.** Las operaciones
+están agrupadas por función; los nombres de grupo no son las rutas de la API.
+Busca y despliega el grupo **Administrar usuarios y roles**. Puedes usar **Ctrl+F**
+y escribir `Administrar usuarios y roles` o `/api/roles` si no lo ves.
 
-**12. Comprobar persistencia y cerrar.** Para verificar persistencia, crea un
-registro mediante POST, anota su ID y consúltalo mediante GET. Cierra el centro
-de pruebas, vuelve a ejecutar la línea del paso 7 y pulsa **Swagger (Web III)**;
-el mismo GET por ID debe devolver el registro. **No pulses Recrear base de pruebas
-entre esas lecturas**, porque ese botón borra deliberadamente CYSA_WebIII_Demo y
-vuelve a cargar la semilla. Al terminar, cierra el centro de pruebas: detiene sus
-procesos locales y conserva los datos.
+**Ejemplo inicial: listar los roles (200).**
+
+1. Dentro de **Administrar usuarios y roles**, pulsa la fila azul **GET /api/roles**,
+   la que no lleva `{id}` al final.
+2. Pulsa **Try it out**.
+3. Deja **Pagina** en `1` y **Tamano** en `50`; deja vacíos los demás filtros.
+4. Pulsa **Execute**.
+5. Baja hasta **Server response**. En **Code** debe aparecer **200** y en
+   **Response body** una lista con los roles `administrador` y `operador`,
+   incluyendo sus campos `id`, `nombre`, `descripcion` y `prueba`.
+   La tabla **Responses** situada más abajo documenta los códigos posibles;
+   el resultado real de tu solicitud está en **Server response**.
+6. Anota el `id` del rol `operador`: se utiliza en el ejemplo de creación siguiente.
+
+En ese mismo grupo puedes probar estas operaciones sin buscar otros apartados:
+
+| Qué probar | Fila y valores en Swagger | Resultado esperado |
+|---|---|---|
+| Listar usuarios de prueba | **GET /api/usuarios**, **Try it out**, **Pagina** `1`, **Tamano** `50`, filtros vacíos, **Execute** | **200** y al menos 15 registros de la semilla |
+| Consultar un rol por ID | **GET /api/roles/{id}**, introducir un `id` devuelto por el listado y pulsar **Execute** | **200** y ese rol |
+| Validación de parámetros | **GET /api/roles**, **Pagina** `0`, **Tamano** `50`, **Execute** | **400** porque la página debe ser como mínimo 1 |
+| Recurso inexistente | **GET /api/roles/{id}**, **id** `999999`, **Execute** | **404** en la base de demostración |
+
+Después del error 400, vuelve a poner **Pagina** en `1` para continuar.
+`GET /api/intersecciones` también está disponible, dentro de **Gestionar
+infraestructura**; no es necesario buscarlo para realizar estos primeros ejemplos.
+
+**12. Crear un registro, comprobar persistencia y cerrar.** Continúa en el grupo
+**Administrar usuarios y roles**:
+
+1. Despliega **POST /api/usuarios**, pulsa **Try it out** y reemplaza el cuerpo
+   del formulario por este JSON. En `rolId` usa el ID del rol `operador` que
+   anotaste en el paso 11; en una semilla nueva suele ser `2`:
+
+```json
+{
+  "prueba": true,
+  "rolId": 2,
+  "identificadorIdp": "docente-prueba-001",
+  "nombre": "Revisión del docente",
+  "activo": true,
+  "mfaHabilitado": false
+}
+```
+
+2. Pulsa **Execute**. Debes recibir **201**. Anota el `id` del **Response body**
+   y la cabecera **Location**. El identificador es único: si repites la prueba,
+   cambia `docente-prueba-001` por otro valor, por ejemplo `docente-prueba-002`.
+   Este registro es sintético; no crea una cuenta de GitHub ni de Keycloak.
+3. Despliega **GET /api/usuarios/{id}**, pulsa **Try it out**, escribe el `id`
+   recibido y pulsa **Execute**. Debe devolver **200** y el mismo usuario.
+4. Cierra el centro de pruebas. Vuelve a ejecutar la línea del paso 7, abre
+   **Swagger (Web III)** y espera **Perfil activo: administrador**.
+5. Regresa a **Administrar usuarios y roles → GET /api/usuarios/{id}**, introduce
+   el mismo `id` y pulsa **Execute**. Debe devolver **200** con los mismos datos:
+   esa es la comprobación de persistencia después del reinicio.
+6. Si deseas limpiar solo ese registro temporal, usa **DELETE /api/usuarios/{id}**
+   con el `id` que acabas de crear; debe responder **204**.
+
+**No pulses Recrear base de pruebas entre las dos consultas**, porque ese botón
+borra deliberadamente CYSA_WebIII_Demo y vuelve a cargar la semilla. Al terminar,
+cierra el centro de pruebas: detiene sus procesos locales y conserva los datos.
 
 ### Alternativa por consola: SQL Server, migraciones y Swagger
 
