@@ -9,6 +9,7 @@ from operacion.planes import proponer,huella
 from cysa_controlador.recepcion import ReceptorPlanes
 from cysa_controlador.run import cargar_config
 from cysa_controlador.controlador import ControladorEmulado
+from cysa_controlador.estados import LocalSeguro
 from pathlib import Path
 
 KEY=b'x'*32
@@ -26,6 +27,11 @@ def test_rechaza_ordenes_sin_prueba_mfa_caducadas_o_alteradas(changes):
 def test_mqtt_no_puede_alterar_fases_sin_romper_firma():
     p=payload();raw=json.loads(firmar(p,KEY));raw['payload']=raw['payload'].replace('15.0','90.0')
     with pytest.raises(ValueError):verificar(json.dumps(raw),KEY,1000)
+
+
+@pytest.mark.parametrize('raw',['[]','null','{"payload":123,"firma":"x"}'])
+def test_sobres_malformados_se_descartan_sin_detener_el_receptor(raw):
+    with pytest.raises(ValueError):verificar(raw,KEY,1000)
 
 @pytest.mark.parametrize('claims',[{'auth_time':time.time(),'amr':['pwd']},{'auth_time':time.time()-301,'amr':['otp']},{'auth_time':time.time()+30,'acr':'2'}])
 def test_mfa_no_acepta_solo_clave_ni_evidencia_vencida_o_futura(claims):
@@ -64,3 +70,41 @@ def test_caida_de_centro_no_cancela_el_cambio_a_local_seguro(tmp_path):
     assert not c.modo.conectado
     assert c.plan_id==c.plan_local.plan_id or c.secuenciador.pendiente is c.plan_local
     assert verificar(out[-1],KEY,1089)['estado']=='rechazado'
+
+
+def test_orden_al_arrancar_espera_latido_y_no_aplica_desconectado(tmp_path):
+    c,r,clock,out=contexto(tmp_path);c.modo=LocalSeguro();p=payload()
+    anterior=c.secuenciador.pendiente
+    r.recibir(firmar(p,KEY));assert r.esperando_centro is not None
+    assert c.secuenciador.pendiente is anterior and not out
+    c.latido(clock[0]);r.tick()
+    assert r.esperando_centro is None and r.pendiente is not None
+    assert c.plan_id!=p['plan']['plan_id']
+
+
+def test_orden_sin_latido_caduca_sin_programar_fases(tmp_path):
+    c,r,clock,out=contexto(tmp_path);c.modo=LocalSeguro();p=payload()
+    anterior=c.secuenciador.pendiente
+    r.recibir(firmar(p,KEY));clock[0]=301;r.tick()
+    assert r.esperando_centro is None and c.secuenciador.pendiente is anterior
+    assert verificar(out[-1],KEY,1301)['estado']=='rechazado'
+
+
+def test_emergencia_futura_no_aplica_antes_del_evento(tmp_path):
+    c,r,clock,out=contexto(tmp_path);p=payload()
+    p['plan'].update(modo='emergencia',evento_utc=1029);p['vence']=1039;p['huella_plan']=huella(p['plan'])
+    r.recibir(firmar(p,KEY));r.tick()
+    assert r.programada is not None and r.pendiente is None
+    clock[0]=29;r.tick()
+    assert r.programada is None and r.pendiente is not None
+    clock[0]=31;c.tick(31);r.tick();clock[0]=31.5;r.tick()
+    assert verificar(out[-1],KEY,1031.5)['estado']=='aplicado'
+    assert r.emergencia_hasta>clock[0]
+
+
+def test_micros_ceden_durante_atencion_de_emergencia(tmp_path):
+    c,r,clock,out=contexto(tmp_path);r.emergencia_hasta=100;p=payload()
+    p['plan']['modo']='micros';p['huella_plan']=huella(p['plan'])
+    anterior=c.secuenciador.pendiente;r.recibir(firmar(p,KEY))
+    assert c.secuenciador.pendiente is anterior
+    assert verificar(out[-1],KEY,1028)['estado']=='rechazado'

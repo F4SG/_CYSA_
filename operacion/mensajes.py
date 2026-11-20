@@ -16,10 +16,12 @@ def firmar(payload,key):
 def verificar(raw,key,ahora=None):
     if len(raw)>32768:raise ValueError('Mensaje demasiado grande')
     envelope=json.loads(raw)
-    if set(envelope)!={'payload','firma'}:raise ValueError('Sobre inválido')
+    if not isinstance(envelope,dict) or set(envelope)!={'payload','firma'}:raise ValueError('Sobre inválido')
+    if not isinstance(envelope['payload'],str):raise ValueError('Payload inválido')
     payload=envelope['payload'];expected=hmac.new(key,payload.encode(),hashlib.sha256).hexdigest()
     if not isinstance(envelope['firma'],str) or not hmac.compare_digest(expected,envelope['firma']):raise ValueError('Firma inválida')
     d=json.loads(payload);now=time.time() if ahora is None else ahora
+    if not isinstance(d,dict):raise ValueError('Contenido inválido')
     if not isinstance(d.get('vence'),(int,float)) or not now<d['vence']<=now+305:raise ValueError('Mensaje caducado o caducidad inválida')
     UUID(d['solicitud_id'])
     if d.get('tipo')=='plan':

@@ -8,6 +8,8 @@ class ReceptorPlanes:
     def __init__(self,ctrl,key,recibos,publicar,reloj=time.monotonic,utc=time.time):
         self.ctrl,self.key,self.path,self.publicar=ctrl,key,Path(recibos),publicar
         self.reloj,self.utc=reloj,utc;self.pendiente=None;self.activo_desde=None;self.emergencia_hasta=0
+        self.programada=None
+        self.esperando_centro=None
         self.recibos=json.loads(self.path.read_text(encoding='utf-8')) if self.path.exists() else {}
     def _guardar(self):
         self.path.parent.mkdir(parents=True,exist_ok=True);tmp=self.path.with_suffix('.tmp')
@@ -31,11 +33,24 @@ class ReceptorPlanes:
             old=dict(self.recibos[d['solicitud_id']]);old['vence']=self.utc()+60
             if old['huella_plan']!=d['huella_plan']:raise ValueError('SolicitudId usado con otro plan')
             self.publicar(firmar(old,self.key));return
+        evento=d['plan'].get('evento_utc')
+        if d['plan']['modo']=='emergencia' and evento and self.utc()<evento:
+            if self.programada and self.programada['solicitud_id']!=d['solicitud_id']:
+                self._respuesta(d,'rechazado','Ya hay una emergencia programada');return
+            self.programada=d;return
         if self.pendiente:
             if self.pendiente['solicitud_id']==d['solicitud_id']:return
-            self._respuesta(d,'rechazado','Hay un cambio autorizado pendiente de aplicar');return
-        if self.ctrl.intermitente or not self.ctrl.modo.conectado:
-            self._respuesta(d,'rechazado','Controlador sin centro o con falla del MMU');return
+            if (d['plan']['modo']=='emergencia' and self.pendiente['plan']['modo']!='emergencia'
+                    and self.ctrl.plan_id!=self.pendiente['plan']['plan_id']):
+                self._respuesta(self.pendiente,'rechazado','El plan pendiente cede a una emergencia autorizada');self.pendiente=None
+            else:
+                self._respuesta(d,'rechazado','Hay un cambio autorizado pendiente de aplicar');return
+        if self.ctrl.intermitente:
+            self._respuesta(d,'rechazado','Controlador con falla del MMU');return
+        if not self.ctrl.modo.conectado:
+            if self.esperando_centro and self.esperando_centro['solicitud_id']!=d['solicitud_id']:
+                self._respuesta(d,'rechazado','Hay una orden esperando la señal del centro');return
+            self.esperando_centro=d;return
         if self.emergencia_hasta>self.reloj() and d['plan']['modo']!='emergencia':
             self._respuesta(d,'rechazado','Se está atendiendo una emergencia; micros y planes normales ceden');return
         cruce,plan=validar(d['plan'])
@@ -45,6 +60,16 @@ class ReceptorPlanes:
         self.ctrl.secuenciador.solicitar(plan)
         self.pendiente=d;self.activo_desde=None
     def tick(self):
+        if self.esperando_centro:
+            d=self.esperando_centro
+            if self.ctrl.intermitente or self.utc()>=d['vence']:
+                self.esperando_centro=None;self._respuesta(d,'rechazado','Falta de centro o falla antes del vencimiento')
+            elif self.ctrl.modo.conectado:
+                self.esperando_centro=None;self.recibir(firmar(d,self.key))
+        if self.programada and self.utc()>=self.programada['plan']['evento_utc']:
+            d,self.programada=self.programada,None
+            try:self.recibir(firmar(d,self.key))
+            except ValueError:self._respuesta(d,'rechazado','Evento caducado antes de poder atenderlo')
         if not self.pendiente:return
         d=self.pendiente
         if self.ctrl.intermitente or not self.ctrl.modo.conectado or self.utc()>=d['vence']:

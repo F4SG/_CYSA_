@@ -251,7 +251,7 @@ se completa la integración gradual documentada.
 
 Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resultados y los muestra en un panel web con acceso por roles.
 
-**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** Trabaja en modo sombra: no cambia semáforos ni activa planes. FastAPI atiende el sistema de monitoreo; la carpeta `dotnet/` incorpora la Web API integrada con SQL Server y conserva los dos servicios históricos de evaluación y decisiones para compatibilidad.
+**Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** El monitoreo de vías trabaja en modo sombra. El [banco S2 de integración](controlador/INTEGRACION.md) permite enviar planes únicamente al controlador emulado/Arduino de laboratorio; no actúa sobre semáforos de la vía pública. FastAPI atiende el monitoreo; `dotnet/` incorpora la Web API de Web III con SQL Server y conserva los dos servicios históricos de evaluación y decisiones para compatibilidad.
 
 ### Qué puedes demostrar
 
@@ -261,7 +261,25 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 - Consultar conteos, inventario y estados reportados desde el navegador.
 - Ingresar como operador o administrador; gestionar usuarios con el segundo rol.
 - Guardar conteos agregados en CSV y enviarlos al panel mediante MQTT.
-- Sprint 2: hacer funcionar el controlador semafórico emulado con la placa Arduino como monitor de conflictos y probar el modo local seguro ([guía del controlador](controlador/README.md)).
+- Sprint 2: controlador emulado, Arduino MMU y modo local seguro ([guía base](controlador/README.md)); conteos → SQL Server → Webster/SUMO → operador con MFA → MQTT/TLS → aplicación y confirmación ([guía de integración](controlador/INTEGRACION.md)). Incluye prioridades para micros y eventos de emergencia del banco.
+
+Para esa integración, inicia primero el entorno IoT de las secciones siguientes. Después,
+desde la raíz del repositorio, ejecuta cada línea en una PowerShell distinta y deja ambas abiertas:
+
+```powershell
+.\iniciar_operacion.ps1
+```
+
+```powershell
+.\iniciar_controlador.ps1 -Puerto COM3 -Mqtt -RecibirPlanes
+```
+
+Abre `http://localhost:5184` o **Operación semafórica (S2)** en el panel. SQL Server local
+y ODBC Driver 18 deben estar instalados. El administrador calcula; el operador autoriza
+con OTP real de Keycloak. El primer acceso permite registrar su autenticador. La base
+operativa es `CYSA_Control_S2`, independiente de `CYSA_WebIII_Demo`. El monitoreo IoT
+anterior conserva su almacén histórico; los nuevos planes, decisiones, envíos, conteos
+y estados S2 se guardan en SQL Server. Consulta los pasos y límites en la guía enlazada.
 
 [Uso de los patrones creacionales y de los entornos de prueba](casos_estudio/README.md).
 

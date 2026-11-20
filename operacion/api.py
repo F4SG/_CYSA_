@@ -14,10 +14,14 @@ class SolicitudPlan(BaseModel):
     hasta:datetime
     modo:Literal['webster','micros','emergencia']='webster'
     grupo:Literal['NS','EO']|None=None
+    evento_utc:datetime|None=None
     @model_validator(mode='after')
     def periodo(self):
         if self.desde.tzinfo is None or self.hasta.tzinfo is None or not 0<(self.hasta-self.desde).total_seconds()<=3600:
             raise ValueError('Usar un intervalo con zona horaria de hasta una hora')
+        if self.modo=='emergencia':
+            if self.evento_utc is None or self.evento_utc.tzinfo is None or not -10<=self.evento_utc.timestamp()-time.time()<=240:
+                raise ValueError('Define el evento de emergencia del banco con zona horaria, dentro de los próximos cuatro minutos')
         return self
 class Decision(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -47,6 +51,7 @@ def router(repo,store=None,simulator=None):
             filas=repo.counts(solicitud.desde,solicitud.hasta,'DEMO_INT_01',None,True,1000,0)
             if len(filas)>=1000 or sum(x['cantidad'] for x in filas)>3000:raise ValueError('Demanda demasiado grande para el banco; acorta el intervalo')
             p=proponer(filas,solicitud.modo,solicitud.grupo);id=uuid4();p['plan_id']='OP_'+id.hex
+            if solicitud.modo=='emergencia':p['evento_utc']=solicitud.evento_utc.timestamp()
             if simulator:v=simulator(filas,p)
             else:
                 from .simular import buscar

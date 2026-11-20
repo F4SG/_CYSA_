@@ -9,8 +9,10 @@ laboratorio:
   si recibe una combinación insegura, o deja de recibir órdenes por más de 1 s, pone todo en **rojo
   intermitente** y no vuelve a obedecer hasta presionar RESET.
 
-Alcance de esta entrega: plan fijo, MMU y **modo local seguro (RF-06)**. La prioridad a emergencias (RF-09)
-y a micros (RF-08) y el envío de planes desde la plataforma quedan para la siguiente entrega.
+Incluye plan fijo, MMU y **modo local seguro (RF-06)**. Para calcular planes con conteos,
+validarlos en SUMO, autorizar con MFA y enviarlos al banco con prioridades para micros
+y emergencias, sigue [INTEGRACION.md](INTEGRACION.md). Ese flujo guarda sus datos en
+**SQL Server** y requiere iniciar también `iniciar_operacion.ps1`.
 
 **Para probarlo todo con la placa, seguir [PRUEBA_COMPLETA.md](PRUEBA_COMPLETA.md).**
 

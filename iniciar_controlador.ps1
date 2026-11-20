@@ -7,7 +7,7 @@
 #   .\iniciar_controlador.ps1 -SimularCorte 30:120    centro simulado que se corta entre los 30 y 120 s (prueba RF-06)
 #   .\iniciar_controlador.ps1 -ProbarPlaca -Puerto COM3   prueba automatica de la placa (LEDs y fallas del MMU)
 param([string]$Puerto = '', [switch]$SinPlaca, [switch]$Mqtt, [switch]$RecibirPlanes, [string]$SimularCorte = '', [switch]$ProbarPlaca,
-      [string]$Config = 'controlador/config/demo_int_01.yaml', [string]$Python = '')
+      [string]$Config = 'controlador/config/demo_int_01.yaml', [string]$Python = '', [string]$Instalacion = '')
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
 Set-Location $repo
@@ -28,12 +28,19 @@ if ($ProbarPlaca) {
   exit $LASTEXITCODE
 }
 if ($Puerto) { $argumentos += @('--puerto', $Puerto) } else { $argumentos += '--sin-placa' }
-if ($Mqtt) { $argumentos += '--mqtt' }
+if ($Mqtt) {
+  if (-not $Instalacion) {
+    $Instalacion=$repo
+    if (-not (Test-Path (Join-Path $Instalacion 'infra/.env'))) {$Instalacion=Join-Path $env:LOCALAPPDATA 'CYSA/workspace'}
+  }
+  $Instalacion=(Resolve-Path -LiteralPath $Instalacion).Path
+  $argumentos += @('--mqtt','--credenciales',(Join-Path $Instalacion 'infra/runtime/clientes/emulador.env'))
+}
 elseif ($SimularCorte) { $argumentos += @('--simular-corte', $SimularCorte) }
 else { $argumentos += '--centro-simulado' }
 if ($RecibirPlanes) {
   if (-not $Mqtt) { throw 'RecibirPlanes requiere Mqtt y la clave creada por preparar_control.py.' }
-  $argumentos += @('--clave-planes', (Join-Path $repo 'infra/runtime/control/clave.key'))
+  $argumentos += @('--clave-planes', (Join-Path $Instalacion 'infra/runtime/control/clave.key'))
 }
 Write-Host 'Ctrl+C detiene el controlador; sin mensajes de la PC la placa pasa a rojo intermitente.' -ForegroundColor Cyan
 & $py @argumentos

@@ -43,14 +43,16 @@ class Almacen:
             if p['estado']!='validado' or not p['validacion']['aprobada'] or p['validacion']['huella_plan']!=huella(p['documento']):
                 raise EstadoInvalido('Se requiere esta versión validada, vigente y sin decisión')
             if (time.time()-p['creado'].timestamp())>900:raise EstadoInvalido('La evaluación venció; repetir la simulación')
+            now=time.time();vence=p['documento'].get('evento_utc',now)+10 if p['documento']['modo']=='emergencia' else now+300
+            if accion=='autorizar' and vence<=now:raise EstadoInvalido('El evento de emergencia ya venció; no se envía una prioridad tardía')
             c.execute('INSERT INTO control_decisiones(solicitud_id,plan_id,usuario,accion,motivo,mfa) VALUES(%s,%s,%s,%s,%s,%s)',
                       (solicitud,id,usuario,accion,motivo,Jsonb(mfa)))
             nuevo='autorizado' if accion=='autorizar' else 'rechazado'
             c.execute('UPDATE control_planes SET estado=%s WHERE id=%s',(nuevo,id))
             if accion=='autorizar':
-                now=time.time();payload=dict(tipo='plan',solicitud_id=str(solicitud),plan=p['documento'],
+                payload=dict(tipo='plan',solicitud_id=str(solicitud),plan=p['documento'],
                     huella_plan=huella(p['documento']),usuario=usuario,mfa_verificado=True,
-                    emitido=now,vence=now+(10 if p['documento']['modo']=='emergencia' else 300))
+                    emitido=now,vence=vence)
                 c.execute('INSERT INTO control_envios(solicitud_id,payload) VALUES(%s,%s)',(solicitud,Jsonb(payload)))
             self.audit(c,id,usuario,'decidir',motivo,dict(estado=p['estado']),dict(estado=nuevo,mfa=mfa))
         return False

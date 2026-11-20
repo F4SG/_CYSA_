@@ -67,4 +67,4 @@ class ControladorEmulado(Controlador):
                       timestamp=datetime.now(timezone.utc), prueba=self.prueba)
 
     def enviar_plan(self, plan: PlanBorrador):
-        raise PermissionError('El envío de planes requiere autorización y MFA (RF-12); no está habilitado.')
+        raise PermissionError('Usa el receptor de órdenes firmadas con autorización y MFA (RF-12); no se admiten planes directos.')

@@ -28,11 +28,12 @@ export async function init(config){
  }
  return true;
 }
-export async function login(){
+export async function login({fresh=false}={}){
  const state=random(),nonce=random(),verifier=random();
  const challenge=encode(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
  sessionStorage.setItem('cysa.pkce',JSON.stringify({state,nonce,verifier,created:Date.now()}));
  const q=new URLSearchParams({client_id:cfg.clientId,redirect_uri:cfg.redirectUri,response_type:'code',scope:'openid profile',state,nonce,code_challenge:challenge,code_challenge_method:'S256'});
+ if(fresh){q.set('max_age','0');q.set('prompt','login');}
  location.assign(cfg.issuer+'/protocol/openid-connect/auth?'+q);
 }
 export async function accessToken(){

@@ -1,14 +1,14 @@
 # Prueba completa del controlador con la placa
 
-Guía para probar todo el funcionamiento del Sprint 2 en Windows: placa MMU, controlador, modo local
-seguro (RF-06) y el sistema completo con Docker y el panel. Tiempo aproximado: 30 minutos.
+Guía para probar el banco base del Sprint 2 en Windows: placa MMU, controlador, modo local
+seguro (RF-06) y comunicación con Docker y el panel. Tiempo aproximado: 30 minutos.
+El envío de planes, SQL Server, SUMO y prioridades se prueba con [INTEGRACION.md](INTEGRACION.md).
 
 ## 0. Antes de empezar
 
 Necesitas:
 
-- La copia del proyecto que ya tienes instalada con Docker (la de la sección 2 del README), en la rama
-  `s2/controlador-emulado` o en `main` cuando la rama esté fusionada.
+- La copia del proyecto que ya tienes instalada con Docker (la de la sección 2 del README), en `main`.
 - La placa Arduino (Uno o Nano), un cable USB de datos, 6 LEDs (2 rojos, 2 ámbar, 2 verdes) y 6
   resistencias de 220 Ω.
 - Arduino IDE.
@@ -17,7 +17,8 @@ En PowerShell, desde la raíz del proyecto:
 
 ```powershell
 git fetch origin
-git switch s2/controlador-emulado
+git switch main
+git pull --ff-only origin main
 $py = (Resolve-Path .\.venv\Scripts\python.exe).Path
 & $py -m pip install -r controlador/requirements.txt
 ```
