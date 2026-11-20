@@ -253,7 +253,10 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 
 **Esta entrega incluye el conteo con cámara o video y el asistente para elegir la fuente y marcar carriles.** El monitoreo de vías trabaja en modo sombra. El [banco S2 de integración](controlador/INTEGRACION.md) permite enviar planes únicamente al controlador emulado/Arduino de laboratorio; no actúa sobre semáforos de la vía pública. FastAPI atiende el monitoreo; `dotnet/` incorpora la Web API de Web III con SQL Server y conserva los dos servicios históricos de evaluación y decisiones para compatibilidad.
 
-### Qué puedes demostrar
+### Sprint 1 — implementado y revisado
+
+Su alcance es detectar, contar y consultar el flujo vehicular en modo sombra,
+sin enviar órdenes a semáforos. La revisión del Sprint 1 ya fue realizada.
 
 - Detectar y contar autos, motos y micros por carril.
 - Elegir una cámara o un archivo de video desde el asistente.
@@ -261,7 +264,37 @@ Sistema de monitoreo de tránsito: detecta y cuenta vehículos, guarda los resul
 - Consultar conteos, inventario y estados reportados desde el navegador.
 - Ingresar como operador o administrador; gestionar usuarios con el segundo rol.
 - Guardar conteos agregados en CSV y enviarlos al panel mediante MQTT.
-- Sprint 2: controlador emulado, Arduino MMU y modo local seguro ([guía base](controlador/README.md)); conteos → SQL Server → Webster/SUMO → operador con MFA → MQTT/TLS → aplicación y confirmación ([guía de integración](controlador/INTEGRACION.md)). Incluye prioridades para micros y eventos de emergencia del banco.
+
+Para reproducirlo, seguir las secciones **1 a 4** y el guion de **5. Probar el
+Sprint 1** de esta misma guía. La evidencia de conteo y sus límites se conservan
+en esa sección.
+
+### Sprint 2 — controlador e integración del banco
+
+El código está implementado y se probó con SQL Server, SUMO, MQTT y el Arduino
+conectado por COM3.
+
+| Parte | Qué incluye |
+| --- | --- |
+| Controlador y MMU | Fases de verde, ámbar y todo rojo; comprobación de conflictos en Arduino; watchdog y modo local seguro ante pérdida del centro. |
+| Cálculo y simulación | Conteos de prueba → SQL Server → propuesta Webster → comparación con el plan fijo usando SUMO real. |
+| Decisión y envío | El administrador calcula; el operador autoriza con MFA reciente. La orden viaja firmada por MQTT/TLS y cambia de plan al terminar un todo rojo. |
+| Confirmación y consulta | Panel **Operación semafórica (S2)** con planes, evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
+| Prioridades del banco | Comparación de prioridad para micros y eventos de emergencia definidos por fecha/hora, conservando los tiempos de seguridad. |
+
+**Configuración para probarlo:** cada instalación debe habilitar y enrolar el OTP
+del operador antes de autorizar planes. La prueba integrada con OTP real se
+realizó en el entorno aislado.
+
+**Validación pendiente:**
+Los eventos de emergencia del banco no equivalen a detección automática de
+ambulancias; esa detección y la precisión por clase requieren validación con
+videos etiquetados. Descargar el ZIP no instala los servicios, no configura las
+cuentas ni programa la placa automáticamente.
+
+Consultar la [guía base del controlador](controlador/README.md), la
+[integración paso a paso](controlador/INTEGRACION.md) y los
+[resultados de verificación](controlador/VERIFICACION.md).
 
 Para esa integración, inicia primero el entorno IoT de las secciones siguientes. Después,
 desde la raíz del repositorio, ejecuta cada línea en una PowerShell distinta y deja ambas abiertas:
@@ -432,7 +465,7 @@ Los pesos YOLO `.pt` no vienen en Git. Prepara `deteccion/modelos/yolo26s.pt` an
 
 Los perfiles de demostración usan **`prueba: true`** e intersección **`DEMO_INT_01`**. En el panel consulta ese contexto de validación y la última hora. Cada intervalo dura unos **30 segundos** y el panel consulta cada **15 segundos**: los resultados no aparecen cuadro a cuadro.
 
-### 5. Probar el software para el sprint
+### 5. Probar el Sprint 1
 
 Haz este ensayo completo antes de presentar. Usa un video con vehículos visibles y deja al menos un minuto para observar publicaciones.
 
