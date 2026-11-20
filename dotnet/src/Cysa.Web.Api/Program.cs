@@ -97,8 +97,8 @@ public partial class Program
         app.UseStaticFiles();
         if(app.Environment.IsDevelopment())app.UseSwaggerUI(o=>o.InjectJavascript("/swagger-demo.js"));
         app.UseCysaApi(manejarErrores:false);
-        app.MapGet("/",()=>Results.Redirect("/demo"));
-        app.MapGet("/demo",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html"));
+        app.MapGet("/",()=>Results.Redirect("/demo")).ExcludeFromDescription();
+        app.MapGet("/demo",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
         await app.RunAsync();
     }
 }

@@ -138,7 +138,7 @@ public static class ApiSetup
             app.UseSwagger();
             app.UseSwaggerUI();
         }
-        app.MapGet("/health", () => Results.Ok(new { status = "ok", soloPrueba = true, activacionPlanes = false })).AllowAnonymous();
+        app.MapGet("/health", () => Results.Ok(new { status = "ok", soloPrueba = true, activacionPlanes = false })).AllowAnonymous().ExcludeFromDescription();
         app.MapControllers();
     }
 }
