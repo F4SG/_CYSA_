@@ -1,8 +1,9 @@
 """Conteos y estados MQTT → SQL Server; outbox SQL Server → MQTT autenticado."""
 import logging,time
+from datetime import datetime,timezone
 from queue import Queue,Empty
 from cysa.mqtt import client
-from cysa.contracts import decode_message
+from cysa.contracts import decode_message,Latido,TOPICO_LATIDO
 from .despacho import iniciar
 log=logging.getLogger('cysa.operacion')
 def ejecutar(store,stop):
@@ -33,8 +34,12 @@ def ejecutar(store,stop):
         despacho=iniciar(c,store)
         c.connect_async(__import__('os').environ.get('MQTT_HOST','localhost'),int(__import__('os').environ.get('MQTT_PORT','8883')),60)
         c.loop_start()
-        pending=None
+        pending=None;ultimo_latido=0
         while not stop.is_set():
+            ahora=time.monotonic()
+            if c.is_connected() and ahora-ultimo_latido>=5:
+                c.publish(TOPICO_LATIDO,Latido(timestamp=datetime.now(timezone.utc)).model_dump_json(),qos=1,retain=False)
+                ultimo_latido=ahora
             if pending is None:
                 try:pending=queue.get(timeout=1)
                 except Empty:continue
