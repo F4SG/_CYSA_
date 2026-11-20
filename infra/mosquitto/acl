@@ -1,6 +1,8 @@
 user deteccion
 topic write corredor/+/+/conteos
 user plataforma
+topic write corredor/DEMO_INT_01/plan
+topic read corredor/DEMO_INT_01/confirmacion
 topic read corredor/+/+/conteos
 topic read corredor/+/estado
 topic write centro/latido
@@ -9,5 +11,7 @@ topic write centro/latido
 topic write corredor/DEMO_INT_01/+/conteos
 topic write corredor/DEMO_INT_01/estado
 user emulador
+topic read corredor/DEMO_INT_01/plan
+topic write corredor/DEMO_INT_01/confirmacion
 topic write corredor/+/estado
 topic read centro/latido

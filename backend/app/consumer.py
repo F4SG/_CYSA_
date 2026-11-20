@@ -19,10 +19,20 @@ def main():
     logging.basicConfig(level=logging.INFO)
     repo=Repository();repo.ready()
     c=client('cysa-plataforma',manual_ack=True)
+    despacho=None
+    if os.environ.get('CYSA_CONTROL_ENABLED')=='true':
+        from operacion.despacho import iniciar
+        despacho=iniciar(c,repo)
     def connected(client,userdata,flags,reason,properties):
         if reason.is_failure:log.error('MQTT rechazó autenticación');return
         client.subscribe([('corredor/+/+/conteos',1),('corredor/+/estado',1)])
+        if despacho:client.subscribe('corredor/DEMO_INT_01/confirmacion',qos=1)
     def message(client,userdata,msg):
+        if despacho and msg.topic=='corredor/DEMO_INT_01/confirmacion':
+            try:despacho[1](msg.payload)
+            except Exception:log.warning('Confirmación descartada: firma, contrato o persistencia no válidos')
+            if msg.qos:client.ack(msg.mid,msg.qos)
+            return
         try:event=decode_message(msg.topic,msg.payload)
         except ValueError:
             log.warning('Mensaje descartado: contrato o tópico inválido')
@@ -40,5 +50,7 @@ def main():
     iniciar_latido(c,float(os.environ.get('LATIDO_S','5')))
     c.connect(os.environ.get('MQTT_HOST','mosquitto'),int(os.environ.get('MQTT_PORT','8883')),60)
     try:c.loop_forever(retry_first_connection=True)
-    finally:c.disconnect()
+    finally:
+        if despacho:despacho[0].set()
+        c.disconnect()
 if __name__=='__main__':main()

@@ -6,7 +6,7 @@
 #   .\iniciar_controlador.ps1 -Mqtt                   latidos y estado por el broker (stack Docker en marcha)
 #   .\iniciar_controlador.ps1 -SimularCorte 30:120    centro simulado que se corta entre los 30 y 120 s (prueba RF-06)
 #   .\iniciar_controlador.ps1 -ProbarPlaca -Puerto COM3   prueba automatica de la placa (LEDs y fallas del MMU)
-param([string]$Puerto = '', [switch]$SinPlaca, [switch]$Mqtt, [string]$SimularCorte = '', [switch]$ProbarPlaca,
+param([string]$Puerto = '', [switch]$SinPlaca, [switch]$Mqtt, [switch]$RecibirPlanes, [string]$SimularCorte = '', [switch]$ProbarPlaca,
       [string]$Config = 'controlador/config/demo_int_01.yaml', [string]$Python = '')
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
@@ -31,6 +31,10 @@ if ($Puerto) { $argumentos += @('--puerto', $Puerto) } else { $argumentos += '--
 if ($Mqtt) { $argumentos += '--mqtt' }
 elseif ($SimularCorte) { $argumentos += @('--simular-corte', $SimularCorte) }
 else { $argumentos += '--centro-simulado' }
+if ($RecibirPlanes) {
+  if (-not $Mqtt) { throw 'RecibirPlanes requiere Mqtt y la clave creada por preparar_control.py.' }
+  $argumentos += @('--clave-planes', (Join-Path $repo 'infra/runtime/control/clave.key'))
+}
 Write-Host 'Ctrl+C detiene el controlador; sin mensajes de la PC la placa pasa a rojo intermitente.' -ForegroundColor Cyan
 & $py @argumentos
 exit $LASTEXITCODE

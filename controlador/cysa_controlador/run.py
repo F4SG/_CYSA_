@@ -66,7 +66,7 @@ def describir(ctrl):
     return texto
 
 
-def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print):
+def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print,receptor=None):
     inicio = reloj()
     visto = None
     ultimo_envio = ultimo_estado = float('-inf')
@@ -83,6 +83,11 @@ def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, dura
         for mensaje in mmu.mensajes(ahora):
             if mensaje.startswith('FALLA:'):
                 ctrl.falla_mmu(mensaje, ahora)
+        if receptor:
+            for raw in centro.recibir_planes():
+                try:receptor.recibir(raw)
+                except (ValueError,KeyError,TypeError):imprimir('Plan descartado: firma, contrato o vigencia no válidos')
+            receptor.tick()
         if not ctrl.intermitente and (ctrl.luces != anterior or ahora - ultimo_envio >= INTERVALO_ENVIO_S):
             mmu.enviar(ctrl.luces, ahora)
             ultimo_envio = ahora
@@ -110,6 +115,8 @@ def main(argv=None):
     p.add_argument('--credenciales', type=Path, default=CREDENCIALES, help='Archivo .env del usuario MQTT emulador')
     p.add_argument('--duracion', type=float, help='Detener después de N segundos')
     p.add_argument('--stop-file', type=Path, help='Detener cuando exista este archivo')
+    p.add_argument('--clave-planes',type=Path,help='Clave del banco para recibir planes firmados por MQTT')
+    p.add_argument('--recibos',type=Path,default=REPO/'resultados/controlador/recibos.json')
     a = p.parse_args(argv)
     try:
         datos, cruce, plan_centro, plan_local = cargar_config(a.config)
@@ -134,7 +141,13 @@ def main(argv=None):
         p.error(f'No se pudo usar la placa: {error}')
     print(f'Controlador {cruce.interseccion}: grupos {", ".join(cruce.grupos)}. Ctrl+C para detener.')
     try:
-        ejecutar(ctrl, mmu, enlace, duracion_s=a.duracion, stop_file=a.stop_file)
+        receptor=None
+        if a.clave_planes:
+            if not a.mqtt:raise ValueError('La recepción de planes requiere --mqtt')
+            from .recepcion import ReceptorPlanes
+            from operacion.mensajes import clave
+            receptor=ReceptorPlanes(ctrl,clave(a.clave_planes),a.recibos,enlace.confirmar_plan)
+        ejecutar(ctrl, mmu, enlace, duracion_s=a.duracion, stop_file=a.stop_file,receptor=receptor)
     except KeyboardInterrupt:
         pass
     finally:

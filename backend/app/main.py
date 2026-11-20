@@ -10,13 +10,17 @@ from app.repository import Repository
 from app.users import KeycloakUsers,build_users_router
 from cysa_inventory.router import build_router
 
-def create_app(repository=None,user_directory=None):
+def create_app(repository=None,user_directory=None,operation_store=None,simulator=None):
     repo=repository or Repository()
     @asynccontextmanager
     async def lifespan(app):
         repo.ready()
+        import os
+        if os.environ.get('CYSA_CONTROL_ENABLED')=='true':
+            from operacion.almacen import Almacen
+            (operation_store or Almacen(repo.connection)).ready()
         yield
-    app=FastAPI(title='CYSA S1 — solo monitoreo',version='1.1.0',lifespan=lifespan)
+    app=FastAPI(title='CYSA — monitoreo y banco semafórico S2',version='2.0.0',lifespan=lifespan)
     directory=user_directory or KeycloakUsers()
     app.state.identity=directory
     @app.exception_handler(RequestValidationError)
@@ -42,5 +46,7 @@ def create_app(repository=None,user_directory=None):
     def states():return {'items':repo.states()}
     app.include_router(build_router(repo,read_access,admin_access))
     app.include_router(build_users_router(directory))
+    from operacion.api import router
+    app.include_router(router(repo,operation_store,simulator))
     return app
 app=create_app()

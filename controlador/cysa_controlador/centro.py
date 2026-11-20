@@ -6,6 +6,7 @@ el ciclo de control: paho trabaja en su propio hilo y la publicación no espera 
 import os
 import threading
 import time
+from queue import Queue,Empty,Full
 
 from cysa.contracts import Latido, TOPICO_LATIDO
 
@@ -18,6 +19,7 @@ class CentroMQTT:
         self._ultimo = None
         self._lock = threading.Lock()
         self.conectado = threading.Event()
+        self.planes=Queue(maxsize=20)
         self.c = client(client_id)
 
         def conectar(c, u, f, reason, properties):
@@ -25,8 +27,14 @@ class CentroMQTT:
                 return
             self.conectado.set()
             c.subscribe(TOPICO_LATIDO, qos=1)
+            c.subscribe('corredor/DEMO_INT_01/plan',qos=1)
 
         def mensaje(c, u, msg):
+            if msg.topic=='corredor/DEMO_INT_01/plan':
+                if len(msg.payload)<=32768:
+                    try:self.planes.put_nowait(msg.payload)
+                    except Full:pass
+                return
             try:
                 Latido.model_validate_json(msg.payload)
             except ValueError:
@@ -47,6 +55,14 @@ class CentroMQTT:
     def publicar_estado(self, estado):
         if self.conectado.is_set():
             self.c.publish(f'corredor/{estado.interseccion}/estado', estado.model_dump_json(), qos=1)
+
+    def recibir_planes(self):
+        while True:
+            try:yield self.planes.get_nowait()
+            except Empty:return
+
+    def confirmar_plan(self,raw):
+        self.c.publish('corredor/DEMO_INT_01/confirmacion',raw,qos=1,retain=False)
 
     def cerrar(self):
         self.c.loop_stop()

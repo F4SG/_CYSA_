@@ -1,0 +1,11 @@
+# Se aplica junto a compose.yaml después de preparar_control.py. Solo banco DEMO.
+services:
+  api:
+    environment:
+      CYSA_CONTROL_ENABLED: 'true'
+  consumer:
+    environment:
+      CYSA_CONTROL_ENABLED: 'true'
+      CYSA_PLAN_KEY_FILE: /run/secrets/cysa-control-key
+    volumes:
+      - ./runtime/control/clave.key:/run/secrets/cysa-control-key:ro
