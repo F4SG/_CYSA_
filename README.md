@@ -38,7 +38,104 @@ entrega se distribuyen por Teams y no se alojan en el historial Git. Su contenid
 El ZIP incluye también **Resultados_pruebas_WebIII.json**, con el registro de
 151 comprobaciones HTTP sobre SQL Server, las operaciones y sus códigos.
 
-### Configurar SQL Server, aplicar migraciones y abrir Swagger
+### Inicio rápido paso a paso para el docente
+
+**Requisitos antes de comenzar:** Windows, **SDK .NET 10** y **SQL Server local**
+instalado y en ejecución. Se necesita internet para restaurar las dependencias
+la primera vez. No se requieren Docker, Python, cámara, YOLO ni SUMO para Web III.
+
+**1. Descargar y extraer todo el ZIP.** Descarga **CYSA_WebAPI.zip** de la entrega
+en Teams. También puedes descargar las fuentes desde GitHub: rama **main** →
+**Code** → **Download ZIP**. Haz clic derecho en el ZIP → **Extraer todo**.
+No abras el proyecto desde la vista del archivo comprimido.
+
+**2. Identificar la carpeta raíz.** Entra en las carpetas extraídas hasta ver
+**desktop**, **dotnet** y **README.md** en el mismo nivel. Esa es la carpeta desde
+la que debes ejecutar los comandos. En el ZIP de Teams se llama **CYSA-WebIII**;
+en la descarga de GitHub el nombre puede ser diferente.
+
+**3. Abrir PowerShell y entrar a esa carpeta con `cd`.** Por ejemplo, si guardaste
+el ZIP de Teams en Descargas y usaste la carpeta de extracción predeterminada,
+ejecuta esta línea y pulsa **Enter**:
+
+```powershell
+cd "$env:USERPROFILE\Downloads\CYSA_WebAPI\CYSA-WebIII"
+```
+
+La ruta es un ejemplo: si extrajiste el ZIP en otra ubicación, copia la ruta de
+la carpeta raíz desde la barra de direcciones del Explorador y úsala entre
+comillas después de `cd`. No copies literalmente una ruta que no exista en tu PC.
+
+**4. Comprobar la ubicación.** Ejecuta esta línea y pulsa **Enter**:
+
+```powershell
+dir
+```
+
+La lista debe mostrar **desktop** y **dotnet**. Si no aparecen, vuelve al paso 2;
+no continúes desde una carpeta superior ni desde `dotnet`.
+
+**5. Comprobar el SDK.** Ejecuta esta línea y pulsa **Enter**:
+
+```powershell
+dotnet --list-sdks
+```
+
+Debe aparecer una versión **10.x**. Si el comando no existe o no aparece ese SDK,
+instala SDK .NET 10 y abre una nueva PowerShell antes de continuar.
+
+**6. Restaurar las dependencias del centro de pruebas.** Ejecuta únicamente esta
+línea y espera a que termine antes de escribir la siguiente:
+
+```powershell
+dotnet restore .\desktop\Cysa.Launcher\Cysa.Launcher.csproj
+```
+
+**7. Abrir el centro de pruebas.** Ejecuta esta línea y pulsa **Enter**:
+
+```powershell
+dotnet run --project .\desktop\Cysa.Launcher\Cysa.Launcher.csproj --no-restore
+```
+
+Espera la compilación. Aparecerá la ventana **CYSA / Centro de pruebas**, con los
+botones del sistema. Mantén abierta PowerShell y esa ventana durante la revisión.
+**Ejecuta cada línea anterior por separado; no hace falta ejecutar los comandos
+de la alternativa por consola que aparece más abajo.**
+
+**8. Elegir SQL Server en el centro de pruebas.** Pulsa **SQL Server (Web III)**.
+Selecciona una instancia que esté instalada en tu equipo: **localhost**, una
+instancia **SQLEXPRESS** de la lista o **(localdb)\MSSQLLocalDB**. Pulsa
+**Probar conexión**, espera el resultado **Conexión correcta** y pulsa
+**Guardar configuración**. La primera comprobación puede compilar y descargar
+dependencias de la API. Este paso no borra ni crea la base y no instala SQL Server.
+Si falla, comprueba el servicio y los permisos de Windows antes de continuar.
+
+**9. Abrir Swagger.** En el centro de pruebas pulsa **Swagger (Web III)**.
+Espera a que termine la preparación: el lanzador inicia la API, aplica las
+migraciones pendientes, crea la base si falta y carga los datos de prueba si
+corresponde. Se abrirá Swagger UI en el navegador con los endpoints disponibles.
+El puerto se asigna a esta instalación; usa la dirección que abre el botón.
+
+**10. Revisar como administrador.** Al cargar Swagger se selecciona automáticamente
+el **administrador de demostración**. Espera a ver **Perfil activo: administrador**.
+No necesitas iniciar sesión con GitHub ni copiar un token en Authorize.
+El perfil se renueva durante la revisión. Los botones de operador y evaluador
+siguen disponibles para las operaciones específicas y las pruebas de permisos;
+la MFA de este laboratorio es simulada.
+
+**11. Probar una consulta.** Despliega **GET /api/intersecciones**, pulsa
+**Try it out** y después **Execute**. Debes obtener **200** y los datos sintéticos.
+Desde Swagger puedes continuar con las demás operaciones y sus formularios.
+
+**12. Comprobar persistencia y cerrar.** Para verificar persistencia, crea un
+registro mediante POST, anota su ID y consúltalo mediante GET. Cierra el centro
+de pruebas, vuelve a ejecutar la línea del paso 7 y pulsa **Swagger (Web III)**;
+el mismo GET por ID debe devolver el registro. **No pulses Recrear base de pruebas
+entre esas lecturas**, porque ese botón borra deliberadamente CYSA_WebIII_Demo y
+vuelve a cargar la semilla. Al terminar, cierra el centro de pruebas: detiene sus
+procesos locales y conserva los datos.
+
+### Alternativa por consola: SQL Server, migraciones y Swagger
 
 Descarga y extrae todo el repositorio o el ZIP. Requisitos: **SDK .NET 10**,
 acceso a NuGet para restaurar dependencias y **SQL Server local** instalado y
@@ -80,14 +177,6 @@ La semilla contiene al menos 15 registros por tabla de aplicación, salvo los do
 roles del modelo. Para demostrar persistencia, crea un registro, consulta su ID,
 detén la API con Ctrl+C, vuelve a ejecutar únicamente el último comando y repite
 el GET. No uses recreación entre lecturas: borra deliberadamente los datos.
-
-### Alternativa con el centro de pruebas desde las fuentes
-
-El ZIP y el repositorio conservan `desktop/Cysa.Launcher`. En Windows, desde la
-raíz extraída, ejecuta `dotnet run --project desktop/Cysa.Launcher`. Selecciona la
-instancia en **SQL Server (Web III)** y pulsa **Swagger (Web III)**. El lanzador
-compila la API, aplica migraciones pendientes y prepara la semilla si falta.
-Este recorrido también requiere SDK .NET 10 y SQL Server local.
 
 Web III se prueba sin Docker, Python, cámara, YOLO ni SUMO. La
 [guía técnica de Web III](dotnet/README-WebIII.md) detalla DTO, recursos, reglas,
