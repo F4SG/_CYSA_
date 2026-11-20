@@ -15,6 +15,12 @@ SQL Server debe estar instalado y accesible. Después de compilar la API, el lan
 aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.
 No requiere Docker, Python, cámara ni YOLO para Web III.
 
+Al cerrar o pulsar **Detener sistema**, se detienen los procesos locales del lanzador.
+Solo se intenta detener el proyecto Docker si se intentó iniciar el flujo IoT en esa
+sesión. Una configuración de una sesión anterior no obliga a consultar Docker.
+Si se usó IoT y Docker dejó de estar disponible, se registra un aviso y el cierre
+continúa; los datos se conservan. No se apaga Docker Desktop ni el motor SQL Server.
+
 El archivo `CYSA.exe` copiado por separado no contiene todo el proyecto. Para usarlo
 sin fuentes ni SDK, extraer completo el ZIP Windows, con `app` y `services` junto al EXE.
 

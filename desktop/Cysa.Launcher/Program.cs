@@ -61,6 +61,7 @@ internal sealed partial class Instance
     public Process? Detector { get; private set; }
     public Process? SumoGui { get; private set; }
     readonly Dictionary<string, Process> apis = [];
+    readonly DockerSession dockerSession = new();
     readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(3) };
     readonly string logPath;
 
@@ -215,7 +216,18 @@ internal sealed partial class Instance
     }
 
     string[] ComposeArgs(params string[] args) => ["compose", "-p", Project, "--env-file", Path.Combine(Repo, "infra", ".env"), "-f", Path.Combine(Repo, "infra", "compose.yaml"), "-f", Path.Combine(Repo, "infra", "launcher.override.yaml"), .. args];
-    Task<int> Compose(params string[] args) => Run(Docker, ComposeArgs(args));
+    Task<int> Compose(params string[] args)
+    {
+        // Registrar el intento antes de arrancar: un fallo puede dejar contenedores parciales.
+        if (args.FirstOrDefault() == "up") dockerSession.MarkUsed();
+        return Run(Docker, ComposeArgs(args));
+    }
+
+    async Task<bool> DockerAvailable()
+    {
+        try { return await Run(Docker, ["info", "--format", "{{.ServerVersion}}"], Root, check: false, output: false, timeoutMinutes: 1) == 0; }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or IOException or InvalidOperationException) { return false; }
+    }
     void RequireConfigured()
     {
         if (!Configured || !File.Exists(Path.Combine(Root, "configurado"))) throw new InvalidOperationException("Pulsa Configurar esta PC para completar la instalación.");
@@ -266,8 +278,8 @@ internal sealed partial class Instance
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
         foreach (var process in apis.Values) { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } process.Dispose(); }
         apis.Clear();
-        if (Configured) await Compose("stop");
-        Write("Servicios detenidos. Los datos y las cuentas se conservan.");
+        await dockerSession.Stop(DockerAvailable, async () => { await Compose("stop"); }, Write);
+        Write("Cierre de servicios finalizado. Los datos y las cuentas se conservan.");
     }
 
     public async Task Verify()
@@ -435,6 +447,7 @@ internal static class SelfTest
 {
     public static void Run(string output)
     {
+        ShutdownTest.Run().GetAwaiter().GetResult();
         var root=Path.Combine(Path.GetTempPath(),"cysa-launcher-test-"+Guid.NewGuid());
         Directory.CreateDirectory(root);
         try
@@ -468,6 +481,11 @@ internal static class SelfTest
             File.WriteAllText(Path.Combine(instance.Repo,"infra",".env"),"TEST=privado");
             instance.Seed();
             if (File.ReadAllText(Path.Combine(instance.Repo,"infra",".env"))!="TEST=privado") throw new Exception("Se alteró estado privado");
+            var clients=Path.Combine(instance.Repo,"infra","runtime","clientes");Directory.CreateDirectory(clients);
+            File.WriteAllText(Path.Combine(clients,"usuarios-locales.json"),"{}");
+            if(!instance.Configured)throw new Exception("Falta la configuración previa para probar el cierre.");
+            instance.StopAll().GetAwaiter().GetResult();
+            if(!File.Exists(Path.Combine(instance.Repo,"infra",".env")))throw new Exception("El cierre borró la configuración.");
             instance.SaveDevice("cpu");
             if (new Instance(instance.Root,package).SavedDevice()!="cpu") throw new Exception("No se conservó el modo CPU del usuario");
             instance.SaveDevice("1");
@@ -494,7 +512,7 @@ internal static class SelfTest
             if(SourceLayout.WebFingerprint(sources)!=fingerprint)throw new Exception("Una compilación invalidó la caché de fuentes");
             File.WriteAllText(Path.Combine(sources,"dotnet","src","Cysa.Web.Api","Cambio.cs"),"// fuente nueva");
             if(SourceLayout.WebFingerprint(sources)==fingerprint)throw new Exception("Un cambio fuente no invalidó la caché");
-            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario, rechazo de secretos, conexión SQL local por usuario y prioridad de configuración externa.");
+            File.WriteAllText(output,"PASS: proyectos independientes, puertos libres, estado conservado, modo CPU/GPU por usuario, rechazo de secretos, conexión SQL local por usuario, prioridad de configuración externa y cierre sin Docker con configuración previa; detención IoT, daemon no disponible y reintentos verificados.");
         }
         finally { Directory.Delete(root,true); }
     }

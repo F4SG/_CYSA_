@@ -108,7 +108,7 @@ internal sealed partial class MainForm
             if (closing) return;
             e.Cancel = true;
             if (busy) { MessageBox.Show(this, "Espera a que termine la operación actual.", "CYSA"); return; }
-            await Execute(instance.StopAll, "DOCKER"); closing = true; Close();
+            await Execute(instance.StopAll, "SISTEMA"); closing = true; Close();
         };
 
         void Add(string title, string description, Func<Task> action, string category, bool primary = false, bool afterHardware = false)
