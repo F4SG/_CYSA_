@@ -79,20 +79,20 @@ No copiarla a Git ni incluirla en entregas.
 
 ## Revisar desde el panel
 
-1. Abrir **http://localhost:5184** o pulsar **Operación semafórica (S2)** en el
-   panel principal. Este servicio debe estar iniciado antes de usar el botón.
+1. En el panel de Proyecto de Sistemas, pulsar **Gestionar planes semafóricos**.
+   El servicio S2 debe estar iniciado.
 2. Ingresar con Keycloak usando usuario y contraseña. Consultar no requiere OTP.
    La primera autorización o rechazo solicita configurar el autenticador con QR;
    las siguientes acciones críticas usan códigos OTP sin registrar de nuevo el dispositivo.
 3. El servicio propone planes Webster cuando una ventana cerrada de cinco minutos
    tiene conteos del banco. El cálculo y SUMO se ejecutan en segundo plano.
    El administrador puede modificar una configuración aprobada de `DEMO_INT_01`
-   desde `/proyecto` con MFA. La siguiente propuesta incluye su versión y límites.
+   desde **Gestionar configuraciones del corredor** con MFA. La siguiente propuesta incluye su versión y límites.
 4. Revisar **Evidencia**: demanda, comparación por acceso, micros/resto, reducción
    y motivos de rechazo. Un plan no aprobado no puede enviarse.
 5. Como **operador**, ingresar un motivo y pulsar **Autorizar** o **Rechazar**.
-   La evidencia OTP dura cinco minutos; **Renovar autenticación MFA** exige un
-   ingreso nuevo. Una sesión solo con contraseña no puede decidir.
+   La evidencia OTP dura cinco minutos. Si falta o venció, el panel solicita
+   MFA y devuelve el motivo para confirmar nuevamente la decisión.
 6. Observar las etapas: `pendiente`, `enviado` y `aplicado`. **Enviado no significa
    ejecutado**: solo se muestra aplicado después del recibo firmado del controlador.
 7. Ver fase y plan reales reportados por el controlador. El envío se reintenta

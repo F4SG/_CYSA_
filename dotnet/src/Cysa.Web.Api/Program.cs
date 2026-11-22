@@ -53,6 +53,16 @@ public partial class Program
             o.CustomOperationIds(a=>(a.RelativePath??"root").Replace("/","_").Replace("{","").Replace("}","")+"_"+a.HttpMethod);
         });
         builder.Services.AddHttpContextAccessor();
+        var panelUrl = builder.Configuration["Security:PanelUrl"];
+        var panelOrigin = Uri.TryCreate(panelUrl, UriKind.Absolute, out var panelUri)
+            && panelUri.IsLoopback && panelUri.Scheme is "http" or "https" && string.IsNullOrEmpty(panelUri.UserInfo)
+            ? panelUri.GetLeftPart(UriPartial.Authority) : null;
+        builder.Services.AddCors(options => options.AddPolicy("PanelProyecto", policy =>
+        {
+            if (panelOrigin is not null)
+                policy.WithOrigins(panelOrigin).WithMethods("GET", "POST", "PUT", "DELETE")
+                    .WithHeaders("Authorization", "Content-Type");
+        }));
         builder.Services.AddSingleton<SemaphoreSlim>(_=>new(1,1));
         builder.Services.AddDbContext<CysaDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
         builder.Services.AddDbContext<EvaluacionesDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
@@ -96,31 +106,13 @@ public partial class Program
         });
         app.Use(async(context,next)=>{context.Response.Headers.CacheControl="no-store";await next();});
         app.UseStaticFiles();
-        if(app.Environment.IsDevelopment())app.UseSwaggerUI(o=>{o.InjectJavascript("/swagger-demo.js");o.InjectJavascript("/module-navigation.js");});
+        app.UseCors();
+        if(app.Environment.IsDevelopment())app.UseSwaggerUI(o=>o.InjectJavascript("/swagger-demo.js"));
         app.UseCysaApi(manejarErrores:false);
         app.MapGet("/",()=>Results.Redirect("/demo")).ExcludeFromDescription();
         app.MapGet("/demo",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
-        app.MapGet("/proyecto",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
-        app.MapGet("/navigation/config",()=>
-        {
-            var panelUrl=app.Configuration["Security:PanelUrl"];
-            return string.IsNullOrEmpty(panelUrl)?Results.NotFound():Results.Json(new{panelUrl});
-        }).ExcludeFromDescription();
-        app.MapGet("/proyecto/config",()=>
-        {
-            var issuer=app.Configuration["Security:ProjectAuthority"];
-            return string.IsNullOrEmpty(issuer)?Results.NotFound():Results.Json(new{issuer,clientId="cysa-panel",redirectUri=(app.Configuration["Evaluaciones:BaseUrl"]??"http://localhost:15183").TrimEnd('/')+"/proyecto"});
-        }).ExcludeFromDescription();
-        app.MapGet("/oidc.js",()=>
-        {
-            var source=app.Configuration["Security:ProjectSource"];
-            return string.IsNullOrEmpty(source)?Results.NotFound():Results.File(Path.Combine(source,"panel","oidc.js"),"application/javascript");
-        }).ExcludeFromDescription();
-        app.MapGet("/home-link.js",()=>
-        {
-            var source=app.Configuration["Security:ProjectSource"];
-            return string.IsNullOrEmpty(source)?Results.NotFound():Results.File(Path.Combine(source,"panel","home-link.js"),"application/javascript");
-        }).ExcludeFromDescription();
+        app.MapGet("/proyecto",()=>panelOrigin is null ? Results.NotFound() :
+            Results.Redirect(panelOrigin + "/?modulo=configuraciones&volver=1")).ExcludeFromDescription();
         await app.RunAsync();
     }
 }

@@ -33,8 +33,13 @@ def test_mqtt_no_puede_alterar_fases_sin_romper_firma():
 def test_sobres_malformados_se_descartan_sin_detener_el_receptor(raw):
     with pytest.raises(ValueError):verificar(raw,KEY,1000)
 
-@pytest.mark.parametrize('claims',[{'auth_time':time.time(),'amr':['pwd']},{'auth_time':time.time()-301,'amr':['otp']},{'auth_time':time.time()+30,'acr':'2'}])
-def test_mfa_no_acepta_solo_clave_ni_evidencia_vencida_o_futura(claims):
+@pytest.mark.parametrize('desfase, evidencia', [
+    (0, {'amr': ['pwd']}),
+    (-301, {'amr': ['otp']}),
+    (30, {'acr': '2'}),
+])
+def test_mfa_no_acepta_solo_clave_ni_evidencia_vencida_o_futura(desfase, evidencia):
+    claims = dict(auth_time=time.time() + desfase, **evidencia)
     with pytest.raises(HTTPException) as ex:mfa_operador(claims)
     assert ex.value.status_code==403
 

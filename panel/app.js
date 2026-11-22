@@ -1,12 +1,11 @@
 import * as oidc from './oidc.js';
 import {initUsers,loadUsers} from './users.js';
-import {destination} from './navigation.js';
+import {panelView} from './navigation.js';
+import {takeDraft} from './project-api.js';
+import {initConfigurations, loadConfigurations, restoreConfiguration} from './configuraciones.js';
+import {initPlans, loadPlans, restoreDecision} from './planes.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
-async function openModule(name){try{location.assign(await destination(name));}catch(error){$('status').hidden=false;$('status').textContent=error.message;$('status').classList.add('error');}}
-$('swaggerWebIII').addEventListener('click',()=>openModule('Swagger (Web III)'));
-$('operacionS2').addEventListener('click',()=>openModule('Operación semafórica (S2)'));
-document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>openModule(button.dataset.webCase)));
 $('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
 const fmt=s=>s?new Date(s).toLocaleString():'Pendiente';
 function cell(tr,value){const td=document.createElement('td');td.textContent=String(value??'Pendiente');tr.append(td);return td;}
@@ -33,14 +32,53 @@ async function refresh(more=false){
 }
 function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 $('intersectionFilter').addEventListener('change',()=>refresh());$('live').addEventListener('change',()=>{$('desde').disabled=$('live').checked;$('hasta').disabled=$('live').checked;if($('live').checked)refresh();});$('search').addEventListener('input',draw);$('reload').addEventListener('click',()=>refresh());$('loadMore').addEventListener('click',()=>refresh(true));
-const login=()=>oidc.login().catch(e=>{$('status').classList.add('error');$('status').textContent=e.message;});$('login').addEventListener('click',login);$('welcomeLogin').addEventListener('click',login);$('logout').addEventListener('click',oidc.logout);
-const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuario y roles','Gestiona tu equipo y sus permisos de acceso.'],reportes:['REPORTES','Consultar reportes de desempeño','Función futura del proyecto.']};
-document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
- const selected=button.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===button)));
+const login=()=>{
+ sessionStorage.setItem('cysa.return-view',panelView(location));
+ return oidc.login().catch(e=>{$('status').classList.add('error');$('status').textContent=e.message;});
+};
+$('login').addEventListener('click',login);$('welcomeLogin').addEventListener('click',login);$('logout').addEventListener('click',oidc.logout);
+const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuario y roles','Gestiona tu equipo y sus permisos de acceso.'],configuraciones:['CORREDOR','Gestionar configuraciones del corredor','Consulta las versiones y los cambios de configuración.'],planes:['OPERACIÓN','Gestionar planes semafóricos','Decisiones y seguimiento del banco emulado S2.'],reportes:['REPORTES','Consultar reportes de desempeño','Función futura del proyecto.']};
+let currentView;
+async function showView(id) {
+ const selected=Object.hasOwn(views,id) && (id!=='usuarios'||oidc.hasRole('administrador'))?id:'conteos';
+ currentView=selected;
+ document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.tab===selected)));
  $('panelHome').hidden=selected==='conteos';
  for(const id of Object.keys(views))$(id).hidden=id!==selected;
  const [eyebrow,title,description]=views[selected];$('pageEyebrow').textContent=eyebrow;$('pageTitle').textContent=title;$('pageDescription').textContent=description;
- const users=selected==='usuarios',detail=users||selected==='reportes';document.querySelector('.filters').hidden=detail;$('summary').hidden=detail;$('status').hidden=detail;
- if(users)loadUsers();
+ const monitoring=['conteos','inventario','estados'].includes(selected);
+ document.querySelector('.filters').hidden=!monitoring;$('summary').hidden=!monitoring;$('status').hidden=!monitoring;
+ if(monitoring)await refresh();
+ if(selected==='usuarios')await loadUsers();
+ if(selected==='configuraciones')await loadConfigurations();
+ if(selected==='planes')await loadPlans();
+}
+document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
+ location.hash=button.dataset.tab;
 }));
-try{config=await (await fetch('config.json',{cache:'no-store'})).json();const returning=new URL(location.href).searchParams.has('volver');const active=await oidc.init(config);if(!active&&returning)await oidc.login();if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
+window.addEventListener('hashchange',()=>{if(currentView)showView(panelView(location));});
+initConfigurations();
+initPlans();
+try {
+ const response=await fetch('/config.json',{cache:'no-store'});
+ if(!response.ok)throw new Error('No se pudo cargar la configuración de CYSA.');
+ config=await response.json();
+ const requested=panelView(location);
+ const returning=new URLSearchParams(location.search).has('volver');
+ if(await oidc.init(config)){
+  const draft=takeDraft();
+  const view=draft?.view || sessionStorage.getItem('cysa.return-view') || requested;
+  sessionStorage.removeItem('cysa.return-view');
+  $('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));
+  $('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();
+  initUsers(config);
+  $('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));
+  $('desde').disabled=true;$('hasta').disabled=true;
+  history.replaceState({},'','#'+view);
+  await showView(view);
+  if(draft?.view==='configuraciones'&&currentView==='configuraciones')restoreConfiguration(draft.data);
+  if(draft?.view==='planes'&&currentView==='planes')restoreDecision(draft.data);
+  setInterval(()=>{if(!document.hidden&&$('live').checked&&['conteos','inventario','estados'].includes(currentView))refresh();},15000);
+  setInterval(()=>{if(!document.hidden&&currentView==='planes')loadPlans();},10000);
+ }else if(returning)await login();
+} catch(error){$('status').textContent=error.message;}

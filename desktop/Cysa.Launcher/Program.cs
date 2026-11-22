@@ -274,7 +274,12 @@ internal sealed partial class Instance
         await File.WriteAllTextAsync(path,JsonSerializer.Serialize(config));
         // Actualizar la configuración pública de Nginx sin tocar secretos ni regenerar cuentas.
         var nginx=Path.Combine(Repo,"infra/runtime/launcher/nginx.conf");
-        if(File.Exists(nginx))await File.WriteAllTextAsync(nginx,(await File.ReadAllTextAsync(Path.Combine(Repo,"identidad/nginx.conf"))).Replace("http://localhost:8080",IdentityUrl));
+        if(File.Exists(nginx))
+        {
+            var policy = await File.ReadAllTextAsync(Path.Combine(Repo,"identidad/nginx.conf"));
+            await File.WriteAllTextAsync(nginx,policy.Replace("http://localhost:8080",IdentityUrl)
+                .Replace("http://localhost:* http://127.0.0.1:*", $"{WebUrl} {OperationUrl}"));
+        }
     }
 
     internal Dictionary<string,int> RunningServices()=>apis.Where(p=>!p.Value.HasExited).ToDictionary(p=>p.Key,p=>p.Value.Id);

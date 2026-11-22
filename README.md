@@ -279,7 +279,7 @@ conectado por COM3.
 | Controlador y MMU | Fases de verde, ámbar y todo rojo; comprobación de conflictos en Arduino; watchdog y modo local seguro ante pérdida del centro. |
 | Cálculo y simulación | Conteos de prueba → SQL Server → propuesta Webster → comparación con el plan fijo usando SUMO real. |
 | Decisión y envío | El administrador calcula; el operador autoriza con MFA reciente. La orden viaja firmada por MQTT/TLS y cambia de plan al terminar un todo rojo. |
-| Confirmación y consulta | Panel **Operación semafórica (S2)** con planes, evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
+| Confirmación y consulta | Vista **Gestionar planes semafóricos** con evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
 | Prioridades del banco | Comparación de prioridad para micros y eventos de emergencia definidos por fecha/hora, conservando los tiempos de seguridad. |
 
 Los [pendientes del Sprint 2](#pendientes-del-sprint-2) están al final de este README.
@@ -299,7 +299,7 @@ desde la raíz del repositorio, ejecuta cada línea en una PowerShell distinta y
 .\iniciar_controlador.ps1 -Puerto COM3 -Mqtt -RecibirPlanes
 ```
 
-Abre `http://localhost:5184` o **Operación semafórica (S2)** en el panel. SQL Server local
+Abre **Gestionar planes semafóricos** en el panel de Proyecto de Sistemas. SQL Server local
 y ODBC Driver 18 deben estar instalados. El administrador calcula; el operador autoriza
 con OTP real de Keycloak. El QR se configura en la primera acción crítica, no al ingresar para consultar. La base
 operativa es `CYSA_Control_S2`, independiente de `CYSA_WebIII_Demo`. El monitoreo IoT
@@ -611,11 +611,10 @@ Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; es
 ## Casos de uso: ubicación y acceso
 
 Los botones conservan exactamente los nombres del diagrama de casos de uso.
-Los módulos separados incluyen **Volver al panel general** y se abren en la
-misma pestaña. Sus direcciones se leen de la configuración vigente de la PC al
-pulsar el botón; el panel no supone que S2 esté en el puerto 5184. Las vistas
-internas de infraestructura, comunicación y usuarios también tienen regreso al
-panel general. Al volver se recupera el acceso mediante Keycloak si la sesión sigue vigente.
+Configuraciones, planes, monitoreo, infraestructura y usuarios se abren dentro
+del panel de Proyecto de Sistemas, con una sesión de Keycloak. Los accesos
+anteriores `/proyecto` y la raíz del servicio S2 redirigen a las vistas
+correspondientes del panel. Desde el lanzador se abre Web III por separado.
 En el **panel IoT** (`http://localhost:8088/`), inicia sesión con Keycloak para
 ver el menú lateral. El **panel Web III** está en `/demo` de la API local:
 abre **Swagger (Web III)** desde el centro de pruebas y cambia `/swagger` por
@@ -627,16 +626,16 @@ la alternativa por consola de esta guía, la dirección es
 | --- | --- | --- |
 | Iniciar sesión | Barra superior de ambos paneles; también en la bienvenida del panel IoT. | En IoT, pulsa el botón e ingresa con tu cuenta de Keycloak. En Web III, selecciona el perfil de demostración y pulsa el botón; la MFA de esa sesión es simulada. |
 | Administrar usuario y roles | Menú lateral del panel IoT, visible para el administrador; menú **CASOS DE USO** de Web III. | En IoT, entra como administrador para gestionar cuentas y asignar los dos roles existentes. En Web III, selecciona el botón y el recurso **Usuarios** o **Roles**; las escrituras requieren el perfil administrador y el catálogo de roles es de consulta. |
-| Gestionar configuraciones del corredor | Menú lateral del panel IoT; módulo `/proyecto` de la API local. La demostración Web III conserva su módulo independiente. | Consultar requiere contraseña; guardar, administrador con MFA reciente. La siguiente propuesta de S2 toma los límites de la última versión aprobada de `DEMO_INT_01` registrada con MFA en `/proyecto`. Los planes ya evaluados conservan su configuración. |
+| Gestionar configuraciones del corredor | Vista del menú lateral de Proyecto de Sistemas. | Consultar requiere contraseña; guardar, administrador con MFA reciente. La siguiente propuesta de S2 toma los límites de la última versión aprobada de `DEMO_INT_01` registrada en esta vista. Los planes ya evaluados conservan su configuración. |
 | Gestionar infraestructura | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | En IoT, consulta los activos registrados. En Web III, elige el recurso: corredores, intersecciones, accesos, carriles, fuentes de detección o controladores; el administrador dispone de las operaciones de gestión. |
-| Gestionar planes semafóricos | Menú lateral del panel IoT, que abre S2; también existe un módulo independiente en la demostración Web III. | En S2, el servidor genera y evalúa las propuestas; el operador autoriza o rechaza con MFA real reciente. Al volver de MFA se revisa y confirma nuevamente la decisión. La demostración Web III mantiene sus métricas y MFA simuladas. |
+| Gestionar planes semafóricos | Vista del menú lateral de Proyecto de Sistemas. | El servidor S2 genera y evalúa las propuestas; el operador autoriza o rechaza con MFA reciente. Al volver de MFA se revisa y confirma nuevamente la decisión. |
 | Monitorear operación semafórica | Menú lateral del panel IoT, menú **CASOS DE USO** de Web III y sección del mismo nombre en el banco S2. | En IoT, consulta conteos por intersección, acceso y carril; la vista adicional **Comunicación** muestra fase, plan y último estado. En Web III se consultan recursos de laboratorio. En S2 se muestran los estados reportados por el controlador emulado. |
 | Consultar reportes de desempeño | Menú lateral del panel general, dentro de la misma sesión. | Muestra el estado futuro de RF-14 y permite volver al panel general. No abre el laboratorio de Web III ni solicita otra sesión. La generación de reportes todavía no está implementada. |
 | Cerrar sesión | Barra superior de ambos paneles, después de iniciar sesión; también en el banco S2. | Pulsa el botón en el panel utilizado. En IoT y S2 se utiliza la sesión de Keycloak; Web III cierra su sesión independiente de demostración. |
 
-Los accesos desde IoT a Web III usan la dirección `webApiBase` de la
-configuración local del panel; la API Web III debe estar iniciada y esa dirección
-debe coincidir con su puerto. El banco S2 requiere la preparación descrita en
+La vista de configuraciones usa la API autenticada de Proyecto mediante
+`webApiBase` y la vista de planes usa `operacionBase`. Ambas direcciones
+provienen de la configuración local. El banco S2 requiere la preparación descrita en
 [la guía de integración](controlador/INTEGRACION.md). Los nombres coincidentes
 identifican el caso de uso, pero cada entorno conserva el alcance indicado en
 la tabla.

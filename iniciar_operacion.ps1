@@ -32,6 +32,13 @@ $env:PYTHONPATH=(@('','shared','backend','inventario','simulacion','controlador'
 $env:CYSA_INSTALACION_DIR=$Instalacion
 $env:CYSA_SQL_SERVER=$InstanciaSQL;$env:CYSA_SQL_DATABASE=$BaseSQL
 $env:CYSA_OPERACION_PORT="$Puerto";$env:CYSA_OPERACION_URL="http://localhost:$Puerto"
+$configPanel=Join-Path $Instalacion 'panel/config.json'
+if(Test-Path -LiteralPath $configPanel){
+  $config=Get-Content -LiteralPath $configPanel -Raw | ConvertFrom-Json
+  $config | Add-Member -NotePropertyName operacionBase -NotePropertyValue $env:CYSA_OPERACION_URL -Force
+  [IO.File]::WriteAllText("$configPanel.tmp", ($config | ConvertTo-Json -Depth 10))
+  Move-Item -LiteralPath "$configPanel.tmp" -Destination $configPanel -Force
+}
 & $Python tools/franco/preparar_control.py --repo $Instalacion
 if($LASTEXITCODE -ne 0){throw 'No se preparó la clave del banco.'}
 & $Python tools/franco/configurar_mfa_control.py --repo $Instalacion

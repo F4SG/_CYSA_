@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>CYSA · Gestión de tránsito</title><script src="theme.js"></script><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="style.css"><script type="module" src="app.js"></script></head>
 <body>
-<header class="topbar"><a class="brand" href="/" aria-label="CYSA, inicio"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>CYSA<small>Gestión de tránsito</small></span></a><div class="topbar-actions"><label class="theme-control"><span>Apariencia</span><select id="themeSelect" data-theme-selector aria-label="Tema de la interfaz"><option value="light">Claro</option><option value="dark">Oscuro</option></select></label><span class="topbar-divider"></span><button id="panelHome" type="button" hidden>Volver al panel general</button><button id="swaggerWebIII" type="button" title="Abre Swagger de la API iniciada desde CYSA.exe">Swagger (Web III)</button><button id="operacionS2" type="button">Operación semafórica (S2)</button><span id="identity" class="identity">Acceso a la plataforma</span><button id="login" class="primary">Iniciar sesión</button><button id="logout" class="quiet" hidden>Cerrar sesión</button></div></header>
+<header class="topbar"><a class="brand" href="#conteos" aria-label="CYSA, inicio"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>CYSA<small>Proyecto de Sistemas</small></span></a><div class="topbar-actions"><label class="theme-control"><span>Apariencia</span><select id="themeSelect" data-theme-selector aria-label="Tema de la interfaz"><option value="light">Claro</option><option value="dark">Oscuro</option></select></label><span class="topbar-divider"></span><button id="panelHome" type="button" hidden>Volver al panel general</button><span id="identity" class="identity">Acceso a la plataforma</span><button id="login" class="primary">Iniciar sesión</button><button id="logout" class="quiet" hidden>Cerrar sesión</button></div></header>
 <section id="welcome" class="welcome"><div><p class="eyebrow">PLATAFORMA CYSA</p><h1>Tu corredor.<br>Una visión completa.</h1><p>Consulta el flujo vehicular, la infraestructura y el estado de comunicación desde un solo lugar.</p><button id="welcomeLogin" class="primary">Iniciar sesión <span aria-hidden="true">↗</span></button></div><div class="welcome-visual" aria-hidden="true"><div class="road"><i></i><i></i><i></i><span></span></div><span class="visual-caption">Información que conecta tu ciudad</span></div></section>
 <p id="status" class="status" role="status">Ingresa con tu cuenta para continuar.</p>
 <main id="workspace" class="app-layout" hidden>
@@ -10,7 +10,9 @@
 <button data-tab="inventario" aria-pressed="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>Gestionar infraestructura</button>
 <button data-tab="estados" aria-pressed="false"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M6.3 6.3a8 8 0 0 0 0 11.4M17.7 6.3a8 8 0 0 1 0 11.4M3 3a12.7 12.7 0 0 0 0 18M21 3a12.7 12.7 0 0 1 0 18"/></svg></span>Comunicación</button>
 <button id="usersTab" data-tab="usuarios" aria-pressed="false" hidden><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M17 5a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-4-5"/></svg></span>Administrar usuario y roles</button>
-<button data-web-case="Gestionar configuraciones del corredor">Gestionar configuraciones del corredor</button><button data-web-case="Gestionar planes semafóricos">Gestionar planes semafóricos</button><button data-tab="reportes" aria-pressed="false">Consultar reportes de desempeño</button></nav><div class="sidebar-note"><span class="live-dot"></span> Acceso protegido<p>Información del corredor<br>y gestión de usuarios.</p></div></aside>
+<button data-tab="configuraciones" aria-pressed="false">Gestionar configuraciones del corredor</button>
+<button data-tab="planes" aria-pressed="false">Gestionar planes semafóricos</button>
+<button data-tab="reportes" aria-pressed="false">Consultar reportes de desempeño</button></nav><div class="sidebar-note"><span class="live-dot"></span> Acceso protegido<p>Información del corredor<br>y gestión de usuarios.</p></div></aside>
 <div class="main-content"><div class="page-heading"><div><p class="eyebrow" id="pageEyebrow">MONITOREO</p><h1 id="pageTitle">Monitorear operación semafórica</h1><p id="pageDescription">Conteos por intersección, acceso y carril.</p></div><span class="page-label">CYSA / Gestión del corredor</span></div>
 <div id="summary" class="summary"><article><span>Vehículos en vista</span><strong id="summaryVehicles">—</strong><small>En los intervalos consultados</small></article><article><span>Intersecciones</span><strong id="summaryIntersections">—</strong><small>En los registros disponibles</small></article><article><span>Activos registrados</span><strong id="summaryAssets">—</strong><small>Infraestructura del corredor</small></article></div>
 <div class="filters"><label>Intersección<select id="intersectionFilter"><option value="">Todas las intersecciones</option></select></label><label class="live-toggle"><input id="live" type="checkbox" checked><span>Última hora</span></label><label class="filter-search">Buscar<input id="search" type="search" placeholder="Intersección, acceso o carril"></label><label>Desde<input id="desde" type="datetime-local"></label><label>Hasta<input id="hasta" type="datetime-local"></label><button id="reload">Actualizar</button></div>
@@ -23,9 +25,71 @@
 <p class="users-scroll-hint">Desplaza la tabla para ver todas las columnas.</p><div class="table users-table" tabindex="0" role="region" aria-label="Lista de usuarios"><table><thead><tr><th>Usuario</th><th>Nombre y correo</th><th>Rol</th><th>Estado</th><th>Acción</th></tr></thead><tbody id="usersBody"></tbody></table></div>
 <div class="table-footer"><div class="pagination"><button id="usersPrev" disabled>Anterior</button><button id="usersNext" disabled>Siguiente</button></div><span>Tu propia cuenta está protegida frente a cambios de rol o desactivación.</span></div>
 <details class="account-help"><summary>Sobre los cambios de acceso</summary><p>Los cambios de rol o estado cierran las sesiones de la cuenta afectada. Cada consulta verifica que la cuenta siga activa y conserve sus permisos.</p></details></section>
+<section id="configuraciones" class="card module-card" hidden aria-labelledby="configTitle">
+  <div class="section-heading"><div><h2 id="configTitle">Parámetros y trazabilidad</h2><p>Versiones de tiempos semafóricos por intersección.</p></div>
+    <div class="module-actions"><button id="configRefresh" type="button">Actualizar</button><button id="configNew" type="button" class="primary" hidden>Nueva configuración</button></div>
+  </div>
+  <div class="module-tabs" role="group" aria-label="Registros de configuración">
+    <button type="button" data-config-view="configuraciones" aria-pressed="true">Configuraciones</button>
+    <button type="button" data-config-view="bitacoras" aria-pressed="false">Bitácora</button>
+    <button type="button" data-config-view="versiones-modelo" aria-pressed="false">Versiones de modelo</button>
+  </div>
+  <p id="configHelp" class="muted" hidden>Las versiones de modelo están disponibles para consulta.</p>
+  <p id="configStatus" class="status" role="status"></p>
+  <div class="table" tabindex="0" role="region" aria-label="Registros del corredor"><table><thead><tr id="configHead"></tr></thead><tbody id="configBody"></tbody></table></div>
+  <div class="table-footer"><span id="configPage">Página 1</span><div class="pagination"><button id="configPrevious" type="button" disabled>Anterior</button><button id="configNext" type="button" disabled>Siguiente</button></div></div>
+</section>
+<section id="planes" class="module-stack" hidden aria-label="Banco operativo S2">
+  <article class="card module-card">
+    <div class="section-heading"><div><h2>Propuestas evaluadas</h2><p>Resultados de SUMO y decisiones del operador.</p></div>
+      <button id="plansRefresh" type="button">Actualizar</button></div>
+    <p id="plansStatus" class="status" role="status"></p>
+    <div class="table" tabindex="0" role="region" aria-label="Planes semafóricos"><table>
+      <thead><tr><th>Plan</th><th>Modo</th><th>Verdes NS / EO (s)</th><th>Mejora SUMO</th><th>Estado</th><th>Envío al controlador</th><th>Acciones</th></tr></thead>
+      <tbody id="plansBody"></tbody></table></div>
+  </article>
+  <article class="card module-card">
+    <div class="section-heading"><div><h2>Controlador emulado</h2><p>Fase y plan reportados por el banco.</p></div></div>
+    <div class="table" tabindex="0" role="region" aria-label="Estados del controlador"><table>
+      <thead><tr><th>Intersección</th><th>Fase</th><th>Plan activo</th><th>Comunicación</th><th>Último reporte</th></tr></thead>
+      <tbody id="controllerBody"></tbody></table></div>
+  </article>
+</section>
 <section id="reportes" class="card" hidden aria-labelledby="reportsTitle"><div class="section-heading"><div><h2 id="reportsTitle">Consultar reportes de desempeño</h2><p>Función futura (RF-14).</p></div></div><p>La generación de reportes por modo de transporte está prevista para una versión posterior. Por ahora puedes consultar los conteos y estados desde Monitorear operación semafórica.</p></section>
 </div></main>
 <dialog id="newUserDialog" class="modal" aria-labelledby="newUserTitle"><div class="modal-heading"><div><p class="eyebrow">EQUIPO Y PERMISOS</p><h2 id="newUserTitle">Crear usuario</h2></div><button id="closeUserDialog" class="icon-button" aria-label="Cerrar formulario">×</button></div><p class="modal-intro">Completa los datos de la cuenta. La contraseña deberá cambiarse en el primer ingreso.</p>
 <form id="newUserForm" class="user-form"><label>Usuario<input name="username" autofocus required pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}" minlength="3" maxlength="64" autocomplete="off" placeholder="nombre.apellido"></label><label>Correo<input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="nombre@organizacion.com"></label><label>Nombre<input name="first_name" required maxlength="80" autocomplete="off"></label><label>Apellido<input name="last_name" required maxlength="80" autocomplete="off"></label><label>Rol<select name="role"><option value="operador">Operador</option><option value="administrador">Administrador</option></select></label><label>Contraseña temporal<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="Mínimo 12 caracteres"></label><p id="roleHelp" class="form-help">El operador puede consultar la información del corredor.</p><p id="newUserError" class="status error" role="alert"></p><div class="form-actions"><button id="cancelUserDialog" type="button">Cancelar</button><button id="createUser" type="submit" class="primary">Crear usuario</button></div></form></dialog>
 <dialog id="confirmDialog" class="modal confirm-modal" aria-labelledby="confirmTitle"><form method="dialog"><p class="eyebrow">CONFIRMAR ACCIÓN</p><h2 id="confirmTitle"></h2><p id="confirmMessage" class="modal-intro"></p><div class="form-actions"><button value="cancel" autofocus>Cancelar</button><button id="confirmAccept" class="primary" value="confirm">Confirmar</button></div></form></dialog>
+<dialog id="configEditor" class="modal" aria-labelledby="configEditorTitle">
+  <h2 id="configEditorTitle">Nueva configuración</h2><p id="configEditorMessage" class="modal-intro"></p>
+  <form id="configForm">
+    <fieldset id="configEditorFields" class="user-form module-fields">
+      <label>Intersección<select name="interseccionId" required></select></label>
+      <label>Versión<input name="version" type="number" min="1" max="1000000" required></label>
+      <label>Verde mínimo (s)<input name="verdeMinSegundos" type="number" min="1" max="3600" step="any" value="10" required></label>
+      <label>Verde máximo (s)<input name="verdeMaxSegundos" type="number" min="1" max="3600" step="any" value="90" required></label>
+      <label>Ámbar (s)<input name="ambarSegundos" type="number" min="1" max="30" step="any" value="3" required></label>
+      <label>Todo rojo (s)<input name="todoRojoSegundos" type="number" min="1" max="60" step="any" value="2" required></label>
+      <label>Extensión para micros (s)<input name="extensionPrioridadSegundos" type="number" min="0" max="10" step="any" value="10" required></label>
+      <label>Responsable técnico<input name="responsableTecnico" maxlength="120" required></label>
+      <label>Fecha de aprobación<input name="aprobadaUtc" type="datetime-local" required></label>
+      <label>Estado<select name="estado"><option value="aprobada">Aprobada</option><option value="retirada">Retirada</option></select></label>
+      <label class="module-checkbox"><input name="prueba" type="checkbox" checked> Configuración de prueba</label>
+    </fieldset>
+    <p id="configEditorStatus" class="status" role="status"></p>
+    <div class="form-actions"><button id="configCancel" type="button">Cancelar</button><button id="configSave" type="submit" class="primary">Guardar configuración</button></div>
+  </form>
+</dialog>
+<dialog id="planDecision" class="modal confirm-modal" aria-labelledby="planDecisionTitle">
+  <h2 id="planDecisionTitle">Decisión del operador</h2><p id="planDecisionName" class="modal-intro"></p>
+  <form id="planDecisionForm">
+    <label>Motivo<textarea id="planReason" rows="4" minlength="5" maxlength="1000" required></textarea></label>
+    <p id="planDecisionStatus" class="status" role="status"></p>
+    <div class="form-actions"><button id="planDecisionCancel" type="button">Cancelar</button><button id="planDecisionSubmit" class="primary" type="submit">Confirmar</button></div>
+  </form>
+</dialog>
+<dialog id="planEvidence" class="modal evidence-modal" aria-labelledby="planEvidenceTitle">
+  <div class="modal-heading"><h2 id="planEvidenceTitle">Evidencia del plan</h2><button id="planEvidenceClose" type="button" class="icon-button" aria-label="Cerrar evidencia">×</button></div>
+  <p id="planEvidenceStatus" class="status" role="status"></p><pre id="planEvidenceData" tabindex="0"></pre>
+</dialog>
 <footer class="footer"><span>CYSA <span class="muted">/ Gestión de tránsito</span></span><span>Acceso por roles · Información del corredor</span></footer></body></html>
