@@ -10,7 +10,7 @@ namespace Cysa.Web.Api.Services;
 
 public sealed class ReglaException(string message,int status=400) : Exception(message) { public int Status { get; }=status; }
 
-public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio reglas,IHttpContextAccessor accessor)
+public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio reglas,IHttpContextAccessor accessor,IConfiguration configuration)
     where T:Entidad,new() where TEntrada:IEntrada<T> where TSalida:ISalida<T,TSalida>
 {
     public async Task<List<TSalida>> Listar(ConsultaRecursos consulta,CancellationToken ct)
@@ -79,6 +79,14 @@ public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio 
         var principal=accessor.HttpContext?.User;
         var subject=principal?.FindFirstValue("sub");
         var actor=await db.Set<Usuario>().FirstOrDefaultAsync(u=>u.IdentificadorIdp==subject,ct);
+        if(actor is null && subject is not null && principal is not null && principal.FindFirstValue("iss")==configuration["Security:ProjectAuthority"] && !string.IsNullOrEmpty(configuration["Security:ProjectAuthority"]))
+        {
+            var role=principal.IsInRole("administrador")?"administrador":"operador";
+            var roleId=await db.Set<Rol>().Where(r=>r.Nombre==role).Select(r=>r.Id).SingleAsync(ct);
+            actor=new Usuario{IdentificadorIdp=subject,Nombre=principal.FindFirstValue("preferred_username")??subject,RolId=roleId,Activo=true,MfaHabilitado=true,Prueba=true};
+            db.Add(actor);await db.SaveChangesAsync(ct);
+        }
+        if(actor is not null && !actor.Activo)throw new ReglaException("El perfil local está desactivado.",403);
         if(actor is null)throw new ReglaException("El usuario autenticado debe tener un perfil local registrado para conservar la auditoría.",403);
         if(actor is not null)
         {

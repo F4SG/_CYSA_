@@ -44,8 +44,9 @@ sistema** reintenta el arranque completo y **Abrir panel** también comprueba e
 inicia los servicios antes de abrir el navegador. Los botones del panel reciben
 las direcciones locales de Web III y S2; no es necesario iniciar Swagger aparte.
 El arranque prepara las dependencias S2, la clave de despacho y MFA OTP de
-Keycloak, conservando claves existentes. Cada usuario enrola su autenticador en
-el siguiente ingreso si aún no tiene OTP.
+Keycloak, conservando claves existentes. El ingreso y las consultas usan usuario
+y contraseña. El usuario enrola su autenticador con el QR en su primera acción
+crítica; después utiliza códigos OTP, sin volver a escanear el QR.
 
 El banco requiere SQL Server local y ODBC Driver 18. Si falta un servicio o
 no conecta con MQTT, el lanzador informa el error y no declara el sistema listo.
@@ -58,6 +59,17 @@ El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Pyth
 El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.
 
 Las APIs .NET funcionan como procesos locales con SQLite en el `runtime` del usuario y escuchan en localhost. Se usan sus perfiles de demostración existentes, con MFA simulado, sin modificar las reglas de las APIs ni conectar con controladores reales. Al cerrar, el lanzador detiene sus procesos y su proyecto Compose, conservando los volúmenes.
+
+El acceso **Gestionar configuraciones del corredor** del panel IoT abre
+`/proyecto` con Keycloak real. Consultar no exige OTP; crear, modificar o eliminar
+configuraciones exige administrador con MFA reciente en el servidor. Los datos
+siguen perteneciendo a la base de laboratorio SQL Server, sin cambiar por sí
+solos los parámetros del controlador S2. La demostración `/demo` de Web III
+conserva su acceso independiente y sus tokens simulados no acceden a las rutas
+`/api/proyecto`. **Gestionar planes semafóricos** abre S2, donde el operador
+necesita MFA reciente para autorizar o rechazar. Tras completar MFA se recupera
+el borrador y se solicita confirmar de nuevo; nunca se aplica una decisión
+automáticamente al regresar de Keycloak.
 
 El botón cámara pide un índice; el de video abre un selector de archivos. Ambos usan el modo CPU o GPU elegido en la ventana y guardado por usuario, con tamaño de inferencia 640 px. Después de configurar o pulsar «Detectar y recomendar» se mide YOLO a 640 px con imágenes sintéticas: dos calentamientos y la mediana de cinco inferencias por dispositivo, sincronizando CUDA. La GPU más rápida se recomienda solo si mejora más del 10 % frente a CPU; en otro caso se recomienda CPU. La opción recomendada se marca en verde con «Recomendado», independientemente de la elección manual. La medición depende de la carga y energía actuales; se puede repetir con «Detectar y recomendar».
 

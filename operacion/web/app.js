@@ -11,6 +11,10 @@ function empty(id,columns,message){const tr=document.createElement('tr');cell(tr
 async function action(work){$('status').textContent='Procesando…';try{await work();$('status').textContent='';}catch(e){$('status').textContent=e.message;}}
 async function decidir(plan,accion,button){
  const motivo=$('reason').value.trim();if(motivo.length<5)throw new Error('Escribe un motivo de al menos cinco caracteres.');
+ if(!oidc.mfaReady()){
+  sessionStorage.setItem('cysa.decision',JSON.stringify({plan:plan.id,accion,motivo,subject:oidc.subject(),created:Date.now()}));
+  await oidc.login({mfa:true});return;
+ }
  const key=[plan.id,accion,motivo].join('|');if(!requests.has(key))requests.set(key,crypto.randomUUID());
  button.disabled=true;
  try{await api('/api/operacion/planes/'+plan.id+'/decisiones',{method:'POST',body:JSON.stringify({solicitud_id:requests.get(key),accion,motivo})});await refresh();}
@@ -39,7 +43,7 @@ $('generate').onsubmit=e=>{e.preventDefault();action(async()=>{
   const modo=$('mode').value;await api('/api/operacion/planes',{method:'POST',body:JSON.stringify({desde:new Date($('desde').value).toISOString(),hasta:new Date($('hasta').value).toISOString(),modo,grupo:modo==='webster'?null:$('group').value,evento_utc:modo==='emergencia'?new Date($('eventTime').value).toISOString():null})});await refresh();
  }finally{$('simulate').disabled=false;}
 });};
-$('login').onclick=()=>oidc.login();$('renew').onclick=()=>oidc.login({fresh:true});$('logout').onclick=()=>oidc.logout();
+$('login').onclick=()=>oidc.login();$('renew').onclick=()=>oidc.login({mfa:true});$('logout').onclick=()=>oidc.logout();
 function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 action(async()=>{
  const config=await(await fetch('/config.json')).json();if(!await oidc.init(config))return;
@@ -47,4 +51,6 @@ action(async()=>{
  $('simulate').disabled=!oidc.hasRole('administrador');$('desde').value=localDate(new Date(Date.now()-15*60000));$('hasta').value=localDate(new Date());
  $('eventTime').value=localDate(new Date(Date.now()+120000));
  await refresh();setInterval(()=>{if(!document.hidden)refresh().catch(e=>{$('status').textContent=e.message;});},5000);
+ const draft=JSON.parse(sessionStorage.getItem('cysa.decision')||'null');sessionStorage.removeItem('cysa.decision');
+ if(draft&&draft.subject===oidc.subject()&&Date.now()-draft.created<600000){$('reason').value=draft.motivo;$('status').textContent=oidc.mfaReady()?'Segundo factor confirmado. Revisa el plan y pulsa nuevamente Autorizar o Rechazar para confirmar tu decisión.':'Motivo recuperado. La decisión sigue pendiente y requiere segundo factor.';}
 });

@@ -19,7 +19,7 @@ internal static class SystemStartupTest
             foreach(var name in new[]{"Cysa.Web.Api","Operacion S2","Controlador S2"})
                 if(!first.ContainsKey(name))throw new Exception("Servicio no iniciado: "+name);
             using var client=new HttpClient();
-            foreach(var url in new[]{instance.WebUrl+"/demo",instance.OperationUrl+"/",instance.PanelUrl})
+            foreach(var url in new[]{instance.WebUrl+"/demo",instance.WebUrl+"/proyecto",instance.OperationUrl+"/",instance.PanelUrl})
             {
                 using var response=await client.GetAsync(url);
                 response.EnsureSuccessStatusCode();

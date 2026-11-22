@@ -40,5 +40,10 @@ document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener(
 }));
 try{config=await (await fetch('config.json')).json();const active=await oidc.init(config);if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
 
-// Los módulos ampliados se abren en el panel Web III de la instalación local.
-document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>{const base=config?.webApiBase||'http://localhost:15183';window.open(base+'/demo#'+encodeURIComponent(button.dataset.webCase),'_blank','noopener');}));
+// Configuraciones usa Keycloak real; planes abre S2 y reportes conserva su vista futura.
+document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>{
+ const name=button.dataset.webCase;
+ if(name==='Gestionar planes semafóricos'){window.open(config?.operacionBase||'http://localhost:5184','_blank','noopener');return;}
+ const base=config?.webApiBase||'http://localhost:15183';
+ window.open(base+(name==='Gestionar configuraciones del corredor'?'/proyecto':'/demo')+'#'+encodeURIComponent(name),'_blank','noopener');
+}));

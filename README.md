@@ -301,7 +301,7 @@ desde la raíz del repositorio, ejecuta cada línea en una PowerShell distinta y
 
 Abre `http://localhost:5184` o **Operación semafórica (S2)** en el panel. SQL Server local
 y ODBC Driver 18 deben estar instalados. El administrador calcula; el operador autoriza
-con OTP real de Keycloak. El primer acceso permite registrar su autenticador. La base
+con OTP real de Keycloak. El QR se configura en la primera acción crítica, no al ingresar para consultar. La base
 operativa es `CYSA_Control_S2`, independiente de `CYSA_WebIII_Demo`. El monitoreo IoT
 anterior conserva su almacén histórico; los nuevos planes, decisiones, envíos, conteos
 y estados S2 se guardan en SQL Server. Consulta los pasos y límites en la guía enlazada.
@@ -505,7 +505,9 @@ incluidos los módulos de gestión, el banco S2 y el controlador con MMU simulad
 **Iniciar sistema** reintenta el arranque y **Abrir panel** comprueba los servicios
 antes de abrir el navegador. No hace falta iniciar Web III ni S2 por separado.
 SQL Server y ODBC Driver 18 deben estar instalados; la primera preparación S2
-configura OTP y cada usuario enrola su autenticador al ingresar. La cámara, el
+configura MFA por operación: el ingreso usa contraseña y el QR se registra solo
+en la primera autorización, rechazo o cambio de configuración. Después se pide
+el código OTP, sin volver a registrar el dispositivo. La cámara, el
 video y la placa física requieren selección explícita. Al cerrar CYSA se
 detienen sus servicios y se conservan los datos.
 
@@ -620,9 +622,9 @@ la alternativa por consola de esta guía, la dirección es
 | --- | --- | --- |
 | Iniciar sesión | Barra superior de ambos paneles; también en la bienvenida del panel IoT. | En IoT, pulsa el botón e ingresa con tu cuenta de Keycloak. En Web III, selecciona el perfil de demostración y pulsa el botón; la MFA de esa sesión es simulada. |
 | Administrar usuario y roles | Menú lateral del panel IoT, visible para el administrador; menú **CASOS DE USO** de Web III. | En IoT, entra como administrador para gestionar cuentas y asignar los dos roles existentes. En Web III, selecciona el botón y el recurso **Usuarios** o **Roles**; las escrituras requieren el perfil administrador y el catálogo de roles es de consulta. |
-| Gestionar configuraciones del corredor | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre el módulo de Web III en otra pestaña. En Web III, selecciona **Configuraciones técnicas**; el administrador puede gestionar los registros de laboratorio. Esto no modifica por sí solo los parámetros del banco S2. |
+| Gestionar configuraciones del corredor | Menú lateral del panel IoT; módulo `/proyecto` de la API local. La demostración Web III conserva su módulo independiente. | El botón de IoT abre la configuración con Keycloak real. Consultar solo exige contraseña; guardar cambios exige administrador con MFA reciente. Si aún no tiene autenticador, el QR aparece al primer cambio. Los registros pertenecen al laboratorio SQL Server y no modifican por sí solos los parámetros del banco S2. |
 | Gestionar infraestructura | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | En IoT, consulta los activos registrados. En Web III, elige el recurso: corredores, intersecciones, accesos, carriles, fuentes de detección o controladores; el administrador dispone de las operaciones de gestión. |
-| Gestionar planes semafóricos | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III; sección del mismo nombre en el banco S2. | El botón lateral de IoT abre Web III. Allí se consultan y gestionan datos de laboratorio; el operador puede decidir sobre planes validados con MFA simulada. Para ejecutar el flujo con SUMO y controlador emulado, usa el botón superior **Operación semafórica (S2)** de IoT, o abre `http://localhost:5184` tras iniciar el banco: el administrador genera y el operador autoriza o rechaza con MFA real reciente. |
+| Gestionar planes semafóricos | Menú lateral del panel IoT, que abre S2; también existe un módulo independiente en la demostración Web III. | En S2, el administrador genera y el operador autoriza o rechaza con MFA real reciente. Ingresar y consultar no exige QR; el primer intento de decisión permite registrar el autenticador. Al volver de MFA se revisa y confirma nuevamente la decisión. La demostración Web III mantiene sus métricas y MFA simuladas. |
 | Monitorear operación semafórica | Menú lateral del panel IoT, menú **CASOS DE USO** de Web III y sección del mismo nombre en el banco S2. | En IoT, consulta conteos por intersección, acceso y carril; la vista adicional **Comunicación** muestra fase, plan y último estado. En Web III se consultan recursos de laboratorio. En S2 se muestran los estados reportados por el controlador emulado. |
 | Consultar reportes de desempeño | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre Web III. Selecciona **Reportes** para consultar metadatos sintéticos. La generación de reportes de desempeño sigue siendo una función futura. |
 | Cerrar sesión | Barra superior de ambos paneles, después de iniciar sesión; también en el banco S2. | Pulsa el botón en el panel utilizado. En IoT y S2 se utiliza la sesión de Keycloak; Web III cierra su sesión independiente de demostración. |

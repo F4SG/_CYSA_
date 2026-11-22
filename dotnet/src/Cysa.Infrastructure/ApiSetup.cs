@@ -1,4 +1,5 @@
 using System.Net;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -46,8 +47,15 @@ public static class ApiSetup
         var demo = builder.Configuration["Security:Mode"] == "Demo";
         if (demo && !builder.Environment.IsDevelopment())
             throw new InvalidOperationException("La identidad de demostración solo se permite en Development.");
-        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
+        var authentication=builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
         {
+            if(demo && !string.IsNullOrEmpty(builder.Configuration["Security:ProjectAuthority"]))
+                o.ForwardDefaultSelector=context=>
+                {
+                    var header=context.Request.Headers.Authorization.ToString();
+                    try{return header.StartsWith("Bearer ",StringComparison.OrdinalIgnoreCase) && new JwtSecurityTokenHandler().ReadJwtToken(header[7..]).Issuer==builder.Configuration["Security:ProjectAuthority"] ? "Proyecto" : null;}
+                    catch(Exception error) when(error is ArgumentException or SecurityTokenException or JsonException){return null;}
+                };
             o.MapInboundClaims = false;
             o.TokenValidationParameters.ClockSkew = TimeSpan.FromSeconds(5);
             o.TokenValidationParameters.NameClaimType = "sub";
@@ -107,6 +115,27 @@ public static class ApiSetup
                 }
             };
         });
+        authentication.AddJwtBearer("Proyecto",o=>
+        {
+            o.Authority=builder.Configuration["Security:ProjectAuthority"]??"http://localhost:8080/realms/cysa";
+            o.Audience="cysa-api";o.RequireHttpsMetadata=!builder.Environment.IsDevelopment();o.MapInboundClaims=false;
+            o.TokenValidationParameters.ValidAlgorithms=[SecurityAlgorithms.RsaSha256];
+            o.TokenValidationParameters.RoleClaimType="role";o.TokenValidationParameters.NameClaimType="sub";
+            o.TokenValidationParameters.ClockSkew=TimeSpan.FromSeconds(5);
+            o.Events=new JwtBearerEvents{OnTokenValidated=context=>
+            {
+                var identity=(ClaimsIdentity)context.Principal!.Identity!;
+                try
+                {
+                    using var realm=JsonDocument.Parse(identity.FindFirst("realm_access")?.Value??"{}");
+                    if(realm.RootElement.TryGetProperty("roles",out var roles))
+                        foreach(var role in roles.EnumerateArray())identity.AddClaim(new("role",role.GetString()!));
+                    if(string.IsNullOrWhiteSpace(identity.FindFirst("sub")?.Value))context.Fail("Falta sujeto");
+                }
+                catch(Exception error) when(error is JsonException or InvalidOperationException or ArgumentException){context.Fail("Roles inválidos");}
+                return Task.CompletedTask;
+            }};
+        });
         builder.Services.AddAuthorization(o =>
         {
             o.AddPolicy("Leer", p => p.RequireAuthenticatedUser().RequireAssertion(c =>
@@ -121,7 +150,7 @@ public static class ApiSetup
         .Any(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("evaluaciones:importar"));
 
     public static bool MfaReciente(ClaimsPrincipal user, DateTimeOffset ahora) =>
-        user.FindAll("amr").Any(c => c.Value is "otp" or "mfa" or "hwk") &&
+        (user.FindFirst("acr")?.Value=="2" || user.FindAll("amr").Any(c => c.Value is "otp" or "mfa" or "hwk")) &&
         long.TryParse(user.FindFirst("auth_time")?.Value, out var timestamp) &&
         timestamp <= ahora.ToUnixTimeSeconds() && ahora.ToUnixTimeSeconds() - timestamp <= 300;
 

@@ -13,7 +13,8 @@ internal sealed partial class Instance
         ["CYSA_SQL_SERVER"]=SqlServerActual(),
         ["CYSA_SQL_DATABASE"]="CYSA_Control_S2",
         ["CYSA_OPERACION_PORT"]=Ports.Operation.ToString(),
-        ["CYSA_OPERACION_URL"]=OperationUrl
+        ["CYSA_OPERACION_URL"]=OperationUrl,
+        ["CYSA_WEB_URL"]=WebUrl
     };
 
     async Task StartOperation()

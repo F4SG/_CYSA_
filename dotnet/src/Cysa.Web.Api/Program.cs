@@ -99,6 +99,17 @@ public partial class Program
         app.UseCysaApi(manejarErrores:false);
         app.MapGet("/",()=>Results.Redirect("/demo")).ExcludeFromDescription();
         app.MapGet("/demo",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
+        app.MapGet("/proyecto",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
+        app.MapGet("/proyecto/config",()=>
+        {
+            var issuer=app.Configuration["Security:ProjectAuthority"];
+            return string.IsNullOrEmpty(issuer)?Results.NotFound():Results.Json(new{issuer,clientId="cysa-panel",redirectUri=(app.Configuration["Evaluaciones:BaseUrl"]??"http://localhost:15183").TrimEnd('/')+"/proyecto"});
+        }).ExcludeFromDescription();
+        app.MapGet("/oidc.js",()=>
+        {
+            var source=app.Configuration["Security:ProjectSource"];
+            return string.IsNullOrEmpty(source)?Results.NotFound():Results.File(Path.Combine(source,"panel","oidc.js"),"application/javascript");
+        }).ExcludeFromDescription();
         await app.RunAsync();
     }
 }

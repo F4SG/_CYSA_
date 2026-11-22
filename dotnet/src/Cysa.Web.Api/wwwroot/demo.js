@@ -1,4 +1,5 @@
 const $=id=>document.getElementById(id);
+const project=location.pathname==='/proyecto',oidc=project?await import('/oidc.js'):null;
 let token='',catalog=[],schema={},selectedCase='Gestionar infraestructura',page=1,editing=null,rows=[];
 const titles={Corredor:'Corredores',Interseccion:'Intersecciones',Acceso:'Accesos',Carril:'Carriles',FuenteDeteccion:'Fuentes de detección',ControladorLocal:'Controladores',ConfigTecnica:'Configuraciones técnicas',Plan:'Planes',Fase:'Fases',EstadoControl:'Estados de control',Medicion:'Mediciones',EventoPrioridad:'Eventos de prioridad',Alerta:'Alertas',ValidacionSumo:'Validaciones SUMO',MetricaPorAcceso:'Métricas por acceso',Recomendacion:'Recomendaciones',Rol:'Roles',Usuario:'Usuarios',Bitacora:'Bitácoras',VersionModelo:'Versiones de modelo',Reporte:'Reportes'};
 const label=name=>name.replace(/([A-Z])/g,' $1').replace(/^./,s=>s.toUpperCase());
@@ -6,14 +7,22 @@ const resource=()=>catalog.find(r=>r.ruta===$('resource').value);
 Object.assign(titles,{FaseAcceso:'Accesos habilitados por fase',ValidacionMedicion:'Mediciones de la validación',ValidacionEvento:'Eventos de la validación'});
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 async function request(path,options={}){
+ if(project){
+  token=await oidc.accessToken();
+  if(options.method&&options.method!=='GET'&&!oidc.mfaReady()){
+   sessionStorage.setItem('cysa.config-draft',JSON.stringify({resource:$('resource').value,editing,body:options.body,method:options.method,subject:oidc.subject(),created:Date.now()}));
+   await oidc.login({mfa:true});throw new Error('Completa el segundo factor para continuar. Los cambios todavía no se enviaron.');
+  }
+  path=path.replace(/^\/api\//,'/api/proyecto/');
+ }
  const r=await fetch(path,{...options,cache:'no-store',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...options.headers}});
  const text=await r.text();let data;try{data=text?JSON.parse(text):null;}catch{data=text;}
  $('result').textContent=(options.method||'GET')+' '+path+' → HTTP '+r.status+(r.headers.get('Location')?'\nLocation: '+r.headers.get('Location'):'')+'\n'+JSON.stringify(data,null,2);
  if(!r.ok)throw new Error(data?.title||data?.error||JSON.stringify(data));return data;
 }
 function controls(){const active=!!token,admin=active&&$('perfil').value==='administrador';$('recreate').disabled=!admin;$('check').disabled=!active;$('refresh').disabled=!active;$('applyFilters').disabled=!active;$('clearFilters').disabled=!active;$('login').hidden=active;$('logout').hidden=!active;$('save').disabled=!admin;}
-async function login(){const r=await fetch('/api/demo/acceso/'+$('perfil').value,{cache:'no-store'});if(!r.ok)throw new Error('Este panel de laboratorio requiere Development y Demo:Enabled.');token=(await r.json()).token;controls();status('Sesión de laboratorio iniciada. MFA simulada renovada por 5 minutos.');await check();await load();}
-async function check(){const data=await request('/api/demo/base');$('databaseStatus').textContent=data.preparada?'Base preparada. Datos disponibles en SQL Server.':'Base pendiente de preparación. Usa Crear o recrear base y datos de prueba.';$('counts').replaceChildren();for(const [table,count]of Object.entries(data.tablas||{})){const p=document.createElement('div');p.textContent=table+': '+count+(table==='Rol'?' (dos roles del sistema)':'');$('counts').append(p);}}
+async function login(){if(project){await oidc.login();return;}const r=await fetch('/api/demo/acceso/'+$('perfil').value,{cache:'no-store'});if(!r.ok)throw new Error('Este panel de laboratorio requiere Development y Demo:Enabled.');token=(await r.json()).token;controls();status('Sesión de laboratorio iniciada. MFA simulada renovada por 5 minutos.');await check();await load();}
+async function check(){if(project)return;const data=await request('/api/demo/base');$('databaseStatus').textContent=data.preparada?'Base preparada. Datos disponibles en SQL Server.':'Base pendiente de preparación. Usa Crear o recrear base y datos de prueba.';$('counts').replaceChildren();for(const [table,count]of Object.entries(data.tablas||{})){const p=document.createElement('div');p.textContent=table+': '+count+(table==='Rol'?' (dos roles del sistema)':'');$('counts').append(p);}}
 async function recreate(){if($('perfil').value!=='administrador')return;$('recreate').disabled=true;status('Recreando exclusivamente CYSA_WebIII_Demo…');try{await request('/api/demo/base',{method:'POST',headers:{'X-CYSA-Confirmar':'CYSA_WebIII_Demo'}});await check();page=1;await load();status('Base recreada, migraciones aplicadas y datos de prueba cargados.');}finally{controls();}}
 function caseView(name){selectedCase=name;$('title').textContent=name;document.querySelectorAll('[data-case]').forEach(b=>b.setAttribute('aria-current',String(b.dataset.case===name)));$('resource').replaceChildren();for(const r of catalog.filter(x=>x.caso===name)){const o=document.createElement('option');o.value=r.ruta;o.textContent=titles[r.entidad]||r.entidad;$('resource').append(o);}page=1;editing=null;resetFilters();form();if(token)load().catch(e=>status(e.message,true));}
 const inventory=['Corredor','Interseccion','Acceso','Carril','FuenteDeteccion','ControladorLocal'];
@@ -42,3 +51,26 @@ $('clearFilters').onclick=()=>{resetFilters();page=1;if(token)load().catch(e=>st
 $('editor').onsubmit=async e=>{e.preventDefault();const data={};for(const input of $('fields').querySelectorAll('input'))data[input.name]=input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.type==='datetime-local'?new Date(input.value).toISOString():input.value;try{await request('/api/'+resource().ruta+(editing?'/'+editing:''),{method:editing?'PUT':'POST',body:JSON.stringify(data)});form();await load();status('Datos guardados en SQL Server.');}catch(error){status(error.message,true);}};
 $('cancel').onclick=form;$('login').onclick=()=>login().catch(e=>status(e.message,true));$('logout').onclick=()=>{token='';$('dataTable').replaceChildren();$('result').textContent='Sesión finalizada.';controls();status('Sesión de laboratorio cerrada.');};$('perfil').onchange=()=>{token='';controls();status('Inicia sesión para utilizar el perfil seleccionado.');};$('recreate').onclick=()=>recreate().catch(e=>status(e.message,true));$('check').onclick=()=>check().catch(e=>status(e.message,true));$('refresh').onclick=()=>load().catch(e=>status(e.message,true));$('resource').onchange=()=>{page=1;resetFilters();form();if(token)load().catch(e=>status(e.message,true));};$('previous').onclick=()=>{page--;load().catch(e=>status(e.message,true));};$('next').onclick=()=>{page++;load().catch(e=>status(e.message,true));};document.querySelectorAll('[data-case]').forEach(b=>b.onclick=()=>caseView(b.dataset.case));
 try{[catalog,schema]=await Promise.all([fetch('/resource-catalog.json').then(r=>r.json()),fetch('/swagger/v1/swagger.json').then(r=>r.json())]);const requested=decodeURIComponent(location.hash.slice(1));caseView(catalog.some(r=>r.caso===requested)?requested:selectedCase);}catch(e){status('No se pudo cargar la documentación de recursos: '+e.message,true);}
+if(project){
+ document.title='CYSA · Configuraciones del corredor';document.querySelector('.brand small').textContent='Proyecto de Sistemas';
+ $('perfil').closest('label').hidden=true;document.querySelector('.database').hidden=true;
+ document.querySelectorAll('[data-case]').forEach(b=>b.hidden=b.dataset.case!=='Gestionar configuraciones del corredor');
+ document.querySelector('aside .hint').textContent='Consulta con contraseña. Los cambios requieren segundo factor. El QR solo se configura una vez.';
+ $('logout').onclick=()=>oidc.logout();
+ catalog=catalog.filter(r=>r.caso==='Gestionar configuraciones del corredor');
+ caseView('Gestionar configuraciones del corredor');
+ try{
+  const active=await oidc.init(await(await fetch('/proyecto/config')).json());
+  if(active){
+   token=await oidc.accessToken();$('perfil').value=oidc.hasRole('administrador')?'administrador':'operador';controls();await load();
+   status(oidc.identity()+'. Segundo factor requerido solo al guardar cambios.');
+   const draft=JSON.parse(sessionStorage.getItem('cysa.config-draft')||'null');sessionStorage.removeItem('cysa.config-draft');
+   if(draft&&draft.subject===oidc.subject()&&Date.now()-draft.created<600000){
+    $('resource').value=draft.resource;form();editing=draft.editing;
+    if(draft.body)for(const [name,value]of Object.entries(JSON.parse(draft.body))){const input=$('fields').querySelector('[name="'+name+'"]');if(input){if(input.type==='checkbox')input.checked=!!value;else input.value=input.type==='datetime-local'?new Date(new Date(value)-new Date(value).getTimezoneOffset()*60000).toISOString().slice(0,16):value??'';}}
+    if(editing){$('save').textContent='Guardar cambios';$('formTitle').textContent='Editar registro '+editing;}
+    status(oidc.mfaReady()?'Segundo factor confirmado. Revisa los datos y confirma nuevamente la operación. No se enviaron cambios automáticamente.':'Borrador recuperado. Los cambios siguen pendientes y requieren segundo factor.');
+   }
+  }else status('Ingresa con usuario y contraseña. El autenticador solo se solicita al cambiar la configuración.');
+ }catch(error){status(error.message,true);}
+}

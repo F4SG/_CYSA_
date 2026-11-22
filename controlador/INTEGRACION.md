@@ -81,8 +81,9 @@ No copiarla a Git ni incluirla en entregas.
 
 1. Abrir **http://localhost:5184** o pulsar **Operación semafórica (S2)** en el
    panel principal. Este servicio debe estar iniciado antes de usar el botón.
-2. Ingresar con Keycloak. Al primer ingreso se solicita enrolar una aplicación
-   autenticadora OTP. Cada persona escanea su propio QR; no se distribuyen secretos.
+2. Ingresar con Keycloak usando usuario y contraseña. Consultar no requiere OTP.
+   La primera autorización o rechazo solicita configurar el autenticador con QR;
+   las siguientes acciones críticas usan códigos OTP sin registrar de nuevo el dispositivo.
 3. Como **administrador**, seleccionar el intervalo de conteos (máximo una hora),
    tipo Webster o prioridad y grupo NS/EO. Pulsar **Calcular y validar en SUMO**.
 4. Revisar **Evidencia**: demanda, comparación por acceso, micros/resto, reducción

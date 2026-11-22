@@ -26,14 +26,17 @@ export async function init(config){
  if(claims.nonce!==saved.nonce||claims.iss!==cfg.issuer||claims.aud!==cfg.clientId||claims.exp*1000<Date.now()){
    tokens=null;throw new Error('ID token no coincide con la solicitud de login');
  }
+ if(saved.mfa&&!mfaReady()){tokens=null;expires=0;throw new Error('Keycloak no confirmó el segundo factor. La operación sigue bloqueada.');}
  return true;
 }
-export async function login({fresh=false}={}){
+export async function login({fresh=false,mfa=false}={}){
  const state=random(),nonce=random(),verifier=random();
  const challenge=encode(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
- sessionStorage.setItem('cysa.pkce',JSON.stringify({state,nonce,verifier,created:Date.now()}));
+ sessionStorage.setItem('cysa.pkce',JSON.stringify({state,nonce,verifier,created:Date.now(),mfa}));
  const q=new URLSearchParams({client_id:cfg.clientId,redirect_uri:cfg.redirectUri,response_type:'code',scope:'openid profile',state,nonce,code_challenge:challenge,code_challenge_method:'S256'});
- if(fresh){q.set('max_age','0');q.set('prompt','login');}
+ q.set('acr_values',mfa?'2':'1');
+ if(mfa)q.set('claims',JSON.stringify({id_token:{acr:{essential:true,values:['2']}}}));
+ if(fresh||mfa){q.set('max_age','0');q.set('prompt','login');}
  location.assign(cfg.issuer+'/protocol/openid-connect/auth?'+q);
 }
 export async function accessToken(){
@@ -54,3 +57,8 @@ export function logout(){sessionVersion++;const hint=tokens?.id_token;tokens=nul
 
 export function hasRole(role){return Boolean(tokens&&(decode(tokens.access_token).realm_access?.roles||[]).includes(role));}
 export function subject(){return tokens?decode(tokens.access_token).sub:null;}
+export function mfaReady(){
+ if(!tokens)return false;
+ const c=decode(tokens.access_token),age=Date.now()/1000-c.auth_time;
+ return typeof c.auth_time==='number'&&age>=-5&&age<=300&&(c.acr==='2'||Array.isArray(c.amr)&&c.amr.some(x=>['otp','mfa','hwk'].includes(x)));
+}

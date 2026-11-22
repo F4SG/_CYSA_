@@ -3,13 +3,13 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 const source=await readFile(new URL('../../panel/oidc.js',import.meta.url),'utf8');
 let sequence=0;
-async function setup(handler){
- const saved={state:'estado',nonce:'nonce',verifier:'verificador',created:Date.now()};
+async function setup(handler,accessClaims={},mfa=false){
+ const saved={state:'estado',nonce:'nonce',verifier:'verificador',created:Date.now(),mfa};
  globalThis.location={href:'http://localhost:8088/?code=codigo&state=estado',assign:()=>{}};
  globalThis.history={replaceState:()=>{}};
  globalThis.sessionStorage={getItem:()=>JSON.stringify(saved),removeItem:()=>{},setItem:()=>{}};
  const jwt=claims=>'e30.'+Buffer.from(JSON.stringify(claims)).toString('base64url')+'.firma';
- const bundle=(seconds=10)=>({access_token:jwt({sub:'usuario',realm_access:{roles:['operador']}}),refresh_token:'renovable',id_token:jwt({nonce:'nonce',iss:'http://localhost:8080/realms/cysa',aud:'cysa-panel',exp:Date.now()/1000+300}),expires_in:seconds});
+ const bundle=(seconds=10)=>({access_token:jwt({sub:'usuario',realm_access:{roles:['operador']},...accessClaims}),refresh_token:'renovable',id_token:jwt({nonce:'nonce',iss:'http://localhost:8080/realms/cysa',aud:'cysa-panel',exp:Date.now()/1000+300}),expires_in:seconds});
  globalThis.fetch=async(url,options)=>new URLSearchParams(options.body).get('grant_type')==='authorization_code'?{ok:true,json:async()=>bundle()}:handler(bundle);
  const oidc=await import('data:text/javascript;base64,'+Buffer.from(source+'\n// caso '+sequence++).toString('base64'));
  await oidc.init({issuer:'http://localhost:8080/realms/cysa',clientId:'cysa-panel',redirectUri:'http://localhost:8088/'});
@@ -36,4 +36,30 @@ test('cerrar sesion mientras renueva no restaura tokens',async()=>{
  const pending=oidc.accessToken();const rejected=assert.rejects(pending,/sesión ha finalizado/);
  oidc.logout();release();await rejected;
  await assert.rejects(oidc.accessToken(),/Se requiere login/);
+});
+
+test('consulta normal solicita nivel uno y no fuerza OTP',async()=>{
+ const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}));let destination;
+ location.assign=url=>destination=new URL(url);await oidc.login();
+ assert.equal(destination.searchParams.get('acr_values'),'1');
+ assert.equal(destination.searchParams.has('claims'),false);assert.equal(oidc.mfaReady(),false);
+});
+
+test('acción crítica solicita nivel dos esencial y autentica de nuevo',async()=>{
+ const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}));let destination,saved;
+ location.assign=url=>destination=new URL(url);sessionStorage.setItem=(_,value)=>saved=JSON.parse(value);
+ await oidc.login({mfa:true});assert.equal(destination.searchParams.get('acr_values'),'2');
+ assert.equal(JSON.parse(destination.searchParams.get('claims')).id_token.acr.essential,true);
+ assert.equal(destination.searchParams.get('max_age'),'0');assert.equal(saved.mfa,true);
+});
+
+test('MFA vencida o sin segundo factor no habilita cambios',async()=>{
+ for(const claims of [{auth_time:Date.now()/1000,acr:'1'},{auth_time:Date.now()/1000-301,acr:'2'},{auth_time:Date.now()/1000+60,acr:'2'}]){
+  const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}),claims);assert.equal(oidc.mfaReady(),false);
+ }
+ const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}),{auth_time:Date.now()/1000-1,acr:'2'});assert.equal(oidc.mfaReady(),true);
+});
+
+test('el retorno de una solicitud MFA rechaza una sesión degradada',async()=>{
+ await assert.rejects(setup(async bundle=>({ok:true,json:async()=>bundle(300)}),{auth_time:Date.now()/1000,acr:'1'},true),/no confirmó el segundo factor/);
 });
