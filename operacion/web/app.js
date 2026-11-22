@@ -49,7 +49,8 @@ function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).t
 action(async()=>{
  const config=await(await fetch('/config.json',{cache:'no-store'})).json();
  $('panelHome').href=panelReturnUrl(config.panelUrl);$('panelHome').hidden=false;
- if(!await oidc.init(config))return;
+ $('login').hidden=true;
+ try{if(!await oidc.ensureSession(config))return;}catch(error){$('login').hidden=false;throw error;}
  $('identity').textContent=oidc.identity();$('login').hidden=true;$('renew').hidden=$('logout').hidden=false;$('workspace').hidden=false;
  $('simulate').disabled=!oidc.hasRole('administrador');$('desde').value=localDate(new Date(Date.now()-15*60000));$('hasta').value=localDate(new Date());
  $('eventTime').value=localDate(new Date(Date.now()+120000));

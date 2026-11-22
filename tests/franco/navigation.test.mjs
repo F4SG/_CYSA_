@@ -15,7 +15,7 @@ test('una pestaña antigua lee el puerto vigente al pulsar y no utiliza 5184',as
 test('cada módulo conserva la dirección de la instalación y su destino correcto',()=>{
  const config={operacionBase:'http://localhost:25184',webApiBase:'http://localhost:25183/'};
  assert.equal(moduleUrl('Gestionar configuraciones del corredor',config),'http://localhost:25183/proyecto#Gestionar%20configuraciones%20del%20corredor');
- assert.equal(moduleUrl('Consultar reportes de desempeño',config),'http://localhost:25183/demo#Consultar%20reportes%20de%20desempe%C3%B1o');
+ assert.throws(()=>moduleUrl('Consultar reportes de desempeño',config),/dentro del panel general/);
  assert.equal(moduleUrl('Swagger (Web III)',config),'http://localhost:25183/swagger');
 });
 test('una configuración incompleta o una lectura fallida no abre un puerto supuesto',async()=>{

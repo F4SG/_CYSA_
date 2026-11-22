@@ -61,6 +61,13 @@ se abren en la misma pestaña y disponen de **Volver al panel general**, tambié
 en Swagger. El regreso recupera la sesión mediante Keycloak. Las páginas y la
 configuración local se sirven sin caché para evitar enlaces de una versión anterior.
 
+**Consultar reportes de desempeño** permanece dentro del panel general como
+función futura, sin entrar a `/demo`. Los módulos de configuraciones y S2
+recuperan automáticamente la sesión de Keycloak; no requieren otro clic en
+**Iniciar sesión**. Si la sesión venció, Keycloak vuelve a pedir las credenciales.
+El perfil de demostración y la sesión de `/demo` corresponden exclusivamente a
+Web III, no al recorrido de Proyecto de Sistemas.
+
 El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Python por usuario solo si no encuentra Python 3.12; crea un entorno virtual propio. Genera secretos mediante el configurador existente, en un directorio temporal local, y promueve el resultado de forma reanudable. No vuelve a generar credenciales al reintentar ni reiniciar.
 
 El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.

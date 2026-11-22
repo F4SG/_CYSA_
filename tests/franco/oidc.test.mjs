@@ -63,3 +63,17 @@ test('MFA vencida o sin segundo factor no habilita cambios',async()=>{
 test('el retorno de una solicitud MFA rechaza una sesión degradada',async()=>{
  await assert.rejects(setup(async bundle=>({ok:true,json:async()=>bundle(300)}),{auth_time:Date.now()/1000,acr:'1'},true),/no confirmó el segundo factor/);
 });
+
+test('un módulo reutiliza SSO sin solicitar otro botón ni forzar contraseña u OTP',async()=>{
+ const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}));
+ location.href='http://localhost:15184/';let target;location.assign=url=>target=new URL(url);
+ const active=await oidc.ensureSession({issuer:'http://localhost:8080/realms/cysa',clientId:'cysa-panel',redirectUri:'http://localhost:15184/'});
+ assert.equal(active,false);assert.equal(target.searchParams.get('redirect_uri'),'http://localhost:15184/');
+ assert.equal(target.searchParams.get('acr_values'),'1');assert.equal(target.searchParams.has('prompt'),false);assert.equal(target.searchParams.has('max_age'),false);
+});
+
+test('un retorno OIDC válido entra al módulo sin iniciar otra autorización',async()=>{
+ const oidc=await setup(async bundle=>({ok:true,json:async()=>bundle(300)}));let redirects=0;location.assign=()=>redirects++;
+ const active=await oidc.ensureSession({issuer:'http://localhost:8080/realms/cysa',clientId:'cysa-panel',redirectUri:'http://localhost:8088/'});
+ assert.equal(active,true);assert.equal(redirects,0);
+});

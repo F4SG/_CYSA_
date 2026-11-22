@@ -39,6 +39,10 @@ export async function login({fresh=false,mfa=false}={}){
  if(fresh||mfa){q.set('max_age','0');q.set('prompt','login');}
  location.assign(cfg.issuer+'/protocol/openid-connect/auth?'+q);
 }
+export async function ensureSession(config){
+ if(await init(config))return true;
+ await login();return false;
+}
 export async function accessToken(){
  if(!tokens)throw new Error('Se requiere login');
  if(Date.now()>expires-30000){

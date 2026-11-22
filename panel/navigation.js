@@ -1,6 +1,8 @@
 // Leer la configuración al pulsar: una pestaña abierta antes del arranque puede tener datos antiguos.
 export function moduleUrl(name,config){
  const operation=name==='Gestionar planes semafóricos'||name==='Operación semafórica (S2)';
+ if(!operation&&!['Gestionar configuraciones del corredor','Swagger (Web III)'].includes(name))
+  throw new Error('Este módulo se consulta dentro del panel general.');
  const value=operation?config.operacionBase:config.webApiBase;
  if(!value)throw new Error('El acceso al módulo todavía no está preparado. Espera a que CYSA indique Sistema listo.');
  const url=new URL(value);

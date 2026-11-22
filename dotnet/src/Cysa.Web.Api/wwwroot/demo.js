@@ -57,10 +57,11 @@ if(project){
  document.querySelectorAll('[data-case]').forEach(b=>b.hidden=b.dataset.case!=='Gestionar configuraciones del corredor');
  document.querySelector('aside .hint').textContent='Consulta con contraseña. Los cambios requieren segundo factor. El QR solo se configura una vez.';
  $('logout').onclick=()=>oidc.logout();
+ $('login').hidden=true;
  catalog=catalog.filter(r=>r.caso==='Gestionar configuraciones del corredor');
  caseView('Gestionar configuraciones del corredor');
  try{
-  const active=await oidc.init(await(await fetch('/proyecto/config')).json());
+  const active=await oidc.ensureSession(await(await fetch('/proyecto/config')).json());
   if(active){
    token=await oidc.accessToken();$('perfil').value=oidc.hasRole('administrador')?'administrador':'operador';controls();await load();
    status(oidc.identity()+'. Segundo factor requerido solo al guardar cambios.');
@@ -72,5 +73,5 @@ if(project){
     status(oidc.mfaReady()?'Segundo factor confirmado. Revisa los datos y confirma nuevamente la operación. No se enviaron cambios automáticamente.':'Borrador recuperado. Los cambios siguen pendientes y requieren segundo factor.');
    }
   }else status('Ingresa con usuario y contraseña. El autenticador solo se solicita al cambiar la configuración.');
- }catch(error){status(error.message,true);}
+ }catch(error){$('login').hidden=false;status(error.message,true);}
 }
