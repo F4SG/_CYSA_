@@ -16,7 +16,7 @@ internal static class SystemStartupTest
             await instance.StartAll();
             await instance.Verify();
             var first=instance.RunningServices();
-            foreach(var name in new[]{"Cysa.Web.Api","Operacion S2","Controlador S2"})
+            foreach(var name in new[]{"Cysa.Evaluaciones.Api","Cysa.Decisiones.Api","Cysa.Web.Api","Operacion S2","Controlador S2"})
                 if(!first.ContainsKey(name))throw new Exception("Servicio no iniciado: "+name);
             using var client=new HttpClient();
             foreach(var url in new[]{instance.WebUrl+"/demo",instance.WebUrl+"/proyecto",instance.OperationUrl+"/",instance.PanelUrl})
@@ -41,7 +41,8 @@ internal static class SystemStartupTest
             if(!secrets.SequenceEqual(SHA256.HashData(File.ReadAllBytes(Path.Combine(instance.Repo,"infra/.env")))))
                 throw new Exception("Cambió la configuración privada");
             await instance.StopAll();
-            if(instance.RunningServices().Count!=0 || !Instance.IsFree(instance.Ports.Web) || !Instance.IsFree(instance.Ports.Operation))
+            if(instance.RunningServices().Count!=0 || new[]{instance.Ports.Evaluation,instance.Ports.Decision,instance.Ports.Web,instance.Ports.Operation}
+                    .Any(port=>!Instance.IsFree(port)))
                 throw new Exception("No se cerraron los servicios propios");
             await File.WriteAllTextAsync(report,"PASS: arranque completo, enlaces correctos, segundo arranque sin duplicados, configuración privada conservada y cierre conjunto sin procesos propios restantes.");
         }

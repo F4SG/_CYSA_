@@ -246,7 +246,7 @@ internal sealed partial class Instance
         {
             if (apis.TryGetValue(name, out var existing) && !existing.HasExited) continue;
             if (!IsFree(port)) throw new InvalidOperationException($"El puerto {port} está ocupado por otra aplicación. Ciérrala y vuelve a iniciar.");
-            var exe = Path.Combine(Package, "services", name, name + ".exe");
+            var exe = await EnsureApiExecutable(name);
             apis[name] = Start(exe, ["--urls", $"http://localhost:{port}"], Path.GetDirectoryName(exe), new() {
                 ["ASPNETCORE_ENVIRONMENT"]="Development", ["Security__Mode"]="Demo",
                 ["Storage__Directory"]=Path.Combine(Repo,"dotnet","runtime"), ["Evaluaciones__BaseUrl"]=$"http://localhost:{Ports.Evaluation}",

@@ -37,16 +37,27 @@ internal sealed partial class Instance
             process.Dispose();apis.Remove("Cysa.Web.Api");
         }
     }
-    internal async Task<string> EnsureWebExecutable()
+    internal Task<string> EnsureWebExecutable() => EnsureApiExecutable("Cysa.Web.Api");
+
+    async Task<string> EnsureApiExecutable(string service)
     {
-        var exe=Path.Combine(Package,"services","Cysa.Web.Api","Cysa.Web.Api.exe");
+        var exe=Path.Combine(Package,"services",service,service+".exe");
         if(File.Exists(exe))return exe;
-        var source=SourceRoot??throw new InvalidOperationException("No se encontró la API ni el proyecto fuente. Extrae el ZIP Windows completo, incluidas app y services, o ejecuta el proyecto dentro del ZIP de fuentes.");
-        var output=Path.Combine(Root,"webiii-services",SourceLayout.WebFingerprint(source));
-        exe=Path.Combine(output,"Cysa.Web.Api.exe");
+        var source=SourceRoot??throw new InvalidOperationException($"No se encontró {service}. Extrae el ZIP Windows completo, incluidas app y services, o utiliza el ZIP de fuentes.");
+        var project=Path.Combine(source,"dotnet","src",service,service+".csproj");
+        if(!File.Exists(project))
+            throw new InvalidOperationException($"Faltan las fuentes de {service}. Comprueba que el árbol de fuentes esté completo.");
+        var web=service=="Cysa.Web.Api";
+        var cache=web ? Path.Combine(Root,"webiii-services") : Path.Combine(Root,"api-services",service);
+        var output=Path.Combine(cache,SourceLayout.WebFingerprint(source));
+        exe=Path.Combine(output,service+".exe");
         var ready=Path.Combine(output,"preparado.txt");
-        if(File.Exists(exe)&&File.Exists(ready)&&File.Exists(Path.Combine(output,"wwwroot","demo.html")))return exe;
-        Write("Ejecución desde fuentes detectada. Preparando automáticamente la API Web III con el SDK .NET.");
+        bool Published() => File.Exists(exe) && (!web || File.Exists(Path.Combine(output,"wwwroot","demo.html")));
+        if(Published() && File.Exists(ready))return exe;
+        // Si hay que reparar una publicación incompleta, el marcador solo vuelve tras el éxito.
+        if(File.Exists(ready))File.Delete(ready);
+        var label=web ? "API Web III" : service;
+        Write($"Ejecución desde fuentes detectada. Preparando automáticamente la {label} con el SDK .NET.");
         try
         {
             if(await Run("dotnet",["--version"],source,check:false,output:false,timeoutMinutes:1)!=0)
@@ -55,11 +66,11 @@ internal sealed partial class Instance
         catch(System.ComponentModel.Win32Exception)
         {throw new InvalidOperationException("No se encontró el SDK .NET. Instala el SDK .NET 10 para ejecutar las fuentes o utiliza el ZIP Windows completo.");}
         Directory.CreateDirectory(output);
-        await Run("dotnet",["publish",Path.Combine(source,"dotnet","src","Cysa.Web.Api","Cysa.Web.Api.csproj"),
+        await Run("dotnet",["publish",project,
             "-c","Release","-r","win-x64","--self-contained","true","-p:PublishSingleFile=true","-p:IncludeNativeLibrariesForSelfExtract=true","--disable-build-servers","-o",output,"--nologo"],source,timeoutMinutes:10);
-        if(!File.Exists(exe)||!File.Exists(Path.Combine(output,"wwwroot","demo.html")))throw new InvalidOperationException("No se completó la preparación de la API. Revisa el registro de compilación.");
-        await File.WriteAllTextAsync(ready,"API Web III preparada desde las fuentes.");
-        Write("API Web III preparada. Los siguientes arranques reutilizan esta versión mientras no cambien sus fuentes.");
+        if(!Published())throw new InvalidOperationException($"No se completó la preparación de {label}. Revisa el registro de compilación.");
+        await File.WriteAllTextAsync(ready,service+" preparada desde las fuentes.");
+        Write($"{label} preparada. Los siguientes arranques reutilizan esta versión mientras no cambien sus fuentes.");
         return exe;
     }
     public string WebUrl => $"http://localhost:{Ports.Web}";

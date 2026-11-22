@@ -5,11 +5,12 @@
 ## Ejecutar desde Visual Studio o desde las fuentes
 
 Al iniciar el proyecto `desktop/Cysa.Launcher`, el lanzador localiza el repositorio
-desde su carpeta de compilación. Si faltan `app` y los servicios publicados, prepara
-las fuentes locales y publica automáticamente la API al pulsar **Swagger (Web III)**,
-**Panel Web III**, **Recrear base de pruebas** o **Probar conexión** en el diálogo SQL.
+desde su carpeta de compilación. Si faltan los servicios publicados, prepara las
+fuentes locales y publica automáticamente las APIs de Evaluaciones, Decisiones y
+Web III al pulsar **Iniciar sistema** o **Abrir panel**. Las acciones exclusivas de
+Web III solo preparan su propia API.
 La primera compilación requiere SDK .NET 10 y acceso a NuGet si faltan dependencias.
-Los siguientes arranques reutilizan la API mientras no cambien sus fuentes.
+Los siguientes arranques reutilizan las APIs mientras no cambien sus fuentes.
 
 SQL Server debe estar instalado y accesible. Después de compilar la API, el lanzador
 aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.
