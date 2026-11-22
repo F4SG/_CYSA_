@@ -71,7 +71,7 @@ internal sealed partial class MainForm
         Add("Swagger (Web III)", "Prepara SQL Server y API · Sin cámara ni SUMO", instance.OpenSwaggerWebIII, "API", primary: true);
         Add("Panel Web III", "Accesos a casos de uso y gestión de datos", instance.OpenDatabaseWebIII, "PANEL");
         Add("Recrear base de pruebas", "BORRA CYSA_WebIII_Demo y carga migraciones + datos", instance.ResetDatabaseWebIII, "BASE DE DATOS");
-        Add("Simulación SUMO (demo)", "Abre la intersección animada con vehículos y semáforos · Red sintética de demostración", instance.OpenSumo, "SUMO");
+        Add("Simulación SUMO (demo)", "Dos cruces animados y prioridad para una ambulancia", instance.OpenSumo, "SUMO");
         status.Margin = new Padding(0, 5, 0, 0); layout.Controls.Add(status);
 
         var terminal = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Padding = new Padding(12, 4, 12, 10), Margin = new Padding(0, 4, 0, 4), Tag = "surface" };

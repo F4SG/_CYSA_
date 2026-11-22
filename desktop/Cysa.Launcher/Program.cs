@@ -61,6 +61,7 @@ internal sealed partial class Instance
     public Action<string> Log { get; set; } = _ => { };
     public Process? Detector { get; private set; }
     public Process? SumoGui { get; private set; }
+    Process? sumoDriver;
     readonly Dictionary<string, Process> apis = [];
     readonly DockerSession dockerSession = new();
     readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(3) };
@@ -305,6 +306,13 @@ internal sealed partial class Instance
             catch (OperationCanceledException) { SumoGui.Kill(true); await SumoGui.WaitForExitAsync(); }
         }
         SumoGui?.Dispose(); SumoGui = null;
+        if (sumoDriver is { HasExited: false })
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await sumoDriver.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException) { sumoDriver.Kill(true); await sumoDriver.WaitForExitAsync(); }
+        }
+        sumoDriver?.Dispose(); sumoDriver = null;
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
         foreach (var process in apis.Values) { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } process.Dispose(); }
         apis.Clear();
@@ -381,17 +389,30 @@ internal sealed partial class Instance
     {
         RequireConfigured();
         if (SumoGui is { HasExited: false }) throw new InvalidOperationException("SUMO ya está abierto. Usa su ventana o ciérrala antes de abrir otra simulación.");
+        if (sumoDriver is { HasExited: false }) throw new InvalidOperationException("SUMO está cerrando la corrida anterior. Espera unos segundos antes de abrir otra.");
         SumoGui?.Dispose();
+        sumoDriver?.Dispose();
         var report = Path.Combine(Root, "sumo-scenario.json");
         await Run(Venv, ["desktop/sumo_gui.py", "--report", report]);
         var scenario = JsonSerializer.Deserialize<SumoScenario>(File.ReadAllText(report))
             ?? throw new InvalidOperationException("No se pudo preparar el escenario SUMO.");
-        SumoGui = Start(scenario.Executable, ["-c", scenario.Config, "--seed", "42", "--delay", "150", "--window-size", "1100,750"], Path.GetDirectoryName(scenario.Config));
+        var socket = new TcpListener(IPAddress.Loopback, 0);
+        socket.Start();
+        var port = ((IPEndPoint)socket.LocalEndpoint).Port.ToString();
+        socket.Stop();
+        SumoGui = Start(scenario.Executable, ["-c", scenario.Config, "--remote-port", port, "--seed", "42",
+            "--delay", "150", "--window-size", "1100,750"], Path.GetDirectoryName(scenario.Config));
+        try { sumoDriver = Start(Venv, ["desktop/sumo_gui.py", "--drive", scenario.Config, "--port", port]); }
+        catch { SumoGui.Kill(true); throw; }
         await Task.Delay(1000);
-        if (SumoGui.HasExited) throw new InvalidOperationException("SUMO-GUI no pudo abrirse. Revisa el registro de la ventana.");
-        Write($"SUMO-GUI abierto: DEMO sintética, plan fijo y {scenario.Expected} vehículos. No es tráfico real.");
-        Write("En SUMO pulsa ▶ (Ctrl+A) para reproducir. Puedes pausar y ajustar Delay (ms). No necesita Docker ni el modo GPU del detector.");
-        Write("Al terminar, cierra SUMO para guardar tripinfo.xml. Si lo cierras antes, los resultados son parciales. Archivos: " + Path.GetDirectoryName(scenario.Config));
+        if (SumoGui.HasExited || sumoDriver.HasExited)
+        {
+            if (!SumoGui.HasExited) SumoGui.Kill(true);
+            throw new InvalidOperationException("La demo SUMO no pudo abrirse. Revisa el registro de la ventana.");
+        }
+        Write($"SUMO-GUI abierto: dos cruces, {scenario.Expected} vehículos y emergencia simulada.");
+        Write("Pulsa ▶ (Ctrl+A) en SUMO para ver el plan fijo, el aviso de A a B y el retorno tras el paso de la ambulancia.");
+        Write("Al terminar, consulta eventos_corredor.csv, semaforos.xml y tripinfo.xml. Archivos: " + Path.GetDirectoryName(scenario.Config));
     }
 
     public async Task ShowLogs()

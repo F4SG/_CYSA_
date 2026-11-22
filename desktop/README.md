@@ -108,13 +108,18 @@ vacía solo la consola de la ventana; el archivo de registro se conserva.
 
 ## Demostración SUMO
 
-«Simulación SUMO (demo)» abre SUMO-GUI de la venv del usuario con una red sintética,
-plan fijo y 13 vehículos. No requiere iniciar Docker. Pulsa reproducir (Ctrl+A)
-en SUMO; el retardo inicial es 150 ms para observar el movimiento. Cada apertura
-crea una carpeta nueva en `workspace/resultados/sumo_gui`, sin sobrescribir corridas.
-Al cerrar SUMO se guarda `tripinfo.xml`; cerrar antes de finalizar deja resultados
-parciales. El lanzador evita abrir dos simulaciones propias simultáneas y cierra su
-ventana al detener el sistema. No calcula Webster ni aplica planes a controladores.
+«Simulación SUMO (demo)» abre un corredor sintético con los cruces A y B,
+19 vehículos y un cruce peatonal. Pulsa reproducir (Ctrl+A). Ambos cruces parten
+del plan fijo y la ambulancia naranja activa un evento predefinido al acercarse a A.
+A avisa a B, que espera el despeje peatonal. Cada cruce pasa por ámbar y todo rojo
+para dar prioridad y repite la transición al volver al plan fijo.
+
+Los marcadores pasan de gris a ámbar durante el aviso y a verde durante la prioridad.
+Cada apertura crea una carpeta en `workspace/resultados/sumo_gui` con
+`eventos_corredor.csv`, `semaforos.xml` y `tripinfo.xml`. Una corrida completa registra
+`corrida_completada`. Acepta cerrar los archivos al finalizar para guardar los XML.
+El lanzador evita abrir dos simulaciones propias simultáneas.
+La demo corre en SUMO sin Docker, cámara ni conexión con el controlador.
 La interfaz usa las opciones oficiales de [SUMO-GUI](https://sumo.dlr.de/docs/sumo-gui.html).
 
 ## Comprobaciones

@@ -37,12 +37,11 @@ BOTONES
   cada usuario. El registro distingue las acciones y los avisos por colores.
   Limpiar vista no borra el archivo de registro.
 - Iniciar sistema: enciende Docker, monitoreo y las dos APIs de demostracion.
-- Simulación SUMO (demo): abre el mapa animado de una intersección sintética
-  con vehículos y semáforos. Pulsa reproducir (Ctrl+A) en SUMO. Funciona sin
-  iniciar Docker; usa la instalación SUMO de este usuario. Cierra SUMO al
-  terminar para guardar tripinfo.xml. Las corridas se conservan en
-  workspace/resultados/sumo_gui. Si cierras antes, son resultados parciales.
-  No calcula Webster ni cambia semáforos reales.
+- Simulación SUMO (demo): abre dos cruces sintéticos con plan fijo, aviso
+  entre cruces y prioridad para una ambulancia. Pulsa reproducir (Ctrl+A).
+  Los cruces vuelven al plan fijo al pasar la ambulancia. Las corridas y su
+  registro eventos_corredor.csv se conservan en workspace/resultados/sumo_gui.
+  La demo funciona sin conectar con Docker, cámara ni semáforos reales.
 - Modo del detector: elige CPU o GPU. Detectar y recomendar mide YOLO con
   imagenes sinteticas y marca en VERDE la opcion mas rapida con Recomendado.
   La eleccion manual se conserva para el usuario, aunque sea diferente de

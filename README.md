@@ -566,7 +566,7 @@ docker compose --env-file infra/.env -f infra/compose.yaml logs --tail 50 consum
 
 ### Arquitectura y documentación
 
-**Cámara/video → YOLO + ByteTrack → conteos → MQTT/TLS → consumidor → PostgreSQL/TimescaleDB → FastAPI → panel web.** Keycloak controla acceso y roles. SUMO se ejecuta aparte mediante herramientas de consola o desde «Simulación SUMO (demo)» del lanzador Windows, que abre su interfaz gráfica con un escenario sintético de plan fijo. El panel de monitoreo IoT no ejecuta automáticamente evaluaciones SUMO. El panel de laboratorio Web III permite registrar métricas suministradas y evaluar planes con sus reglas, sin ejecutar el simulador ni activar semáforos.
+**Cámara/video → YOLO + ByteTrack → conteos → MQTT/TLS → consumidor → PostgreSQL/TimescaleDB → FastAPI → panel web.** Keycloak controla acceso y roles. «Simulación SUMO (demo)» abre un corredor sintético de dos cruces. En una corrida se muestra el plan fijo, el aviso entre cruces para una ambulancia y el regreso al plan fijo. El panel de laboratorio Web III conserva su evaluación de métricas suministradas y funciona separado de SUMO.
 
 - [Guía técnica completa](docs/guia_tecnica_s1.md): arquitectura, endpoints, contratos, simulación, seguridad y respaldos.
 - [Gestión de usuarios](docs/franco/gestion_usuarios_local.md).
