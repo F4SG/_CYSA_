@@ -1,34 +1,6 @@
 # CYSA
 
-[Casos de uso: ubicación y acceso](#casos-de-uso-ubicación-y-acceso) · [Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i)
-
-## Casos de uso: ubicación y acceso
-
-Los botones conservan exactamente los nombres del diagrama de casos de uso.
-En el **panel IoT** (`http://localhost:8088/`), inicia sesión con Keycloak para
-ver el menú lateral. El **panel Web III** está en `/demo` de la API local:
-abre **Swagger (Web III)** desde el centro de pruebas y cambia `/swagger` por
-`/demo` en esa misma dirección; el puerto depende de la instalación. Si usas
-la alternativa por consola de esta guía, la dirección es
-`http://localhost:5183/demo`.
-
-| Caso de uso / nombre exacto del botón | Dónde se encuentra | Cómo se accede y qué permite |
-| --- | --- | --- |
-| Iniciar sesión | Barra superior de ambos paneles; también en la bienvenida del panel IoT. | En IoT, pulsa el botón e ingresa con tu cuenta de Keycloak. En Web III, selecciona el perfil de demostración y pulsa el botón; la MFA de esa sesión es simulada. |
-| Administrar usuario y roles | Menú lateral del panel IoT, visible para el administrador; menú **CASOS DE USO** de Web III. | En IoT, entra como administrador para gestionar cuentas y asignar los dos roles existentes. En Web III, selecciona el botón y el recurso **Usuarios** o **Roles**; las escrituras requieren el perfil administrador y el catálogo de roles es de consulta. |
-| Gestionar configuraciones del corredor | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre el módulo de Web III en otra pestaña. En Web III, selecciona **Configuraciones técnicas**; el administrador puede gestionar los registros de laboratorio. Esto no modifica por sí solo los parámetros del banco S2. |
-| Gestionar infraestructura | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | En IoT, consulta los activos registrados. En Web III, elige el recurso: corredores, intersecciones, accesos, carriles, fuentes de detección o controladores; el administrador dispone de las operaciones de gestión. |
-| Gestionar planes semafóricos | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III; sección del mismo nombre en el banco S2. | El botón lateral de IoT abre Web III. Allí se consultan y gestionan datos de laboratorio; el operador puede decidir sobre planes validados con MFA simulada. Para ejecutar el flujo con SUMO y controlador emulado, usa el botón superior **Operación semafórica (S2)** de IoT, o abre `http://localhost:5184` tras iniciar el banco: el administrador genera y el operador autoriza o rechaza con MFA real reciente. |
-| Monitorear operación semafórica | Menú lateral del panel IoT, menú **CASOS DE USO** de Web III y sección del mismo nombre en el banco S2. | En IoT, consulta conteos por intersección, acceso y carril; la vista adicional **Comunicación** muestra fase, plan y último estado. En Web III se consultan recursos de laboratorio. En S2 se muestran los estados reportados por el controlador emulado. |
-| Consultar reportes de desempeño | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre Web III. Selecciona **Reportes** para consultar metadatos sintéticos. La generación de reportes de desempeño sigue siendo una función futura. |
-| Cerrar sesión | Barra superior de ambos paneles, después de iniciar sesión; también en el banco S2. | Pulsa el botón en el panel utilizado. En IoT y S2 se utiliza la sesión de Keycloak; Web III cierra su sesión independiente de demostración. |
-
-Los accesos desde IoT a Web III usan la dirección `webApiBase` de la
-configuración local del panel; la API Web III debe estar iniciada y esa dirección
-debe coincidir con su puerto. El banco S2 requiere la preparación descrita en
-[la guía de integración](controlador/INTEGRACION.md). Los nombres coincidentes
-identifican el caso de uso, pero cada entorno conserva el alcance indicado en
-la tabla.
+[Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i) · [Casos de uso: ubicación y acceso](#casos-de-uso-ubicación-y-acceso)
 
 ## Web III
 
@@ -623,3 +595,31 @@ Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; es
 - **Preparar el equipo para las pruebas:** descargar el ZIP no instala los
   servicios, no configura las cuentas ni programa la placa automáticamente.
   Seguir la [guía de integración](controlador/INTEGRACION.md).
+
+## Casos de uso: ubicación y acceso
+
+Los botones conservan exactamente los nombres del diagrama de casos de uso.
+En el **panel IoT** (`http://localhost:8088/`), inicia sesión con Keycloak para
+ver el menú lateral. El **panel Web III** está en `/demo` de la API local:
+abre **Swagger (Web III)** desde el centro de pruebas y cambia `/swagger` por
+`/demo` en esa misma dirección; el puerto depende de la instalación. Si usas
+la alternativa por consola de esta guía, la dirección es
+`http://localhost:5183/demo`.
+
+| Caso de uso / nombre exacto del botón | Dónde se encuentra | Cómo se accede y qué permite |
+| --- | --- | --- |
+| Iniciar sesión | Barra superior de ambos paneles; también en la bienvenida del panel IoT. | En IoT, pulsa el botón e ingresa con tu cuenta de Keycloak. En Web III, selecciona el perfil de demostración y pulsa el botón; la MFA de esa sesión es simulada. |
+| Administrar usuario y roles | Menú lateral del panel IoT, visible para el administrador; menú **CASOS DE USO** de Web III. | En IoT, entra como administrador para gestionar cuentas y asignar los dos roles existentes. En Web III, selecciona el botón y el recurso **Usuarios** o **Roles**; las escrituras requieren el perfil administrador y el catálogo de roles es de consulta. |
+| Gestionar configuraciones del corredor | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre el módulo de Web III en otra pestaña. En Web III, selecciona **Configuraciones técnicas**; el administrador puede gestionar los registros de laboratorio. Esto no modifica por sí solo los parámetros del banco S2. |
+| Gestionar infraestructura | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | En IoT, consulta los activos registrados. En Web III, elige el recurso: corredores, intersecciones, accesos, carriles, fuentes de detección o controladores; el administrador dispone de las operaciones de gestión. |
+| Gestionar planes semafóricos | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III; sección del mismo nombre en el banco S2. | El botón lateral de IoT abre Web III. Allí se consultan y gestionan datos de laboratorio; el operador puede decidir sobre planes validados con MFA simulada. Para ejecutar el flujo con SUMO y controlador emulado, usa el botón superior **Operación semafórica (S2)** de IoT, o abre `http://localhost:5184` tras iniciar el banco: el administrador genera y el operador autoriza o rechaza con MFA real reciente. |
+| Monitorear operación semafórica | Menú lateral del panel IoT, menú **CASOS DE USO** de Web III y sección del mismo nombre en el banco S2. | En IoT, consulta conteos por intersección, acceso y carril; la vista adicional **Comunicación** muestra fase, plan y último estado. En Web III se consultan recursos de laboratorio. En S2 se muestran los estados reportados por el controlador emulado. |
+| Consultar reportes de desempeño | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre Web III. Selecciona **Reportes** para consultar metadatos sintéticos. La generación de reportes de desempeño sigue siendo una función futura. |
+| Cerrar sesión | Barra superior de ambos paneles, después de iniciar sesión; también en el banco S2. | Pulsa el botón en el panel utilizado. En IoT y S2 se utiliza la sesión de Keycloak; Web III cierra su sesión independiente de demostración. |
+
+Los accesos desde IoT a Web III usan la dirección `webApiBase` de la
+configuración local del panel; la API Web III debe estar iniciada y esa dirección
+debe coincidir con su puerto. El banco S2 requiere la preparación descrita en
+[la guía de integración](controlador/INTEGRACION.md). Los nombres coincidentes
+identifican el caso de uso, pero cada entorno conserva el alcance indicado en
+la tabla.
