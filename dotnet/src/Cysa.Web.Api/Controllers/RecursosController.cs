@@ -54,10 +54,10 @@ public sealed class MetricaPorAccesoController(RecursoService<MetricaPorAcceso, 
 [Route("api/recomendaciones"), Tags("Gestionar planes semafóricos")]
 public sealed class RecomendacionController(RecursoService<Recomendacion, RecomendacionEntrada, RecomendacionSalida> service) : RegistroController<Recomendacion, RecomendacionEntrada, RecomendacionSalida>(service);
 
-[Route("api/roles"), Tags("Administrar usuarios y roles")]
+[Route("api/roles"), Tags("Administrar usuario y roles")]
 public sealed class RolController(RecursoService<Rol, RolEntrada, RolSalida> service) : ConsultaController<Rol, RolEntrada, RolSalida>(service);
 
-[Route("api/usuarios"), Tags("Administrar usuarios y roles")]
+[Route("api/usuarios"), Tags("Administrar usuario y roles")]
 public sealed class UsuarioController(RecursoService<Usuario, UsuarioEntrada, UsuarioSalida> service) : CrudController<Usuario, UsuarioEntrada, UsuarioSalida>(service);
 
 [Route("api/bitacoras"), Tags("Gestionar configuraciones del corredor")]

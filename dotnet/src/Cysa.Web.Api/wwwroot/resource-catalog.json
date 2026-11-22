@@ -98,13 +98,13 @@
   {
     "entidad": "Rol",
     "ruta": "roles",
-    "caso": "Administrar usuarios y roles",
+    "caso": "Administrar usuario y roles",
     "operaciones": "read"
   },
   {
     "entidad": "Usuario",
     "ruta": "usuarios",
-    "caso": "Administrar usuarios y roles",
+    "caso": "Administrar usuario y roles",
     "operaciones": "crud"
   },
   {
