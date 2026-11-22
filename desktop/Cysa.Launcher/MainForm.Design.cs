@@ -57,8 +57,8 @@ internal sealed partial class MainForm
         for (var i = 0; i < 4; i++) { buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 25)); }
         layout.Controls.Add(buttons);
         Add("Configurar esta PC", "Instala y crea tus cuentas", instance.Configure, "INSTALACIÓN", afterHardware: true);
-        Add("Iniciar sistema", "Enciende los servicios", instance.StartAll, "DOCKER", primary: true);
-        Add("Abrir panel", "Monitoreo en el navegador", () => { Instance.Open(instance.PanelUrl); return Task.CompletedTask; }, "PANEL");
+        Add("Iniciar sistema", "Inicia todos los módulos de Proyecto de Sistemas", instance.StartAll, "SISTEMA", primary: true);
+        Add("Abrir panel", "Inicia los servicios y abre el proyecto", instance.OpenPanel, "PANEL");
         Add("Credenciales", "Cuentas de esta PC", Credentials, "ACCESO");
         Add("Contar con cámara", "Conteo desde una cámara", () => { var device = SelectedDevice(); using var dialog = new CameraDialog(); ApplyControlTheme(dialog); if (dialog.ShowDialog(this) == DialogResult.OK) instance.StartDetector(dialog.Source, device); return Task.CompletedTask; }, "CÁMARA");
         Add("Contar con video", "Conteo desde un archivo", () => { var device = SelectedDevice(); using var dialog = new OpenFileDialog { Filter = "Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this) == DialogResult.OK) instance.StartDetector(dialog.FileName, device); return Task.CompletedTask; }, "VIDEO");
@@ -102,7 +102,7 @@ internal sealed partial class MainForm
             instance.Write("Datos de esta instalación: " + instance.Root + " | Proyecto Docker: " + instance.Project);
             cpu.Enabled=gpu.Enabled=false;
             hardwareDetail.Text="Para cámara o video, pulsa Detectar y recomendar. Web III puede usarse sin medir CPU/GPU ni cargar YOLO.";
-            if (instance.Configured) await Execute(() => { instance.Seed(); return Task.CompletedTask; }, "ARCHIVOS");
+            if (instance.Configured) await Execute(async () => { instance.Seed(); await instance.StartAll(); }, "SISTEMA");
         };
         FormClosing += async (_, e) => {
             if (closing) return;

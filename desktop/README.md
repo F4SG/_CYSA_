@@ -38,6 +38,21 @@ No se empaquetan `.git`, entornos virtuales, modelos, videos, bases, claves, tok
 
 ## Instalación y aislamiento
 
+En una PC ya configurada, abrir CYSA inicia automáticamente el monitoreo IoT,
+las APIs de gestión, el banco S2 y su controlador con MMU simulado. **Iniciar
+sistema** reintenta el arranque completo y **Abrir panel** también comprueba e
+inicia los servicios antes de abrir el navegador. Los botones del panel reciben
+las direcciones locales de Web III y S2; no es necesario iniciar Swagger aparte.
+El arranque prepara las dependencias S2, la clave de despacho y MFA OTP de
+Keycloak, conservando claves existentes. Cada usuario enrola su autenticador en
+el siguiente ingreso si aún no tiene OTP.
+
+El banco requiere SQL Server local y ODBC Driver 18. Si falta un servicio o
+no conecta con MQTT, el lanzador informa el error y no declara el sistema listo.
+La cámara y el video esperan la selección de fuente. La placa Arduino física
+se inicia explícitamente; el arranque automático nunca abre un puerto serial.
+**Detener sistema** y cerrar el lanzador detienen también S2 y el emulador.
+
 El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Python por usuario solo si no encuentra Python 3.12; crea un entorno virtual propio. Genera secretos mediante el configurador existente, en un directorio temporal local, y promueve el resultado de forma reanudable. No vuelve a generar credenciales al reintentar ni reiniciar.
 
 El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.

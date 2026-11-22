@@ -15,6 +15,7 @@ internal static class Program
         if (args.Contains("--self-test")) { SelfTest.Run(args.Last()); return; }
         if (args.Length == 3 && args[0] == "--integration-test") { IntegrationTest.Run(args[1], args[2]).GetAwaiter().GetResult(); return; }
         if (args.Length == 4 && args[0] == "--webiii-startup-test") { WebStartupTest.Run(args[1],args[2],args[3]).GetAwaiter().GetResult(); return; }
+        if (args.Length == 4 && args[0] == "--system-startup-test") { SystemStartupTest.Run(args[1],args[2],args[3]).GetAwaiter().GetResult(); return; }
         ApplicationConfiguration.Initialize();
         var root = args.Length == 2 && args[0] == "--data-dir" ? Path.GetFullPath(args[1]) : Instance.Home;
         using var mutex = new Mutex(true, "Local\\CYSA-" + Instance.ProjectFor(root), out var first);
@@ -27,14 +28,14 @@ internal static class Program
 internal sealed record HardwareReport(string Recommended, bool GpuReady, string GpuDevice, string GpuName, double CpuMs, double? GpuMs, bool NvidiaDetected, string Reason);
 internal sealed record SumoScenario(string Executable, string Config, int Expected);
 
-internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision, int Web = 15183)
+internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, int Decision, int Web = 15183, int Operation = 15184)
 {
-    public int[] All => [Panel, Identity, Mqtt, Evaluation, Decision, Web];
+    public int[] All => [Panel, Identity, Mqtt, Evaluation, Decision, Web, Operation];
     public static Ports Select(Func<int, bool> free)
     {
         for (var offset = 0; offset < 20000; offset += 100)
         {
-            var ports = new Ports(18088 + offset, 18080 + offset, 18883 + offset, 15181 + offset, 15182 + offset, 15183 + offset);
+            var ports = new Ports(18088 + offset, 18080 + offset, 18883 + offset, 15181 + offset, 15182 + offset, 15183 + offset, 15184 + offset);
             if (ports.All.All(free)) return ports;
         }
         throw new InvalidOperationException("No se encontró un grupo de puertos libres.");
@@ -251,8 +252,18 @@ internal sealed partial class Instance
                 ["Logging__LogLevel__Default"]="Warning", ["Logging__LogLevel__Microsoft.AspNetCore"]="Warning" });
         }
         foreach (var port in new[] { Ports.Panel, Ports.Evaluation, Ports.Decision }) await WaitUrl($"http://127.0.0.1:{port}/health", 90);
-        Write("Sistema listo. Las APIs operan en modo demo y no activan semáforos.");
+        await StartWebIII();
+        await StartOperation();
+        Write("Sistema listo: monitoreo, módulos de gestión, banco S2 y controlador emulado disponibles. No se actúa sobre semáforos reales.");
     }
+
+    public async Task OpenPanel()
+    {
+        await StartAll();
+        Open(PanelUrl);
+    }
+
+    internal Dictionary<string,int> RunningServices()=>apis.Where(p=>!p.Value.HasExited).ToDictionary(p=>p.Key,p=>p.Value.Id);
 
     async Task WaitUrl(string url, int seconds)
     {
@@ -287,6 +298,11 @@ internal sealed partial class Instance
         RequireConfigured();
         await Compose("ps");
         await Run(Venv, ["desktop/runtime.py", "verify", "--panel", PanelUrl, "--evaluation", $"http://127.0.0.1:{Ports.Evaluation}", "--decision", $"http://127.0.0.1:{Ports.Decision}"]);
+        await WaitUrl(WebUrl+"/health", 10);
+        await WaitOperationReady();
+        if(!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited)
+            throw new InvalidOperationException("El controlador emulado S2 no está iniciado. Pulsa Iniciar sistema.");
+        Write("Verificados: módulos de gestión, SQL Server, banco S2, MQTT y controlador emulado.");
     }
 
     public async Task Tests()
@@ -455,7 +471,9 @@ internal static class SelfTest
             var a=Instance.ProjectFor(Path.Combine(root,"usuario a")); var b=Instance.ProjectFor(Path.Combine(root,"usuario b"));
             if (a==b || a!=Instance.ProjectFor(Path.Combine(root,"usuario a"))) throw new Exception("Aislamiento de proyectos incorrecto");
             var ports=Ports.Select(p=>p>19000);
-            if (ports.All.Distinct().Count()!=6 || ports.All.Any(p=>p<=19000)) throw new Exception("Selección de puertos incorrecta");
+            if (ports.All.Distinct().Count()!=7 || ports.All.Any(p=>p<=19000)) throw new Exception("Selección de puertos incorrecta");
+            var legacy=JsonSerializer.Deserialize<Ports>("{\"Panel\":18088,\"Identity\":18080,\"Mqtt\":18883,\"Evaluation\":15181,\"Decision\":15182}")!;
+            if(legacy.Web!=15183 || legacy.Operation!=15184)throw new Exception("No se conservó compatibilidad con instalaciones anteriores");
             var package=Path.Combine(root,"paquete"); Directory.CreateDirectory(Path.Combine(package,"app","infra"));
             File.WriteAllText(Path.Combine(package,"app","infra","compose.yaml"),"services: {}");
             var instance=new Instance(Path.Combine(root,"usuario"),package); instance.Seed();

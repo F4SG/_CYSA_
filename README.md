@@ -499,6 +499,16 @@ El segundo comando requiere Node.js. Estas pruebas validan el software; no susti
 
 ### 6. Encender y apagar otro día
 
+Si utilizas **CYSA · Centro de pruebas** en una PC ya configurada, basta con
+abrir la aplicación: inicia automáticamente los servicios del proyecto,
+incluidos los módulos de gestión, el banco S2 y el controlador con MMU simulado.
+**Iniciar sistema** reintenta el arranque y **Abrir panel** comprueba los servicios
+antes de abrir el navegador. No hace falta iniciar Web III ni S2 por separado.
+SQL Server y ODBC Driver 18 deben estar instalados; la primera preparación S2
+configura OTP y cada usuario enrola su autenticador al ingresar. La cámara, el
+video y la placa física requieren selección explícita. Al cerrar CYSA se
+detienen sus servicios y se conservan los datos.
+
 En PowerShell, dentro de la carpeta `CYSA`:
 
 ```powershell
