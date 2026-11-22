@@ -4,44 +4,60 @@ import {projectRequest, rememberDraft, rowCells, emptyRow, setStatus} from './pr
 const $ = id => document.getElementById(id);
 const operation = (path, options) => projectRequest('operacionBase', '/api/' + path, options);
 const requests = new Map();
-let loading = false;
+const resolved = new Map();
+let loading;
+let plansShown = [];
 let decision;
+let sending = false;
+let redirecting = false;
 const modes = {webster: 'Webster', micros: 'Prioridad para micros', emergencia: 'Emergencia'};
 const states = {validado: 'Validado', no_aprobado: 'No aprobado', autorizado: 'Autorizado', rechazado: 'Rechazado'};
 
-export async function loadPlans() {
-    if (loading) return;
-    loading = true;
+function drawPlans() {
+    const rows = plansShown.map(snapshot => {
+        const plan = snapshot.estado === 'validado' ? resolved.get(snapshot.id) || snapshot : snapshot;
+        const doc = plan.documento;
+        const gain = plan.validacion.mejora_porcentaje;
+        const row = rowCells([
+            doc.plan_id, modes[doc.modo] || doc.modo, `${doc.verdes.NS} / ${doc.verdes.EO}`,
+            Number.isFinite(gain) ? gain.toFixed(2) + ' %' : null,
+            states[plan.estado] || plan.estado, [plan.estado_envio || 'Sin envío', plan.detalle_envio].filter(Boolean).join(' · '),
+        ]);
+        const buttons = row.insertCell();
+        buttons.className = 'module-actions';
+        const operations = [['Evidencia', () => openEvidence(plan)]];
+        if (plan.estado === 'validado' && !resolved.has(plan.id) && oidc.hasRole('operador')) {
+            for (const [label, accion] of [['Autorizar', 'autorizar'], ['Rechazar', 'rechazar']]) {
+                operations.push([label, () => openDecision({id: plan.id, label: doc.plan_id, accion}),
+                    sending && decision?.id === plan.id]);
+            }
+        }
+        for (const [label, click, disabled = false] of operations) {
+            const button = document.createElement('button');
+            button.textContent = label;
+            button.disabled = disabled;
+            button.onclick = click;
+            buttons.append(button);
+        }
+        return row;
+    });
+    $('plansBody').replaceChildren(...(rows.length ? rows : [emptyRow(7, 'Todavía no hay propuestas evaluadas.')]));
+}
+
+export function loadPlans() {
+    loading ??= refreshPlans().finally(() => { loading = null; });
+    return loading;
+}
+
+async function refreshPlans() {
     const status = $('plansStatus');
     $('plansRefresh').disabled = true;
     try {
         const [plans, controller] = await Promise.all([
             operation('operacion/planes'), operation('estados'),
         ]);
-        const rows = plans.items.map(plan => {
-            const doc = plan.documento;
-            const gain = plan.validacion.mejora_porcentaje;
-            const row = rowCells([
-                doc.plan_id, modes[doc.modo] || doc.modo, `${doc.verdes.NS} / ${doc.verdes.EO}`,
-                Number.isFinite(gain) ? gain.toFixed(2) + ' %' : null,
-                states[plan.estado] || plan.estado, [plan.estado_envio || 'Sin envío', plan.detalle_envio].filter(Boolean).join(' · '),
-            ]);
-            const buttons = row.insertCell();
-            buttons.className = 'module-actions';
-            const operations = [['Evidencia', () => openEvidence(plan)]];
-            if (plan.estado === 'validado' && oidc.hasRole('operador')) {
-                operations.push(['Autorizar', () => openDecision({id: plan.id, label: doc.plan_id, accion: 'autorizar'})]);
-                operations.push(['Rechazar', () => openDecision({id: plan.id, label: doc.plan_id, accion: 'rechazar'})]);
-            }
-            for (const [label, click] of operations) {
-                const button = document.createElement('button');
-                button.textContent = label;
-                button.onclick = click;
-                buttons.append(button);
-            }
-            return row;
-        });
-        $('plansBody').replaceChildren(...(rows.length ? rows : [emptyRow(7, 'Todavía no hay propuestas evaluadas.')]));
+        plansShown = plans.items;
+        drawPlans();
         const reports = controller.items.map(item => {
             const time = Date.parse(item.timestamp);
             const fresh = Number.isFinite(time) && Date.now() - time <= 30000;
@@ -54,10 +70,16 @@ export async function loadPlans() {
         $('controllerBody').replaceChildren(...(reports.length ? reports : [emptyRow(5, 'El emulador aún no ha reportado su estado.')]));
         if (status.classList.contains('error')) setStatus(status);
     } catch (error) { setStatus(status, error.message, true); }
-    finally { loading = false; $('plansRefresh').disabled = false; }
+    finally { $('plansRefresh').disabled = false; }
 }
 
 function openDecision(draft, restored = false) {
+    if (sending || resolved.has(draft.id) || $('planDecision').open) return;
+    const snapshot = plansShown.find(plan => plan.id === draft.id);
+    if (snapshot && snapshot.estado !== 'validado') {
+        setStatus($('plansStatus'), 'Este plan ya no admite una decisión.');
+        return;
+    }
     decision = draft;
     const title = draft.accion === 'autorizar' ? 'Autorizar plan' : 'Rechazar plan';
     $('planDecisionTitle').textContent = title;
@@ -66,6 +88,14 @@ function openDecision(draft, restored = false) {
     $('planReason').value = draft.motivo || '';
     setStatus($('planDecisionStatus'), restored ? 'Revisa el motivo y confirma tu decisión.' : '');
     $('planDecision').showModal();
+}
+
+function setSending(value) {
+    sending = value;
+    $('planDecisionSubmit').disabled = value;
+    $('planDecisionCancel').disabled = value;
+    $('planReason').readOnly = value;
+    drawPlans();
 }
 
 export function restoreDecision(draft) {
@@ -90,32 +120,57 @@ async function openEvidence(plan) {
 
 export function initPlans() {
     $('plansRefresh').onclick = loadPlans;
-    $('planDecisionCancel').onclick = () => $('planDecision').close();
+    const dialog = $('planDecision');
+    $('planDecisionCancel').onclick = () => { if (!sending) dialog.close(); };
+    dialog.addEventListener('cancel', event => { if (sending) event.preventDefault(); });
+    window.addEventListener('pageshow', event => {
+        if (!event.persisted || !redirecting) return;
+        redirecting = false;
+        setSending(false);
+        setStatus($('planDecisionStatus'));
+    });
     $('planEvidenceClose').onclick = () => $('planEvidence').close();
     $('planDecisionForm').onsubmit = async event => {
         event.preventDefault();
+        if (sending || !dialog.open || !decision || resolved.has(decision.id)) return;
         const motivo = $('planReason').value.trim();
         const status = $('planDecisionStatus');
         if (motivo.length < 5) { setStatus(status, 'Escribe un motivo de al menos cinco caracteres.', true); return; }
-        const button = $('planDecisionSubmit');
-        button.disabled = true;
+        const {id, accion} = decision;
+        const key = JSON.stringify([id, accion, motivo]);
+        setSending(true);
+        setStatus(status, 'Registrando decisión…');
         try {
             if (!oidc.mfaReady()) {
                 rememberDraft('planes', {...decision, motivo});
+                setStatus(status, 'Abriendo verificación de dos pasos…');
                 await oidc.login({mfa: true});
+                redirecting = true;
                 return;
             }
-            const {id, accion} = decision;
-            const key = JSON.stringify([id, accion, motivo]);
             if (!requests.has(key)) requests.set(key, crypto.randomUUID());
-            await operation(`operacion/planes/${id}/decisiones`, {
+            const saved = await operation(`operacion/planes/${id}/decisiones`, {
                 method: 'POST', body: {solicitud_id: requests.get(key), accion, motivo},
             });
+            resolved.set(id, saved);
             requests.delete(key);
-            $('planDecision').close();
+            dialog.close();
             setStatus($('plansStatus'), 'Decisión registrada.');
+        } catch (error) {
+            if (error.status === 409 || error.status === 404) {
+                resolved.set(id, null);
+                requests.delete(key);
+                dialog.close();
+                setStatus($('plansStatus'), 'Este plan ya no admite una decisión.');
+            } else {
+                setStatus(status, error.message, true);
+            }
+        } finally {
+            if (!redirecting) setSending(false);
+        }
+        if (resolved.has(id)) {
+            await loading;
             await loadPlans();
-        } catch (error) { setStatus(status, error.message, true); }
-        finally { button.disabled = false; }
+        }
     };
 }

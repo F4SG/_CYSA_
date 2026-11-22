@@ -24,8 +24,10 @@ export async function projectRequest(service, path, {method = 'GET', body} = {})
     }
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-        throw new Error(data?.title || (typeof data?.detail === 'string' ? data.detail : null)
+        const error = new Error(data?.title || (typeof data?.detail === 'string' ? data.detail : null)
             || (response.status === 403 ? 'Tu sesión no tiene permiso para esta acción.' : `El servicio respondió HTTP ${response.status}.`));
+        error.status = response.status;
+        throw error;
     }
     return data;
 }

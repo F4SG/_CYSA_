@@ -77,6 +77,21 @@ Para usar certificados de una instalación distinta, añadir `-Instalacion
 'C:\ruta\de\la\instalacion'` a ambos scripts. API y controlador deben usar la misma clave.
 No copiarla a Git ni incluirla en entregas.
 
+### Cargar cinco propuestas de práctica
+
+Inicia el sistema desde el lanzador. Desde la raíz del repositorio, ejecuta:
+
+```powershell
+& "$env:LOCALAPPDATA\CYSA\workspace\.venv\Scripts\python.exe" .\tools\franco\preparar_planes_demo.py
+```
+
+Los [cinco casos sintéticos](../data/franco/ejemplos/planes_autorizacion_demo.csv)
+indican cuántos autos recibe cada acceso por intervalo de 30 segundos. El
+script usa la configuración vigente, comprueba cada caso en SUMO, publica los
+conteos con `prueba=true` y deja las propuestas validadas, pendientes de decisión.
+Se usa `--solo-validar` para comprobar los casos sin publicar conteos ni guardar
+planes. Con `--instalacion` se puede elegir otra carpeta local del lanzador.
+
 ## Revisar desde el panel
 
 1. En el panel de Proyecto de Sistemas, pulsar **Gestionar planes semafóricos**.

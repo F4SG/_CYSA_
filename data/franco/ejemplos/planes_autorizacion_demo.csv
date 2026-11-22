@@ -1,0 +1,6 @@
+caso,N,S,E,W
+equilibrado,3,3,3,3
+demanda_mayor_ns,4,4,3,3
+demanda_mayor_eo,3,3,4,4
+demanda_menor_ns,2,2,3,3
+demanda_menor_eo,3,3,2,2
