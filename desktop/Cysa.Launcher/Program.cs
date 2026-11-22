@@ -297,12 +297,19 @@ internal sealed partial class Instance
     {
         RequireConfigured();
         await Compose("ps");
-        await Run(Venv, ["desktop/runtime.py", "verify", "--panel", PanelUrl, "--evaluation", $"http://127.0.0.1:{Ports.Evaluation}", "--decision", $"http://127.0.0.1:{Ports.Decision}"]);
+        foreach(var url in new[]{PanelUrl+"/health",IdentityUrl+"/realms/cysa",$"http://localhost:{Ports.Evaluation}/health",$"http://localhost:{Ports.Decision}/health"})
+            await WaitUrl(url,10);
         await WaitUrl(WebUrl+"/health", 10);
         await WaitOperationReady();
+        foreach(var url in new[]{PanelUrl+"/api/conteos",OperationUrl+"/api/estados"})
+        {
+            using var response=await http.GetAsync(url);
+            if(response.StatusCode!=HttpStatusCode.Unauthorized)throw new InvalidOperationException("Una consulta protegida no rechazó el acceso sin sesión.");
+        }
         if(!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited)
             throw new InvalidOperationException("El controlador emulado S2 no está iniciado. Pulsa Iniciar sistema.");
         Write("Verificados: módulos de gestión, SQL Server, banco S2, MQTT y controlador emulado.");
+        Write("Las consultas sin sesión se rechazan. El ingreso por rol con OTP se comprueba desde el navegador; no se intenta omitir MFA con una contraseña guardada.");
     }
 
     public async Task Tests()

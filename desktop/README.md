@@ -106,6 +106,6 @@ Para una comprobación completa de un paquete ya generado, sin usar la instalaci
 ./CYSA.exe --integration-test "$env:LOCALAPPDATA/CYSA-ensayo" "$PWD/resultado-ensayo.txt"
 ```
 
-Este modo ejecuta la misma configuración que el botón, verifica login OIDC de ambos roles, publica un conteo sintético por MQTT/TLS y confirma su lectura por API, prueba ambas APIs HTTP y las pruebas Python, detiene/reinicia y comprueba que no cambian los secretos. Al terminar detiene solo el proyecto del ensayo; conserva sus datos para diagnóstico. Requiere Docker e internet como la primera instalación normal.
+Este modo ejecuta la misma configuración que el botón, verifica disponibilidad de servicios y rechazo de consultas sin sesión, prueba las APIs HTTP y las pruebas Python, detiene/reinicia y comprueba que no cambian los secretos. El ingreso de ambos roles con OTP se valida desde el navegador; el diagnóstico no utiliza contraseñas guardadas para intentar omitir MFA. Al terminar detiene solo el proyecto del ensayo; conserva sus datos para diagnóstico. Requiere Docker, SQL Server, ODBC Driver 18 e internet como la primera instalación normal.
 
 Las verificaciones añaden exclusivamente registros marcados como prueba. No demuestran precisión con tráfico real ni sustituyen la calibración de la cámara. El ejecutable aún no tiene firma comercial; el instalador Python conserva su firma oficial.

@@ -14,6 +14,7 @@ internal static class SystemStartupTest
         {
             instance.Seed();
             await instance.StartAll();
+            await instance.Verify();
             var first=instance.RunningServices();
             foreach(var name in new[]{"Cysa.Web.Api","Operacion S2","Controlador S2"})
                 if(!first.ContainsKey(name))throw new Exception("Servicio no iniciado: "+name);
