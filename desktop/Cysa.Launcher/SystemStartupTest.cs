@@ -23,10 +23,17 @@ internal static class SystemStartupTest
             {
                 using var response=await client.GetAsync(url);
                 response.EnsureSuccessStatusCode();
+                if(!(await response.Content.ReadAsStringAsync()).Contains("Volver al panel general"))throw new Exception("Falta regreso al panel en "+url);
             }
             using var config=JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(instance.Repo,"panel/config.json")));
             if(config.RootElement.GetProperty("webApiBase").GetString()!=instance.WebUrl || config.RootElement.GetProperty("operacionBase").GetString()!=instance.OperationUrl)
                 throw new Exception("Los botones no apuntan a los servicios iniciados");
+            using var navigation=JsonDocument.Parse(await client.GetStringAsync(instance.WebUrl+"/navigation/config"));
+            if(navigation.RootElement.GetProperty("panelUrl").GetString()!=instance.PanelUrl+"/")throw new Exception("Regreso al panel general incorrecto");
+            using var operation=JsonDocument.Parse(await client.GetStringAsync(instance.OperationUrl+"/config.json"));
+            if(operation.RootElement.GetProperty("panelUrl").GetString()!=instance.PanelUrl+"/")throw new Exception("Regreso de S2 incorrecto");
+            using var swagger=await client.GetAsync(instance.WebUrl+"/swagger/index.html");
+            if(!(await swagger.Content.ReadAsStringAsync()).Contains("/module-navigation.js"))throw new Exception("Falta navegación en Swagger");
             await instance.StartAll();
             var second=instance.RunningServices();
             if(first.Count!=second.Count || first.Any(p=>!second.TryGetValue(p.Key,out var id) || id!=p.Value))

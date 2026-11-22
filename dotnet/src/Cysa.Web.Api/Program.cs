@@ -94,12 +94,18 @@ public partial class Program
             catch(SqlException){await Results.Problem(statusCode:503,title:"SQL Server no está disponible o la base no está preparada. Revise la conexión y las migraciones.").ExecuteAsync(context);}
             finally{if(gated)gate.Release();}
         });
+        app.Use(async(context,next)=>{context.Response.Headers.CacheControl="no-store";await next();});
         app.UseStaticFiles();
-        if(app.Environment.IsDevelopment())app.UseSwaggerUI(o=>o.InjectJavascript("/swagger-demo.js"));
+        if(app.Environment.IsDevelopment())app.UseSwaggerUI(o=>{o.InjectJavascript("/swagger-demo.js");o.InjectJavascript("/module-navigation.js");});
         app.UseCysaApi(manejarErrores:false);
         app.MapGet("/",()=>Results.Redirect("/demo")).ExcludeFromDescription();
         app.MapGet("/demo",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
         app.MapGet("/proyecto",()=>Results.File(Path.Combine(app.Environment.WebRootPath,"demo.html"),"text/html")).ExcludeFromDescription();
+        app.MapGet("/navigation/config",()=>
+        {
+            var panelUrl=app.Configuration["Security:PanelUrl"];
+            return string.IsNullOrEmpty(panelUrl)?Results.NotFound():Results.Json(new{panelUrl});
+        }).ExcludeFromDescription();
         app.MapGet("/proyecto/config",()=>
         {
             var issuer=app.Configuration["Security:ProjectAuthority"];
@@ -109,6 +115,11 @@ public partial class Program
         {
             var source=app.Configuration["Security:ProjectSource"];
             return string.IsNullOrEmpty(source)?Results.NotFound():Results.File(Path.Combine(source,"panel","oidc.js"),"application/javascript");
+        }).ExcludeFromDescription();
+        app.MapGet("/home-link.js",()=>
+        {
+            var source=app.Configuration["Security:ProjectSource"];
+            return string.IsNullOrEmpty(source)?Results.NotFound():Results.File(Path.Combine(source,"panel","home-link.js"),"application/javascript");
         }).ExcludeFromDescription();
         await app.RunAsync();
     }

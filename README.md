@@ -611,6 +611,11 @@ Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; es
 ## Casos de uso: ubicación y acceso
 
 Los botones conservan exactamente los nombres del diagrama de casos de uso.
+Los módulos separados incluyen **Volver al panel general** y se abren en la
+misma pestaña. Sus direcciones se leen de la configuración vigente de la PC al
+pulsar el botón; el panel no supone que S2 esté en el puerto 5184. Las vistas
+internas de infraestructura, comunicación y usuarios también tienen regreso al
+panel general. Al volver se recupera el acceso mediante Keycloak si la sesión sigue vigente.
 En el **panel IoT** (`http://localhost:8088/`), inicia sesión con Keycloak para
 ver el menú lateral. El **panel Web III** está en `/demo` de la API local:
 abre **Swagger (Web III)** desde el centro de pruebas y cambia `/swagger` por

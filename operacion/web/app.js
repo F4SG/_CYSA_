@@ -1,4 +1,5 @@
 import * as oidc from '/oidc.js';
+import {panelReturnUrl} from '/home-link.js';
 const $=id=>document.getElementById(id),requests=new Map();
 let refreshing=false;
 async function api(path,options={}){
@@ -46,7 +47,9 @@ $('generate').onsubmit=e=>{e.preventDefault();action(async()=>{
 $('login').onclick=()=>oidc.login();$('renew').onclick=()=>oidc.login({mfa:true});$('logout').onclick=()=>oidc.logout();
 function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 action(async()=>{
- const config=await(await fetch('/config.json')).json();if(!await oidc.init(config))return;
+ const config=await(await fetch('/config.json',{cache:'no-store'})).json();
+ $('panelHome').href=panelReturnUrl(config.panelUrl);$('panelHome').hidden=false;
+ if(!await oidc.init(config))return;
  $('identity').textContent=oidc.identity();$('login').hidden=true;$('renew').hidden=$('logout').hidden=false;$('workspace').hidden=false;
  $('simulate').disabled=!oidc.hasRole('administrador');$('desde').value=localDate(new Date(Date.now()-15*60000));$('hasta').value=localDate(new Date());
  $('eventTime').value=localDate(new Date(Date.now()+120000));

@@ -237,6 +237,7 @@ internal sealed partial class Instance
     public async Task StartAll()
     {
         RequireConfigured();
+        await PreparePanelNavigation();
         await EnsureDocker();
         await Compose("up", "-d");
         await WaitUrl($"http://127.0.0.1:{Ports.Identity}/realms/cysa", 180);
@@ -261,6 +262,19 @@ internal sealed partial class Instance
     {
         await StartAll();
         Open(PanelUrl);
+    }
+
+    async Task PreparePanelNavigation()
+    {
+        var path=Path.Combine(Repo,"panel/config.json");
+        var config=JsonSerializer.Deserialize<Dictionary<string,JsonElement>>(await File.ReadAllTextAsync(path))!;
+        config["webApiBase"]=JsonSerializer.SerializeToElement(WebUrl);
+        config["operacionBase"]=JsonSerializer.SerializeToElement(OperationUrl);
+        config["panelUrl"]=JsonSerializer.SerializeToElement(PanelUrl+"/");
+        await File.WriteAllTextAsync(path,JsonSerializer.Serialize(config));
+        // Actualizar la configuración pública de Nginx sin tocar secretos ni regenerar cuentas.
+        var nginx=Path.Combine(Repo,"infra/runtime/launcher/nginx.conf");
+        if(File.Exists(nginx))await File.WriteAllTextAsync(nginx,(await File.ReadAllTextAsync(Path.Combine(Repo,"identidad/nginx.conf"))).Replace("http://localhost:8080",IdentityUrl));
     }
 
     internal Dictionary<string,int> RunningServices()=>apis.Where(p=>!p.Value.HasExited).ToDictionary(p=>p.Key,p=>p.Value.Id);

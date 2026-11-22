@@ -54,6 +54,13 @@ La cámara y el video esperan la selección de fuente. La placa Arduino física
 se inicia explícitamente; el arranque automático nunca abre un puerto serial.
 **Detener sistema** y cerrar el lanzador detienen también S2 y el emulador.
 
+Los accesos a módulos consultan la configuración de la instalación al pulsarlos;
+no utilizan un puerto alternativo fijo si falta información. Antes de levantar
+los servicios se publican sus direcciones en `panel/config.json`. Los módulos
+se abren en la misma pestaña y disponen de **Volver al panel general**, también
+en Swagger. El regreso recupera la sesión mediante Keycloak. Las páginas y la
+configuración local se sirven sin caché para evitar enlaces de una versión anterior.
+
 El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Python por usuario solo si no encuentra Python 3.12; crea un entorno virtual propio. Genera secretos mediante el configurador existente, en un directorio temporal local, y promueve el resultado de forma reanudable. No vuelve a generar credenciales al reintentar ni reiniciar.
 
 El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.

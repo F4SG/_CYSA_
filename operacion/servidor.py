@@ -1,5 +1,5 @@
 """API del banco S2 en Windows: SQL Server integrado, Keycloak y SUMO locales."""
-import os,threading,logging
+import os,threading,logging,json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI,Depends
@@ -22,13 +22,19 @@ def create_app(store=None,directory=None,worker=True):
         stop.set()
         if thread:thread.join(timeout=8)
     app=FastAPI(title='CYSA S2 — SQL Server, SUMO y controlador',lifespan=lifespan)
+    @app.middleware('http')
+    async def no_cache(request,call_next):
+        response=await call_next(request);response.headers['Cache-Control']='no-store';return response
     app.state.identity=directory or KeycloakUsers()
     app.include_router(router(store,store))
     @app.get('/health')
     def health():return dict(status='ok',persistencia='SQL Server',banco_prueba=True,
         mqtt_conectado=bool(getattr(store,'mqtt_ready',None) and store.mqtt_ready.is_set()))
     @app.get('/config.json')
-    def config():return dict(issuer=os.environ['OIDC_ISSUER'],clientId='cysa-panel',redirectUri=os.environ.get('CYSA_OPERACION_URL','http://localhost:5184')+'/')
+    def config():
+        path=Path(os.environ.get('CYSA_INSTALACION_DIR',ROOT))/'panel/config.json'
+        panel=json.loads(path.read_text(encoding='utf-8-sig')).get('redirectUri') if path.exists() else None
+        return dict(issuer=os.environ['OIDC_ISSUER'],clientId='cysa-panel',redirectUri=os.environ.get('CYSA_OPERACION_URL','http://localhost:5184')+'/',panelUrl=os.environ.get('CYSA_PANEL_URL',panel))
     @app.get('/api/estados',dependencies=[Depends(read_access)])
     def estados():return dict(items=store.states())
     @app.get('/')
@@ -37,6 +43,8 @@ def create_app(store=None,directory=None,worker=True):
     def js():return FileResponse(ROOT/'operacion/web/app.js',media_type='application/javascript')
     @app.get('/oidc.js')
     def oidc():return FileResponse(ROOT/'panel/oidc.js',media_type='application/javascript')
+    @app.get('/home-link.js')
+    def home_link():return FileResponse(ROOT/'panel/home-link.js',media_type='application/javascript')
     return app
 
 if __name__=='__main__':

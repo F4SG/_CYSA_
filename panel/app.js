@@ -1,9 +1,12 @@
 import * as oidc from './oidc.js';
 import {initUsers,loadUsers} from './users.js';
+import {destination} from './navigation.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
-$('swaggerWebIII').addEventListener('click',()=>{const base=(config?.webApiBase||'http://localhost:15183').replace(/\/+$/,'');window.location.assign(base+'/swagger');});
-$('operacionS2').addEventListener('click',()=>window.open(config?.operacionBase||'http://localhost:5184','_blank','noopener'));
+async function openModule(name){try{location.assign(await destination(name));}catch(error){$('status').hidden=false;$('status').textContent=error.message;$('status').classList.add('error');}}
+$('swaggerWebIII').addEventListener('click',()=>openModule('Swagger (Web III)'));
+$('operacionS2').addEventListener('click',()=>openModule('Operación semafórica (S2)'));
+$('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
 const fmt=s=>s?new Date(s).toLocaleString():'Pendiente';
 function cell(tr,value){const td=document.createElement('td');td.textContent=String(value??'Pendiente');tr.append(td);return td;}
 function source(tr,prueba){const td=cell(tr,''),badge=document.createElement('span');badge.textContent=prueba?'Validación':'Operación';badge.className='source-badge'+(prueba?' simulated':'');td.append(badge);}
@@ -33,17 +36,13 @@ const login=()=>oidc.login().catch(e=>{$('status').classList.add('error');$('sta
 const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuario y roles','Gestiona tu equipo y sus permisos de acceso.']};
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
  const selected=button.dataset.tab;document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===button)));
+ $('panelHome').hidden=selected==='conteos';
  for(const id of Object.keys(views))$(id).hidden=id!==selected;
  const [eyebrow,title,description]=views[selected];$('pageEyebrow').textContent=eyebrow;$('pageTitle').textContent=title;$('pageDescription').textContent=description;
  const users=selected==='usuarios';document.querySelector('.filters').hidden=users;$('summary').hidden=users;$('status').hidden=users;
  if(users)loadUsers();
 }));
-try{config=await (await fetch('config.json')).json();const active=await oidc.init(config);if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
+try{config=await (await fetch('config.json',{cache:'no-store'})).json();const returning=new URL(location.href).searchParams.has('volver');const active=await oidc.init(config);if(!active&&returning)await oidc.login();if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
 
 // Configuraciones usa Keycloak real; planes abre S2 y reportes conserva su vista futura.
-document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>{
- const name=button.dataset.webCase;
- if(name==='Gestionar planes semafóricos'){window.open(config?.operacionBase||'http://localhost:5184','_blank','noopener');return;}
- const base=config?.webApiBase||'http://localhost:15183';
- window.open(base+(name==='Gestionar configuraciones del corredor'?'/proyecto':'/demo')+'#'+encodeURIComponent(name),'_blank','noopener');
-}));
+document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>openModule(button.dataset.webCase)));

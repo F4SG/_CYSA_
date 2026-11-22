@@ -69,6 +69,7 @@ internal sealed partial class Instance
         ["Storage__Directory"]=Path.Combine(Root,"webiii-runtime"),
         ["Security__ProjectAuthority"]=IdentityUrl+"/realms/cysa",
         ["Security__ProjectSource"]=Repo,
+        ["Security__PanelUrl"]=PanelUrl+"/",
         ["Evaluaciones__BaseUrl"]=WebUrl,
         ["ConnectionStrings__Cysa"]=SqlConnectionExterna ? Environment.GetEnvironmentVariable("CYSA_WEBIII_CONNECTION")! : new SqlServerOptions(SqlServerActual()).Cadena(),
         ["Logging__LogLevel__Default"]="Warning"
