@@ -1,6 +1,34 @@
 # CYSA
 
-[Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i)
+[Casos de uso: ubicación y acceso](#casos-de-uso-ubicación-y-acceso) · [Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i)
+
+## Casos de uso: ubicación y acceso
+
+Los botones conservan exactamente los nombres del diagrama de casos de uso.
+En el **panel IoT** (`http://localhost:8088/`), inicia sesión con Keycloak para
+ver el menú lateral. El **panel Web III** está en `/demo` de la API local:
+abre **Swagger (Web III)** desde el centro de pruebas y cambia `/swagger` por
+`/demo` en esa misma dirección; el puerto depende de la instalación. Si usas
+la alternativa por consola de esta guía, la dirección es
+`http://localhost:5183/demo`.
+
+| Caso de uso / nombre exacto del botón | Dónde se encuentra | Cómo se accede y qué permite |
+| --- | --- | --- |
+| Iniciar sesión | Barra superior de ambos paneles; también en la bienvenida del panel IoT. | En IoT, pulsa el botón e ingresa con tu cuenta de Keycloak. En Web III, selecciona el perfil de demostración y pulsa el botón; la MFA de esa sesión es simulada. |
+| Administrar usuario y roles | Menú lateral del panel IoT, visible para el administrador; menú **CASOS DE USO** de Web III. | En IoT, entra como administrador para gestionar cuentas y asignar los dos roles existentes. En Web III, selecciona el botón y el recurso **Usuarios** o **Roles**; las escrituras requieren el perfil administrador y el catálogo de roles es de consulta. |
+| Gestionar configuraciones del corredor | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre el módulo de Web III en otra pestaña. En Web III, selecciona **Configuraciones técnicas**; el administrador puede gestionar los registros de laboratorio. Esto no modifica por sí solo los parámetros del banco S2. |
+| Gestionar infraestructura | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | En IoT, consulta los activos registrados. En Web III, elige el recurso: corredores, intersecciones, accesos, carriles, fuentes de detección o controladores; el administrador dispone de las operaciones de gestión. |
+| Gestionar planes semafóricos | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III; sección del mismo nombre en el banco S2. | El botón lateral de IoT abre Web III. Allí se consultan y gestionan datos de laboratorio; el operador puede decidir sobre planes validados con MFA simulada. Para ejecutar el flujo con SUMO y controlador emulado, usa el botón superior **Operación semafórica (S2)** de IoT, o abre `http://localhost:5184` tras iniciar el banco: el administrador genera y el operador autoriza o rechaza con MFA real reciente. |
+| Monitorear operación semafórica | Menú lateral del panel IoT, menú **CASOS DE USO** de Web III y sección del mismo nombre en el banco S2. | En IoT, consulta conteos por intersección, acceso y carril; la vista adicional **Comunicación** muestra fase, plan y último estado. En Web III se consultan recursos de laboratorio. En S2 se muestran los estados reportados por el controlador emulado. |
+| Consultar reportes de desempeño | Menú lateral del panel IoT y menú **CASOS DE USO** de Web III. | El botón de IoT abre Web III. Selecciona **Reportes** para consultar metadatos sintéticos. La generación de reportes de desempeño sigue siendo una función futura. |
+| Cerrar sesión | Barra superior de ambos paneles, después de iniciar sesión; también en el banco S2. | Pulsa el botón en el panel utilizado. En IoT y S2 se utiliza la sesión de Keycloak; Web III cierra su sesión independiente de demostración. |
+
+Los accesos desde IoT a Web III usan la dirección `webApiBase` de la
+configuración local del panel; la API Web III debe estar iniciada y esa dirección
+debe coincidir con su puerto. El banco S2 requiere la preparación descrita en
+[la guía de integración](controlador/INTEGRACION.md). Los nombres coincidentes
+identifican el caso de uso, pero cada entorno conserva el alcance indicado en
+la tabla.
 
 ## Web III
 
@@ -123,14 +151,14 @@ El perfil se renueva durante la revisión. Los botones de operador y evaluador
 siguen disponibles para las operaciones específicas y las pruebas de permisos;
 la MFA de este laboratorio es simulada.
 
-**11. Probar los endpoints de Administrar usuarios y roles.** Las operaciones
+**11. Probar los endpoints de Administrar usuario y roles.** Las operaciones
 están agrupadas por función; los nombres de grupo no son las rutas de la API.
-Busca y despliega el grupo **Administrar usuarios y roles**. Puedes usar **Ctrl+F**
-y escribir `Administrar usuarios y roles` o `/api/roles` si no lo ves.
+Busca y despliega el grupo **Administrar usuario y roles**. Puedes usar **Ctrl+F**
+y escribir `Administrar usuario y roles` o `/api/roles` si no lo ves.
 
 **Ejemplo inicial: listar los roles (200).**
 
-1. Dentro de **Administrar usuarios y roles**, pulsa la fila azul **GET /api/roles**,
+1. Dentro de **Administrar usuario y roles**, pulsa la fila azul **GET /api/roles**,
    la que no lleva `{id}` al final.
 2. Pulsa **Try it out**.
 3. Deja **Pagina** en `1` y **Tamano** en `50`; deja vacíos los demás filtros.
@@ -156,7 +184,7 @@ Después del error 400, vuelve a poner **Pagina** en `1` para continuar.
 infraestructura**; no es necesario buscarlo para realizar estos primeros ejemplos.
 
 **12. Crear un registro, comprobar persistencia y cerrar.** Continúa en el grupo
-**Administrar usuarios y roles**:
+**Administrar usuario y roles**:
 
 1. Despliega **POST /api/usuarios**, pulsa **Try it out** y reemplaza el cuerpo
    del formulario por este JSON. En `rolId` usa el ID del rol `operador` que
@@ -181,7 +209,7 @@ infraestructura**; no es necesario buscarlo para realizar estos primeros ejemplo
    recibido y pulsa **Execute**. Debe devolver **200** y el mismo usuario.
 4. Cierra el centro de pruebas. Vuelve a ejecutar la línea del paso 7, abre
    **Swagger (Web III)** y espera **Perfil activo: administrador**.
-5. Regresa a **Administrar usuarios y roles → GET /api/usuarios/{id}**, introduce
+5. Regresa a **Administrar usuario y roles → GET /api/usuarios/{id}**, introduce
    el mismo `id` y pulsa **Execute**. Debe devolver **200** con los mismos datos:
    esa es la comprobación de persistencia después del reinicio.
 6. Si deseas limpiar solo ese registro temporal, usa **DELETE /api/usuarios/{id}**
