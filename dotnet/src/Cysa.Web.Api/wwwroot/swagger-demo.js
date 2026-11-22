@@ -1,4 +1,6 @@
 // Accesos de laboratorio únicamente: el endpoint está deshabilitado fuera de Development/local.
+// Cargar la navegación también desde el script que Swagger ya utiliza.
+import('/module-navigation.js').catch(()=>{});
 window.addEventListener('load',()=>{
  const timer=setInterval(()=>{
   if(!window.ui?.preauthorizeApiKey || !window.ui.getSystem?.().specSelectors?.securityDefinitions?.()?.has('Bearer'))return;
