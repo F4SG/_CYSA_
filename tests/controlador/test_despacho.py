@@ -108,3 +108,35 @@ def test_micros_ceden_durante_atencion_de_emergencia(tmp_path):
     anterior=c.secuenciador.pendiente;r.recibir(firmar(p,KEY))
     assert c.secuenciador.pendiente is anterior
     assert verificar(out[-1],KEY,1028)['estado']=='rechazado'
+
+
+def test_emergencia_restaura_el_plan_central_tras_el_todo_rojo(tmp_path):
+    c,r,clock,out=contexto(tmp_path)
+    base=c.plan_centro
+    for instante in (31,64):
+        clock[0]=instante;c.latido(instante);c.tick(instante)
+    p=payload();p['plan'].update(modo='emergencia',evento_utc=1065)
+    p['huella_plan']=huella(p['plan']);p['vence']=1085
+    r.recibir(firmar(p,KEY))
+    for instante in (65,66,66.5):
+        clock[0]=instante;c.tick(instante);r.tick()
+    assert c.plan_id==p['plan']['plan_id'] and c.plan_centro is base
+    for instante in (81,84,86):
+        clock[0]=instante;c.tick(instante);r.tick()
+    assert c.secuenciador.plan is base
+
+
+def test_solicitud_peatonal_se_despeja_antes_de_atender_emergencia(tmp_path):
+    c,r,clock,out=contexto(tmp_path)
+    clock[0]=31;c.tick(31)
+    c.secuenciador.solicitar_cruce()
+    clock[0]=66;c.latido(66);c.tick(66)
+    assert c.secuenciador.fase.peatonal=='cruce'
+    p=payload();p['plan'].update(modo='emergencia',evento_utc=1067)
+    p['huella_plan']=huella(p['plan']);p['vence']=1089
+    r.recibir(firmar(p,KEY))
+    for instante, etapa in ((67,'cruce'),(71,'despeje'),(77,'despeje')):
+        clock[0]=instante;c.tick(instante);r.tick()
+        assert c.secuenciador.fase.peatonal==etapa and c.luces==('R','R')
+    clock[0]=80;c.tick(80);r.tick()
+    assert c.plan_id==p['plan']['plan_id'] and 'G' in c.luces

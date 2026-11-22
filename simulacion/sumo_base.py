@@ -33,21 +33,26 @@ def load_counts(path):
         if any(a['fin_dt']>b['inicio_dt'] for a,b in zip(ordered,ordered[1:])):raise ValueError('Intervalos superpuestos')
     return rows
 
-def demo_network(out):
+def demo_network(out, *, peatonal=False):
     nodes=Element('nodes')
     for name,x,y,kind in [('C',0,0,'traffic_light'),('N',0,300,'priority'),('S',0,-300,'priority'),('E',300,0,'priority'),('W',-300,0,'priority')]:
         SubElement(nodes,'node',id=name,x=str(x),y=str(y),type=kind)
     edges=Element('edges');connections=Element('connections');mapping={}
     for idx,(acc,target) in enumerate([('N','S'),('S','N'),('E','W'),('W','E')]):
-        SubElement(edges,'edge',id=acc+'_in',**{'from':acc,'to':'C','numLanes':'1','speed':'13.89'})
-        SubElement(edges,'edge',id=acc+'_out',**{'from':'C','to':acc,'numLanes':'1','speed':'13.89'})
-        SubElement(connections,'connection',**{'from':acc+'_in','to':target+'_out','fromLane':'0','toLane':'0','tl':'C','linkIndex':str(idx)})
+        extra={'sidewalkWidth':'2'} if peatonal else {}
+        SubElement(edges,'edge',id=acc+'_in',**{'from':acc,'to':'C','numLanes':'1','speed':'13.89'},**extra)
+        SubElement(edges,'edge',id=acc+'_out',**{'from':'C','to':acc,'numLanes':'1','speed':'13.89'},**extra)
+        lane='1' if peatonal else '0'
+        SubElement(connections,'connection',**{'from':acc+'_in','to':target+'_out','fromLane':lane,'toLane':lane,'tl':'C','linkIndex':str(idx)})
         mapping[acc]=(acc+'_in',target+'_out')
+    if peatonal:
+        SubElement(connections,'crossing',node='C',edges='N_in N_out',width='3',priority='true')
     tls=Element('additional');logic=SubElement(tls,'tlLogic',id='C',type='static',programID='DEMO_FIJO',offset='0')
     for duration,state in [(30,'GGrr'),(3,'yyrr'),(2,'rrrr'),(30,'rrGG'),(3,'rryy'),(2,'rrrr')]:SubElement(logic,'phase',duration=str(duration),state=state)
     for name,root in [('demo.nod.xml',nodes),('demo.edg.xml',edges),('demo.con.xml',connections),('demo.tll.xml',tls)]:write_xml(out/name,root)
+    opciones=[] if peatonal else ['--tllogic-files',str(out/'demo.tll.xml')]
     subprocess.run([binary('netconvert'),'--node-files',str(out/'demo.nod.xml'),'--edge-files',str(out/'demo.edg.xml'),
-      '--connection-files',str(out/'demo.con.xml'),'--tllogic-files',str(out/'demo.tll.xml'),'--output-file',str(out/'red.net.xml')],check=True)
+      '--connection-files',str(out/'demo.con.xml'),*opciones,'--output-file',str(out/'red.net.xml')],check=True)
     # netconvert puede reordenar linkIndex. Derivar los verdes de las conexiones finales,
     # no de los índices solicitados en PlainXML (evita verdes en conflicto).
     from xml.etree.ElementTree import parse
@@ -76,7 +81,10 @@ def build_routes(rows,mapping,out):
     for clase,vclass,length in [('auto','passenger','5'),('micro','bus','10'),('moto','motorcycle','2')]:
         SubElement(routes,'vType',id=clase,vClass=vclass,length=length,accel='2.0',decel='4.5',sigma='0',speedFactor='1')
     for access,(source,target) in mapping.items():SubElement(routes,'route',id='ruta_'+access,edges=source+' '+target)
-    for i,r in enumerate(sorted(rows,key=lambda r:r['inicio_dt'])):
+    orden_accesos={acceso:i for i,acceso in enumerate(mapping)}
+    # Los UUID de MQTT no deben fijar el orden de vehículos que salen al mismo tiempo.
+    for i,r in enumerate(sorted(rows,key=lambda r:(r['inicio_dt'],orden_accesos.get(r['acceso'],len(mapping)),
+                                                    r['carril'],r['clase'],r['fin_dt']))):
         if r['acceso'] not in mapping:raise ValueError('Acceso sin correspondencia en la red: '+r['acceso'])
         if r['cantidad']:
             SubElement(routes,'flow',id=f'{r["acceso"]}__{i}',type=r['clase'],route='ruta_'+r['acceso'],

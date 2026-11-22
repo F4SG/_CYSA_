@@ -24,6 +24,9 @@ plan_centro:
     - {fase_id: F2_EO_VERDE, duracion_s: 30, luces: {NS: R, EO: G}}
     - {fase_id: F2_EO_AMBAR, duracion_s: 3, luces: {NS: R, EO: Y}}
     - {fase_id: F2_TODO_ROJO, duracion_s: 2, luces: {NS: R, EO: R}}
+    - {fase_id: PEATON_CRUCE, duracion_s: 5, luces: {NS: R, EO: R}, peatonal: cruce, a_demanda: true}
+    - {fase_id: PEATON_DESPEJE, duracion_s: 6.667, luces: {NS: R, EO: R}, peatonal: despeje}
+    - {fase_id: PEATON_TODO_ROJO, duracion_s: 2, luces: {NS: R, EO: R}}
 
 # Plan local seguro (RF-06): se usa al arrancar y si no llegan latidos del centro por más de 60 s.
 plan_local:
@@ -35,3 +38,6 @@ plan_local:
     - {fase_id: L2_EO_VERDE, duracion_s: 25, luces: {NS: R, EO: G}}
     - {fase_id: L2_EO_AMBAR, duracion_s: 3, luces: {NS: R, EO: Y}}
     - {fase_id: L2_TODO_ROJO, duracion_s: 3, luces: {NS: R, EO: R}}
+    - {fase_id: PEATON_CRUCE, duracion_s: 5, luces: {NS: R, EO: R}, peatonal: cruce, a_demanda: true}
+    - {fase_id: PEATON_DESPEJE, duracion_s: 6.667, luces: {NS: R, EO: R}, peatonal: despeje}
+    - {fase_id: PEATON_TODO_ROJO, duracion_s: 3, luces: {NS: R, EO: R}}

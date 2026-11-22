@@ -1,7 +1,7 @@
 """Persistencia transaccional del banco S2 en SQL Server; independiente de Web III."""
 import json,time
 from pathlib import Path
-from .planes import huella
+from .planes import LONGITUDES,huella,minimo_peatonal
 from .sqlserver import connection as sql_connection,crear_base
 
 def Jsonb(value):return json.dumps(value,ensure_ascii=True,allow_nan=False)
@@ -43,8 +43,13 @@ class Almacen:
             if p['estado']!='validado' or not p['validacion']['aprobada'] or p['validacion']['huella_plan']!=huella(p['documento']):
                 raise EstadoInvalido('Se requiere esta versión validada, vigente y sin decisión')
             if (time.time()-p['creado'].timestamp())>900:raise EstadoInvalido('La evaluación venció; repetir la simulación')
-            now=time.time();vence=p['documento'].get('evento_utc',now)+10 if p['documento']['modo']=='emergencia' else now+300
-            if accion=='autorizar' and vence<=now:raise EstadoInvalido('El evento de emergencia ya venció; no se envía una prioridad tardía')
+            now=time.time()
+            evento=p['documento'].get('evento_utc')
+            if accion=='autorizar' and evento is not None and evento<=now:
+                raise EstadoInvalido('La orden de emergencia debe autorizarse antes del evento')
+            # El receptor limita los 10 s según el despeje realmente activo. La orden
+            # debe seguir vigente hasta que termine ese despeje y se confirme el verde.
+            vence=evento+11+max(map(minimo_peatonal,LONGITUDES)) if evento is not None else now+300
             c.execute('INSERT INTO control_decisiones(solicitud_id,plan_id,usuario,accion,motivo,mfa) VALUES(%s,%s,%s,%s,%s,%s)',
                       (solicitud,id,usuario,accion,motivo,Jsonb(mfa)))
             nuevo='autorizado' if accion=='autorizar' else 'rechazado'
@@ -82,6 +87,15 @@ class Almacen:
                 (desde,hasta,interseccion,interseccion,carril,carril,prueba,prueba,offset,limit)).fetchall()
     def states(self):
         with self.connection() as c:return c.execute('SELECT * FROM control_estados ORDER BY interseccion').fetchall()
+    def plan_vigente(self):
+        with self.connection() as c:
+            row=c.execute("""SELECT p.documento FROM control_estados s
+                JOIN control_planes p ON JSON_VALUE(p.documento,'$.plan_id')=s.plan_activo
+                WHERE s.interseccion='DEMO_INT_01' AND s.estado_controlador='conectado'
+                    AND s.[timestamp] >= DATEADD(second,-30,SYSUTCDATETIME())
+                    AND JSON_VALUE(p.documento,'$.modo')<>'emergencia'
+                """).fetchone()
+        return row['documento'] if row else None
     def save(self,event):
         from cysa.contracts import Conteo,Estado
         d=event.model_dump()

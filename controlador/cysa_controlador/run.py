@@ -66,8 +66,10 @@ def describir(ctrl):
     return texto
 
 
-def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print,receptor=None):
+def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print,receptor=None, solicitudes_peatonales=()):
     inicio = reloj()
+    solicitudes = iter(sorted(solicitudes_peatonales))
+    solicitud = next(solicitudes, None)
     visto = None
     ultimo_envio = ultimo_estado = float('-inf')
     anterior = previo = None
@@ -75,6 +77,9 @@ def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, dura
         if stop_file and Path(stop_file).exists():
             break
         ahora = reloj()
+        while solicitud is not None and ahora - inicio >= solicitud:
+            ctrl.secuenciador.solicitar_cruce()
+            solicitud = next(solicitudes, None)
         latido = centro.ultimo_latido(ahora)
         if latido is not None and latido != visto:
             visto = latido
@@ -114,6 +119,8 @@ def main(argv=None):
     centro.add_argument('--centro-simulado', action='store_true', help='Centro simulado que late siempre (sin broker)')
     p.add_argument('--credenciales', type=Path, default=CREDENCIALES, help='Archivo .env del usuario MQTT emulador')
     p.add_argument('--duracion', type=float, help='Detener después de N segundos')
+    p.add_argument('--solicitar-cruce-en', type=float, action='append', default=[],
+                   help='Simular una solicitud peatonal N segundos después de arrancar')
     p.add_argument('--stop-file', type=Path, help='Detener cuando exista este archivo')
     p.add_argument('--clave-planes',type=Path,help='Clave del banco para recibir planes firmados por MQTT')
     p.add_argument('--recibos',type=Path,default=REPO/'resultados/controlador/recibos.json')
@@ -147,7 +154,8 @@ def main(argv=None):
             from .recepcion import ReceptorPlanes
             from operacion.mensajes import clave
             receptor=ReceptorPlanes(ctrl,clave(a.clave_planes),a.recibos,enlace.confirmar_plan)
-        ejecutar(ctrl, mmu, enlace, duracion_s=a.duracion, stop_file=a.stop_file,receptor=receptor)
+        ejecutar(ctrl, mmu, enlace, duracion_s=a.duracion, stop_file=a.stop_file,receptor=receptor,
+                 solicitudes_peatonales=a.solicitar_cruce_en)
     except KeyboardInterrupt:
         pass
     finally:

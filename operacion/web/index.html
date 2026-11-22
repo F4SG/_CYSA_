@@ -11,13 +11,8 @@ body{font:16px system-ui;margin:0;background:#f2f6f4;color:#142b24}main{max-widt
 <small>El Arduino conserva su firmware MMU. Los planes se aplican al terminar un todo rojo; este banco no controla semáforos de la vía pública.</small></header>
 <p id="status" role="status" aria-live="polite"></p>
 <div id="workspace" hidden>
-<section><h2>Gestionar planes semafóricos</h2><p>La cámara publica conteos agregados por MQTT. El servidor consulta esos datos en SQL Server y ejecuta SUMO con la misma demanda para el plan fijo y el candidato.</p>
-<form id="generate"><label>Desde<input type="datetime-local" id="desde" required></label><label>Hasta<input type="datetime-local" id="hasta" required></label>
-<label>Tipo de plan<select id="mode"><option value="webster">Webster</option><option value="micros">Prioridad para micros</option><option value="emergencia">Prioridad para emergencias</option></select></label>
-<label>Grupo de prioridad<select id="group"><option>NS</option><option>EO</option></select></label>
-<label>Evento de emergencia del banco<input id="eventTime" type="datetime-local" step="1"></label><button id="simulate">Calcular y validar en SUMO</button></form>
-<small>Genera el administrador; decide el operador con OTP reciente. Una prioridad se rechaza si perjudica a los demás o no cabe en el plazo sin interrumpir el despeje peatonal.</small>
-<label>Motivo de la decisión<textarea id="reason" minlength="5" maxlength="1000" placeholder="Explica por qué autorizas o rechazas este plan"></textarea></label>
+<section><h2>Gestionar planes semafóricos</h2><p>El servidor genera y evalúa propuestas en SUMO a partir de los conteos de prueba. El operador decide sobre los planes validados con OTP reciente.</p>
+<label id="reasonLabel" hidden>Motivo de la decisión<textarea id="reason" minlength="5" maxlength="1000" placeholder="Explica por qué autorizas o rechazas este plan"></textarea></label>
 <div class="scroll"><table><thead><tr><th>Plan</th><th>Tipo</th><th>Verdes NS / EO</th><th>Mejora SUMO</th><th>Estado</th><th>Envío / ejecución</th><th>Decisión</th><th>Evidencia</th></tr></thead><tbody id="plans"></tbody></table></div></section>
 <section><h2>Monitorear operación semafórica</h2><p>“Enviado” indica recepción por el broker. “Aplicado” requiere el recibo firmado del controlador; la posición física de los LEDs se comprueba visualmente.</p>
 <div class="scroll"><table><thead><tr><th>Intersección</th><th>Fase</th><th>Plan activo</th><th>Estado</th><th>Último reporte</th></tr></thead><tbody id="states"></tbody></table></div></section>

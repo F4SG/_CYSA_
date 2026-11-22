@@ -84,8 +84,10 @@ No copiarla a Git ni incluirla en entregas.
 2. Ingresar con Keycloak usando usuario y contraseña. Consultar no requiere OTP.
    La primera autorización o rechazo solicita configurar el autenticador con QR;
    las siguientes acciones críticas usan códigos OTP sin registrar de nuevo el dispositivo.
-3. Como **administrador**, seleccionar el intervalo de conteos (máximo una hora),
-   tipo Webster o prioridad y grupo NS/EO. Pulsar **Calcular y validar en SUMO**.
+3. El servicio propone planes Webster cuando una ventana cerrada de cinco minutos
+   tiene conteos del banco. El cálculo y SUMO se ejecutan en segundo plano.
+   El administrador puede modificar una configuración aprobada de `DEMO_INT_01`
+   desde `/proyecto` con MFA. La siguiente propuesta incluye su versión y límites.
 4. Revisar **Evidencia**: demanda, comparación por acceso, micros/resto, reducción
    y motivos de rechazo. Un plan no aprobado no puede enviarse.
 5. Como **operador**, ingresar un motivo y pulsar **Autorizar** o **Rechazar**.
@@ -100,16 +102,26 @@ No copiarla a Git ni incluirla en entregas.
 
 Webster debe reducir al menos 10 % la demora global. Todos los candidatos se
 simulan frente al mismo plan fijo, demanda y semilla, y se rechaza un perjuicio
-superior al 15 % por acceso. Micros utiliza una extensión de 1 a 10 s una vez por
+superior al 15 % por acceso. Micros utiliza una extensión de hasta 10 s una vez por
 ciclo; la búsqueda solo recomienda un candidato si micros mejora al menos 10 %
-y el resto no empeora más de 10 %. Todo verde conserva L/0,9 + 5 s de peatones.
+y el resto no empeora más de 10 %. La solicitud peatonal inicia un cruce con todos
+los vehículos en rojo. Los 5 s de cruce y el despeje de L/0,9 s se completan antes
+de habilitar tráfico vehicular. SUMO incluye una persona de prueba.
+
+Para escenarios controlados de micros y emergencias, usar el módulo de consola
+`python -m operacion.generar DESDE HASTA --modo micros --grupo NS`. Para emergencia
+usar `--modo emergencia --grupo EO --evento HORA`. Las tres fechas son ISO 8601 con
+zona horaria. Se usa el mismo entorno de Python y SQL Server que al iniciar S2.
+Para solicitar un cruce en la emulación local, pasar `--solicitar-cruce-en N` al
+módulo `cysa_controlador.run`. N son segundos desde el arranque del emulador.
 
 La emergencia del banco es un **evento predefinido** con fecha/hora (hasta cuatro
 minutos por delante), que permite autorizar el plan antes del evento. El plazo
-de diez segundos se cuenta desde ese evento, no desde un reintento MQTT. Al llegar
-el evento, el controlador solo cambia al terminar todo rojo. Si no puede dar el
-verde en ese plazo sin interrumpir el despeje, rechaza la orden y lo informa;
-no se omite ni se fuerza esa incompatibilidad. Micros cede ante una emergencia.
+de diez segundos se mide desde el evento. Si un cruce ya está activo, se mantiene
+la etapa peatonal pendiente antes de cambiar a prioridad. El verde vehicular
+respeta el mínimo, seguido por ámbar y todo rojo. Si el cambio no cabe en el
+plazo aplicable, se rechaza. Al completar la prioridad, el secuenciador retoma
+el plan anterior en la fase siguiente. Micros cede ante una emergencia.
 
 Estos eventos controlados no acreditan detección automática de ambulancias ni
 precisión YOLO de micros/emergencias: esas métricas requieren videos etiquetados
@@ -127,8 +139,9 @@ y se miden aparte. El banco solo opera DEMO_INT_01, no un cruce de vía pública
 .\iniciar_controlador.ps1 -Puerto COM3 -Mqtt -RecibirPlanes
 ```
 
-4. Repetir una autorización desde el panel. No se corta el verde que está en
-   curso: el cambio espera el siguiente todo rojo.
+4. Repetir una autorización desde el panel. El cambio espera un todo rojo.
+   El MMU Arduino valida las salidas vehiculares. La fase peatonal se observa
+   en el estado del emulador y en SUMO.
 5. Cerrar con Ctrl+C. Al cesar los mensajes, el MMU entra en rojo intermitente.
    La respuesta serial acredita las reglas del firmware; el montaje de los LEDs
    siempre se comprueba visualmente. No se flashea la placa durante estas pruebas.

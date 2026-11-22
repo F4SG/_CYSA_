@@ -1,28 +1,10 @@
-import os,time,threading
-from datetime import datetime
+import os,time
 from typing import Literal
-from uuid import UUID,uuid4
+from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException
-from pydantic import BaseModel,ConfigDict,Field,model_validator
-from app.auth import admin_access,read_access,require_roles
+from pydantic import BaseModel,ConfigDict,Field
+from app.auth import read_access,require_roles
 from .almacen import Almacen,EstadoInvalido
-from .planes import huella,proponer
-
-class SolicitudPlan(BaseModel):
-    model_config=ConfigDict(extra='forbid')
-    desde:datetime
-    hasta:datetime
-    modo:Literal['webster','micros','emergencia']='webster'
-    grupo:Literal['NS','EO']|None=None
-    evento_utc:datetime|None=None
-    @model_validator(mode='after')
-    def periodo(self):
-        if self.desde.tzinfo is None or self.hasta.tzinfo is None or not 0<(self.hasta-self.desde).total_seconds()<=3600:
-            raise ValueError('Usar un intervalo con zona horaria de hasta una hora')
-        if self.modo=='emergencia':
-            if self.evento_utc is None or self.evento_utc.tzinfo is None or not -10<=self.evento_utc.timestamp()-time.time()<=240:
-                raise ValueError('Define el evento de emergencia del banco con zona horaria, dentro de los próximos cuatro minutos')
-        return self
 class Decision(BaseModel):
     model_config=ConfigDict(extra='forbid')
     solicitud_id:UUID
@@ -37,29 +19,13 @@ def mfa_operador(claims=Depends(require_roles('operador'))):
         raise HTTPException(403,'Se requiere MFA de Keycloak; una sesión solo con contraseña no autoriza')
     return claims
 
-def router(repo,store=None,simulator=None):
-    store=store or Almacen();lock=threading.Lock()
+def router(store=None):
+    store=store or Almacen()
     r=APIRouter(prefix='/api/operacion',tags=['Operación semafórica S2'])
     def habilitado():
         if os.environ.get('CYSA_CONTROL_ENABLED')!='true':raise HTTPException(503,'Habilita el banco S2 siguiendo controlador/INTEGRACION.md')
     @r.get('/planes',dependencies=[Depends(habilitado),Depends(read_access)])
     def listado():return {'items':store.listar()}
-    @r.post('/planes',status_code=201,dependencies=[Depends(habilitado)])
-    def generar(solicitud:SolicitudPlan,claims=Depends(admin_access)):
-        if not lock.acquire(blocking=False):raise HTTPException(409,'Hay una simulación en curso')
-        try:
-            filas=repo.counts(solicitud.desde,solicitud.hasta,'DEMO_INT_01',None,True,1000,0)
-            if len(filas)>=1000 or sum(x['cantidad'] for x in filas)>3000:raise ValueError('Demanda demasiado grande para el banco; acorta el intervalo')
-            p=proponer(filas,solicitud.modo,solicitud.grupo);id=uuid4();p['plan_id']='OP_'+id.hex
-            if solicitud.modo=='emergencia':p['evento_utc']=solicitud.evento_utc.timestamp()
-            if simulator:v=simulator(filas,p)
-            else:
-                from .simular import buscar
-                p,v=buscar(filas,p)
-            return store.guardar(id,p,v,dict(desde=solicitud.desde.isoformat(),hasta=solicitud.hasta.isoformat(),
-                mensajes=[str(x['mensaje_id']) for x in filas]),claims['sub'])
-        except (ValueError,TimeoutError) as e:raise HTTPException(400,str(e)) from None
-        finally:lock.release()
     @r.get('/planes/{id}',dependencies=[Depends(habilitado),Depends(read_access)])
     def obtener(id:UUID):
         p=store.obtener(id)

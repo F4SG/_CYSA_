@@ -12,7 +12,7 @@ def demanda(n=60,e=60,micros=False):
 
 def test_webster_genera_plan_ejecutable_y_no_acorta_peatones():
     p=proponer(demanda());cruce,plan=validar(p)
-    assert len(plan.fases)==6 and all(t>=minimo_peatonal(g) for g,t in p['verdes'].items())
+    assert sum(f.duracion_s for f in plan.fases if f.peatonal)>=minimo_peatonal('NS')
     original=huella(p);p['verdes']['NS']+=1;assert huella(p)!=original
 
 @pytest.mark.parametrize('bad',[float('nan'),float('inf'),0,-1,True,1000])
@@ -42,3 +42,23 @@ def test_prioridad_micros_elige_extension_condicional_sin_perjudicar_resto():
     assert v['aprobada'] and 0<p['extension_micro_s']<=10
     assert v['candidato']['micro']<=v['referencia']['micro']*.9
     assert v['candidato']['resto']<=v['referencia']['resto']*1.1+.001
+
+def test_configuracion_aprobada_viaja_en_el_documento_ejecutable():
+    from operacion.planes import TIEMPOS
+    config = dict(id=7, version=2, tiempos={**TIEMPOS,'verde_min_s':18,'ambar_s':4})
+    p = proponer(demanda(), configuracion=config)
+    _, plan = validar(p)
+    assert p['configuracion_id'] == 7 and p['configuracion_version'] == 2
+    assert plan.verde_min_s == 18
+    assert all(f.duracion_s == 4 for f in plan.fases if 'Y' in f.luces)
+
+@pytest.mark.skipif(importlib.util.find_spec('sumolib') is None,reason='SUMO no instalado')
+def test_sumo_emergencia_incluye_retorno_y_despeje():
+    from operacion.simular import evaluar
+    r = demanda()
+    v = evaluar(r, proponer(r,'emergencia','EO'))
+    assert v['cruce_peatonal_sumo']
+    sin = v['prioridad_emergencia']['sin_despeje']
+    con = v['prioridad_emergencia']['con_despeje']
+    assert sin['demora_s'] <= 10 and sin['retorno_s'] > sin['verde_s']
+    assert con['verde_s'] >= 81.667 and con['retorno_s'] > con['verde_s']

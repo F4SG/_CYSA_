@@ -19,13 +19,6 @@ class ReceptorPlanes:
                     estado=estado,detalle=detalle,vence=self.utc()+60)
         self.recibos[d['solicitud_id']]=result;self._guardar()
         self.publicar(firmar(result,self.key))
-    def _espera(self):
-        sec=self.ctrl.secuenciador;espera=max(0,sec.fase.duracion_s-(self.reloj()-sec.inicio))
-        if sec.fase.todo_rojo:return espera
-        for step in range(1,len(sec.plan.fases)+1):
-            f=sec.plan.fases[(sec.indice+step)%len(sec.plan.fases)];espera+=f.duracion_s
-            if f.todo_rojo:return espera
-        raise ValueError('No existe transición segura')
     def recibir(self,raw):
         d=verificar(raw,self.key,self.utc())
         if d['tipo']!='plan':raise ValueError('Mensaje no es un plan')
@@ -38,11 +31,12 @@ class ReceptorPlanes:
             if self.programada and self.programada['solicitud_id']!=d['solicitud_id']:
                 self._respuesta(d,'rechazado','Ya hay una emergencia programada');return
             self.programada=d;return
+        reemplazada=None
         if self.pendiente:
             if self.pendiente['solicitud_id']==d['solicitud_id']:return
             if (d['plan']['modo']=='emergencia' and self.pendiente['plan']['modo']!='emergencia'
                     and self.ctrl.plan_id!=self.pendiente['plan']['plan_id']):
-                self._respuesta(self.pendiente,'rechazado','El plan pendiente cede a una emergencia autorizada');self.pendiente=None
+                reemplazada=self.pendiente
             else:
                 self._respuesta(d,'rechazado','Hay un cambio autorizado pendiente de aplicar');return
         if self.ctrl.intermitente:
@@ -51,13 +45,27 @@ class ReceptorPlanes:
             if self.esperando_centro and self.esperando_centro['solicitud_id']!=d['solicitud_id']:
                 self._respuesta(d,'rechazado','Hay una orden esperando la señal del centro');return
             self.esperando_centro=d;return
-        if self.emergencia_hasta>self.reloj() and d['plan']['modo']!='emergencia':
-            self._respuesta(d,'rechazado','Se está atendiendo una emergencia; micros y planes normales ceden');return
+        sec=self.ctrl.secuenciador
+        if self.emergencia_hasta>self.reloj() or sec.retorno is not None:
+            self._respuesta(d,'rechazado','Se está atendiendo una emergencia; la orden debe esperar su retorno');return
         cruce,plan=validar(d['plan'])
         if cruce.grupos!=self.ctrl.cruce.grupos:raise ValueError('Grupos incompatibles con la placa')
-        if self.utc()+self._espera()+.5>=d['vence']:
+        emergencia=d['plan']['modo']=='emergencia'
+        limite=d['vence']
+        if emergencia and evento is not None:
+            peatonal=0
+            if sec.fase.peatonal:
+                tiempo_evento=self.reloj()-(self.utc()-evento)
+                peatonal=max(0,sec.inicio+sec.fase.duracion_s-tiempo_evento)
+                if sec.fase.peatonal=='cruce':
+                    peatonal+=sec.plan.fases[(sec.indice+1)%len(sec.plan.fases)].duracion_s
+            limite=min(limite,evento+10+peatonal+.5)
+        corte=sec.corte_verde(self.reloj(),sec.plan.verde_min_s) if emergencia and evento is not None else None
+        if self.utc()+sec.hasta_cambio(self.reloj(),fin_verde=corte)+.5>=limite:
             self._respuesta(d,'rechazado','No cabe en el plazo sin interrumpir el despeje o la transición segura');return
-        self.ctrl.secuenciador.solicitar(plan)
+        if reemplazada:
+            self._respuesta(reemplazada,'rechazado','El plan pendiente cede a una emergencia autorizada')
+        sec.solicitar(plan,temporal=emergencia,fin_verde=corte)
         self.pendiente=d;self.activo_desde=None
     def tick(self):
         if self.esperando_centro:
@@ -81,8 +89,9 @@ class ReceptorPlanes:
         if self.ctrl.plan_id==d['plan']['plan_id']:
             if self.activo_desde is None:self.activo_desde=self.reloj()
             if self.reloj()-self.activo_desde>=.4:
-                self.ctrl.plan_centro=self.ctrl.secuenciador.plan
                 if d['plan']['modo']=='emergencia':
-                    self.emergencia_hasta=self.reloj()+sum(f.duracion_s for f in self.ctrl.secuenciador.plan.fases)
+                    self.emergencia_hasta=self.reloj()+self.ctrl.secuenciador.hasta_cambio(self.reloj())
+                else:
+                    self.ctrl.plan_centro=self.ctrl.secuenciador.plan
                 self._respuesta(d,'aplicado','Plan seleccionado tras todo rojo y sin falla MMU reportada')
                 self.pendiente=None

@@ -5,11 +5,12 @@ from uuid import UUID
 
 JSON_COLUMNS={'documento','validacion','origen','mfa','payload','anterior','nuevo'}
 DATABASES={'CYSA_Control_S2','CYSA_Control_S2_Pruebas'}
+CONFIG_DATABASE='CYSA_WebIII_Demo'
 SERVERS={'localhost','.',r'localhost\SQLEXPRESS',r'.\SQLEXPRESS',r'(localdb)\MSSQLLocalDB'}
 
 def cadena(database=None):
     server=os.environ.get('CYSA_SQL_SERVER','localhost');database=database or os.environ.get('CYSA_SQL_DATABASE','CYSA_Control_S2')
-    if server not in SERVERS or database not in DATABASES|{'master'}:raise ValueError('Servidor/base fuera del banco SQL Server local')
+    if server not in SERVERS or database not in DATABASES|{'master',CONFIG_DATABASE}:raise ValueError('Servidor/base fuera del banco SQL Server local')
     return f'Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=10'
 
 def crear_base():
@@ -52,3 +53,29 @@ class Conexion:
         return Result(self.db.cursor().execute(sql,*params))
 
 def connection():return Conexion()
+
+def configuracion_aprobada():
+    """Lee solo la versión aprobada cuya última escritura se hizo con MFA de Proyecto."""
+    import pyodbc
+    with pyodbc.connect(cadena(CONFIG_DATABASE)) as db:
+        row=db.execute("""
+            SELECT TOP 1 c.Id,c.Version,c.VerdeMinSegundos,c.VerdeMaxSegundos,
+                c.AmbarSegundos,c.TodoRojoSegundos,c.ExtensionPrioridadSegundos
+            FROM ConfigTecnica c
+            JOIN Interseccion i ON i.Id=c.InterseccionId
+            CROSS APPLY (
+                SELECT TOP 1 b.Motivo,b.MfaVerificado
+                FROM Bitacora b WHERE b.ObjetoTipo=N'ConfigTecnica'
+                    AND b.ObjetoId=CONVERT(nvarchar(32),c.Id)
+                ORDER BY b.Id DESC
+            ) a
+            WHERE i.Nombre=N'DEMO_INT_01' AND i.Prueba=1 AND c.Prueba=1
+                AND c.Estado=N'aprobada' AND c.AprobadaUtc<=SYSUTCDATETIME()
+                AND a.MfaVerificado=1
+                AND a.Motivo=N'Configuración registrada mediante la API de Proyecto'
+            ORDER BY c.Version DESC
+            """).fetchone()
+    if row is None:
+        return None
+    campos=('verde_min_s','verde_max_s','ambar_s','todo_rojo_s','extension_micro_s')
+    return dict(id=row[0],version=row[1],tiempos={k:float(v) for k,v in zip(campos,row[2:])})

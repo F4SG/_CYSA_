@@ -14,19 +14,26 @@ def create_app(store=None,directory=None,worker=True):
     store=store or Almacen()
     @asynccontextmanager
     async def lifespan(app):
-        store.ready();stop=threading.Event();thread=None
+        store.ready();stop=threading.Event();threads=[]
         if worker:
             from .trabajador import ejecutar
-            thread=threading.Thread(target=ejecutar,args=(store,stop),daemon=True,name='cysa-sql-mqtt');thread.start()
-        yield
-        stop.set()
-        if thread:thread.join(timeout=8)
+            from .generar import planificar
+            for funcion,nombre in ((ejecutar,'cysa-sql-mqtt'),(planificar,'cysa-planificador')):
+                thread=threading.Thread(target=funcion,args=(store,stop),daemon=True,name=nombre)
+                thread.start()
+                threads.append(thread)
+        try:
+            yield
+        finally:
+            stop.set()
+            for thread in threads:
+                thread.join(timeout=8)
     app=FastAPI(title='CYSA S2 — SQL Server, SUMO y controlador',lifespan=lifespan)
     @app.middleware('http')
     async def no_cache(request,call_next):
         response=await call_next(request);response.headers['Cache-Control']='no-store';return response
     app.state.identity=directory or KeycloakUsers()
-    app.include_router(router(store,store))
+    app.include_router(router(store))
     @app.get('/health')
     def health():return dict(status='ok',persistencia='SQL Server',banco_prueba=True,
         mqtt_conectado=bool(getattr(store,'mqtt_ready',None) and store.mqtt_ready.is_set()))

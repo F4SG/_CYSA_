@@ -6,6 +6,7 @@ let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loadin
 async function openModule(name){try{location.assign(await destination(name));}catch(error){$('status').hidden=false;$('status').textContent=error.message;$('status').classList.add('error');}}
 $('swaggerWebIII').addEventListener('click',()=>openModule('Swagger (Web III)'));
 $('operacionS2').addEventListener('click',()=>openModule('Operación semafórica (S2)'));
+document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>openModule(button.dataset.webCase)));
 $('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
 const fmt=s=>s?new Date(s).toLocaleString():'Pendiente';
 function cell(tr,value){const td=document.createElement('td');td.textContent=String(value??'Pendiente');tr.append(td);return td;}
@@ -43,6 +44,3 @@ document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener(
  if(users)loadUsers();
 }));
 try{config=await (await fetch('config.json',{cache:'no-store'})).json();const returning=new URL(location.href).searchParams.has('volver');const active=await oidc.init(config);if(!active&&returning)await oidc.login();if(active){$('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));$('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();initUsers(config);$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));$('desde').disabled=true;$('hasta').disabled=true;await refresh();setInterval(()=>{if(!document.hidden&&$('live').checked)refresh();},15000);}}catch(e){$('status').textContent=e.message;}
-
-// Configuraciones usa Keycloak real; planes abre S2 y reportes conserva su vista futura.
-document.querySelectorAll('[data-web-case]').forEach(button=>button.addEventListener('click',()=>openModule(button.dataset.webCase)));

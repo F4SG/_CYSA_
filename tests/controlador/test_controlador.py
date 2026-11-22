@@ -31,7 +31,7 @@ def test_config_demo_es_valida(demo):
     cruce, centro, local = demo
     assert cruce.grupos == ('NS', 'EO')
     assert centro.plan_id == 'DEMO_FIJO' and local.plan_id == 'LOCAL_SEGURO'
-    assert sum(f.duracion_s for f in centro.fases) == 70
+    assert sum(f.duracion_s for f in centro.fases if not f.fase_id.startswith('PEATON')) == 70
 
 
 @pytest.mark.parametrize('definicion, error', [

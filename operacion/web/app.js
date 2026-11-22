@@ -34,26 +34,19 @@ async function refresh(){
    }
    const e=cell(tr,'');const b=document.createElement('button');b.textContent='Evidencia';b.onclick=()=>action(async()=>{$('evidence').textContent=JSON.stringify({plan:p,auditoria:await api('/api/operacion/planes/'+p.id+'/auditoria')},null,2);});e.append(b);$('plans').append(tr);
   }
-  if(!plans.items.length)empty('plans',8,'Todavía no hay planes. Selecciona un intervalo con conteos de prueba y pulsa Calcular y validar en SUMO.');
+  if(!plans.items.length)empty('plans',8,'Todavía no hay planes. El servicio evalúa cada ventana de cinco minutos con conteos del banco.');
   $('states').replaceChildren();for(const s of states.items){const tr=document.createElement('tr');const age=Date.now()-Date.parse(s.timestamp);const state=Number.isFinite(age)&&age<=30000?s.estado_controlador:'Sin reporte reciente';[s.interseccion,s.fase_actual,s.plan_activo,state,s.timestamp].forEach(v=>cell(tr,v));$('states').append(tr);}
-  if(!states.items.length)empty('states',5,'No hay reportes del controlador. Inícialo con -Puerto COM3 -Mqtt -RecibirPlanes para ver el Arduino aquí.');
+  if(!states.items.length)empty('states',5,'No hay reportes del controlador emulado. Comprueba el arranque del banco S2.');
  }finally{refreshing=false;}
 }
-$('generate').onsubmit=e=>{e.preventDefault();action(async()=>{
- $('simulate').disabled=true;try{
-  const modo=$('mode').value;await api('/api/operacion/planes',{method:'POST',body:JSON.stringify({desde:new Date($('desde').value).toISOString(),hasta:new Date($('hasta').value).toISOString(),modo,grupo:modo==='webster'?null:$('group').value,evento_utc:modo==='emergencia'?new Date($('eventTime').value).toISOString():null})});await refresh();
- }finally{$('simulate').disabled=false;}
-});};
 $('login').onclick=()=>oidc.login();$('renew').onclick=()=>oidc.login({mfa:true});$('logout').onclick=()=>oidc.logout();
-function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 action(async()=>{
  const config=await(await fetch('/config.json',{cache:'no-store'})).json();
  $('panelHome').href=panelReturnUrl(config.panelUrl);$('panelHome').hidden=false;
  $('login').hidden=true;
  try{if(!await oidc.ensureSession(config))return;}catch(error){$('login').hidden=false;throw error;}
  $('identity').textContent=oidc.identity();$('login').hidden=true;$('renew').hidden=$('logout').hidden=false;$('workspace').hidden=false;
- $('simulate').disabled=!oidc.hasRole('administrador');$('desde').value=localDate(new Date(Date.now()-15*60000));$('hasta').value=localDate(new Date());
- $('eventTime').value=localDate(new Date(Date.now()+120000));
+ $('reasonLabel').hidden=!oidc.hasRole('operador');
  await refresh();setInterval(()=>{if(!document.hidden)refresh().catch(e=>{$('status').textContent=e.message;});},5000);
  const draft=JSON.parse(sessionStorage.getItem('cysa.decision')||'null');sessionStorage.removeItem('cysa.decision');
  if(draft&&draft.subject===oidc.subject()&&Date.now()-draft.created<600000){$('reason').value=draft.motivo;$('status').textContent=oidc.mfaReady()?'Segundo factor confirmado. Revisa el plan y pulsa nuevamente Autorizar o Rechazar para confirmar tu decisión.':'Motivo recuperado. La decisión sigue pendiente y requiere segundo factor.';}

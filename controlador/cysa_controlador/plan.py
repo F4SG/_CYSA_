@@ -1,5 +1,6 @@
 """Planes de fases y reglas de seguridad que el controlador nunca deja romper."""
 from dataclasses import dataclass
+from math import isfinite
 
 VERDE, AMBAR, ROJO = 'G', 'Y', 'R'
 LUCES = (VERDE, AMBAR, ROJO)
@@ -10,16 +11,19 @@ class Fase:
     fase_id: str
     duracion_s: float
     luces: tuple            # una letra por grupo, en el orden de Interseccion.grupos
+    peatonal: str | None = None
+    a_demanda: bool = False
 
     @property
     def todo_rojo(self):
-        return all(luz == ROJO for luz in self.luces)
+        return self.peatonal is None and all(luz == ROJO for luz in self.luces)
 
 
 @dataclass(frozen=True)
 class Plan:
     plan_id: str
     fases: tuple
+    verde_min_s: float = 10
 
 
 @dataclass(frozen=True)
@@ -51,7 +55,7 @@ def validar_plan(plan, cruce):
     for fase in plan.fases:
         if len(fase.luces) != n or any(luz not in LUCES for luz in fase.luces):
             raise ValueError(f'{plan.plan_id}/{fase.fase_id}: luces inválidas {fase.luces}')
-        if fase.duracion_s <= 0:
+        if not isfinite(fase.duracion_s) or fase.duracion_s <= 0:
             raise ValueError(f'{plan.plan_id}/{fase.fase_id}: duración debe ser positiva')
         par = cruce.en_conflicto(fase.luces)
         if par:
@@ -62,9 +66,18 @@ def validar_plan(plan, cruce):
             raise ValueError(f'{plan.plan_id}/{fase.fase_id}: todo rojo menor a {cruce.todo_rojo_min_s} s')
         if VERDE in fase.luces and fase.duracion_s < cruce.verde_min_s:
             raise ValueError(f'{plan.plan_id}/{fase.fase_id}: verde menor a {cruce.verde_min_s} s')
+        if fase.peatonal is not None and (fase.peatonal not in ('cruce', 'despeje') or any(luz != ROJO for luz in fase.luces)):
+            raise ValueError(f'{plan.plan_id}/{fase.fase_id}: fase peatonal incompatible con tráfico vehicular')
     # Transiciones, incluida la vuelta de la última fase a la primera.
     fases = list(plan.fases)
+    for i,fase in enumerate(fases):
+        if fase.a_demanda and (fase.peatonal!='cruce' or not fases[(i+2)%len(fases)].todo_rojo):
+            raise ValueError(f'{plan.plan_id}: el cruce a demanda requiere despeje y todo rojo final')
     for actual, siguiente in zip(fases, fases[1:] + fases[:1]):
+        if actual.peatonal == 'cruce' and siguiente.peatonal != 'despeje':
+            raise ValueError(f'{plan.plan_id}: el cruce requiere despeje peatonal')
+        if siguiente.peatonal == 'despeje' and (actual.peatonal != 'cruce' or siguiente.duracion_s <= 0):
+            raise ValueError(f'{plan.plan_id}: despeje sin fase peatonal previa')
         for g in range(n):
             antes, despues = actual.luces[g], siguiente.luces[g]
             if antes == VERDE and despues == ROJO:
@@ -103,6 +116,8 @@ def cargar_plan(plan_id, fases, cruce):
         luces = f['luces']
         if set(luces) != set(cruce.grupos):
             raise ValueError(f'{plan_id}/{f.get("fase_id")}: indicar la luz de cada grupo {cruce.grupos}')
-        convertidas.append(Fase(str(f['fase_id']), float(f['duracion_s']), tuple(str(luces[g]).upper() for g in cruce.grupos)))
-    return validar_plan(Plan(plan_id, tuple(convertidas)), cruce)
+        convertidas.append(Fase(str(f['fase_id']), float(f['duracion_s']),
+                                tuple(str(luces[g]).upper() for g in cruce.grupos),
+                                f.get('peatonal'), f.get('a_demanda',False)))
+    return validar_plan(Plan(plan_id, tuple(convertidas), cruce.verde_min_s), cruce)
 

@@ -79,7 +79,9 @@ public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio 
         var principal=accessor.HttpContext?.User;
         var subject=principal?.FindFirstValue("sub");
         var actor=await db.Set<Usuario>().FirstOrDefaultAsync(u=>u.IdentificadorIdp==subject,ct);
-        if(actor is null && subject is not null && principal is not null && principal.FindFirstValue("iss")==configuration["Security:ProjectAuthority"] && !string.IsNullOrEmpty(configuration["Security:ProjectAuthority"]))
+        var authority=configuration["Security:ProjectAuthority"];
+        var projectIdentity=!string.IsNullOrEmpty(authority) && principal?.FindFirstValue("iss")==authority;
+        if(actor is null && subject is not null && principal is not null && projectIdentity)
         {
             var role=principal.IsInRole("administrador")?"administrador":"operador";
             var roleId=await db.Set<Rol>().Where(r=>r.Nombre==role).Select(r=>r.Id).SingleAsync(ct);
@@ -91,7 +93,8 @@ public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio 
         if(actor is not null)
         {
             db.Add(new Bitacora{UsuarioId=actor.Id,Operacion=operation,FechaUtc=DateTimeOffset.UtcNow,
-                Motivo="Operación realizada mediante la API",ObjetoTipo=typeof(T).Name,ObjetoId=e.Id.ToString(),
+                Motivo=projectIdentity && e is ConfigTecnica ? "Configuración registrada mediante la API de Proyecto"
+                    : "Operación realizada mediante la API",ObjetoTipo=typeof(T).Name,ObjetoId=e.Id.ToString(),
                 ValorAnterior=before,ValorPosterior=operation=="eliminar" ? "Eliminado" : JsonSerializer.Serialize(e),
                 MfaVerificado=principal is not null && ApiSetup.MfaReciente(principal,DateTimeOffset.UtcNow),Prueba=e.Prueba});
             await db.SaveChangesAsync(ct);
