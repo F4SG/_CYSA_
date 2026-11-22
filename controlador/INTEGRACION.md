@@ -79,7 +79,10 @@ No copiarla a Git ni incluirla en entregas.
 
 ### Cargar cinco propuestas de práctica
 
-Inicia el sistema desde el lanzador. Desde la raíz del repositorio, ejecuta:
+El lanzador prepara cinco propuestas en cada instalación al iniciar el sistema.
+Cada vez que pulsas **Abrir panel**, vuelve a evaluarlas y reemplaza el lote
+anterior. Las decisiones registradas se conservan en el historial. También puedes
+renovar el lote desde la raíz del repositorio con:
 
 ```powershell
 & "$env:LOCALAPPDATA\CYSA\workspace\.venv\Scripts\python.exe" .\tools\franco\preparar_planes_demo.py
@@ -87,10 +90,14 @@ Inicia el sistema desde el lanzador. Desde la raíz del repositorio, ejecuta:
 
 Los [cinco casos sintéticos](../data/franco/ejemplos/planes_autorizacion_demo.csv)
 indican cuántos autos recibe cada acceso por intervalo de 30 segundos. El
-script usa la configuración vigente, comprueba cada caso en SUMO, publica los
-conteos con `prueba=true` y deja las propuestas validadas, pendientes de decisión.
-Se usa `--solo-validar` para comprobar los casos sin publicar conteos ni guardar
-planes. Con `--instalacion` se puede elegir otra carpeta local del lanzador.
+script usa la configuración vigente, comprueba cada caso en SUMO y deja cinco
+propuestas de prueba validadas, pendientes de decisión. Los conteos sintéticos
+se describen en la evidencia de cada plan.
+Al terminar, abre **Gestionar planes semafóricos** como operador y pulsa
+**Actualizar**. Cada propuesta vence 15 minutos después de su evaluación.
+Para practicar con propuestas nuevas, vuelve a ejecutar el comando.
+Se usa `--solo-validar` para comprobar los casos sin guardar planes. Con
+`--instalacion` se puede elegir otra carpeta local del lanzador.
 
 ## Revisar desde el panel
 

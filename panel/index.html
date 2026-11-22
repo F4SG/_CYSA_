@@ -41,12 +41,15 @@
 </section>
 <section id="planes" class="module-stack" hidden aria-label="Banco operativo S2">
   <article class="card module-card">
-    <div class="section-heading"><div><h2>Propuestas evaluadas</h2><p>Resultados de SUMO y decisiones del operador.</p></div>
+    <div class="section-heading"><div><h2>Propuestas evaluadas</h2><p>Las propuestas validadas se pueden decidir durante 15 minutos desde su evaluación.</p></div>
       <button id="plansRefresh" type="button">Actualizar</button></div>
     <p id="plansStatus" class="status" role="status"></p>
     <div class="table" tabindex="0" role="region" aria-label="Planes semafóricos"><table>
       <thead><tr><th>Plan</th><th>Modo</th><th>Verdes NS / EO (s)</th><th>Mejora SUMO</th><th>Estado</th><th>Envío al controlador</th><th>Acciones</th></tr></thead>
       <tbody id="plansBody"></tbody></table></div>
+    <div id="plansExamples" class="table-footer" hidden>
+      <span>Para preparar cinco ejemplos nuevos, pulsa Abrir panel en el lanzador.</span>
+    </div>
   </article>
   <article class="card module-card">
     <div class="section-heading"><div><h2>Controlador emulado</h2><p>Fase y plan reportados por el banco.</p></div></div>
@@ -55,7 +58,38 @@
       <tbody id="controllerBody"></tbody></table></div>
   </article>
 </section>
-<section id="reportes" class="card" hidden aria-labelledby="reportsTitle"><div class="section-heading"><div><h2 id="reportsTitle">Consultar reportes de desempeño</h2><p>Función futura (RF-14).</p></div></div><p>La generación de reportes por modo de transporte está prevista para una versión posterior. Por ahora puedes consultar los conteos y estados desde Monitorear operación semafórica.</p></section>
+<section id="reportes" class="card module-card" hidden aria-labelledby="reportsTitle">
+  <div class="section-heading">
+    <div><h2 id="reportsTitle">Conteos por modo de transporte</h2><p>Usa tu hora local. El reporte incluye los intervalos que empiezan desde la fecha inicial y antes de la fecha final.</p></div>
+    <button id="reportCsv" type="button" disabled>Descargar CSV</button>
+  </div>
+  <form id="reportForm">
+    <fieldset id="reportFilters" class="filters module-fields" aria-label="Filtros del reporte">
+      <label>Desde<input id="reportDesde" type="datetime-local" required></label>
+      <label>Hasta<input id="reportHasta" type="datetime-local" required></label>
+      <label>Intersección<select id="reportIntersection"><option value="">Todas</option></select></label>
+      <label>Contexto<select id="reportContext"><option value="todos">Todos</option><option value="operacion">Operación</option><option value="validacion">Validación</option></select></label>
+      <button type="submit" class="primary">Consultar</button>
+    </fieldset>
+  </form>
+  <p id="reportStatus" class="status" role="status"></p>
+  <div id="reportResults" hidden>
+    <h3>Totales por contexto</h3>
+    <div class="table report-summary" role="region" tabindex="0" aria-label="Totales por contexto">
+      <table>
+        <thead><tr><th>Contexto</th><th>Autos</th><th>Motos</th><th>Micros</th><th>Total</th></tr></thead>
+        <tbody id="reportSummary"></tbody>
+      </table>
+    </div>
+    <h3>Desglose por carril</h3>
+    <div class="table" role="region" tabindex="0" aria-label="Desglose de conteos por carril">
+      <table>
+        <thead><tr><th>Contexto</th><th>Intersección</th><th>Acceso</th><th>Carril</th><th>Autos</th><th>Motos</th><th>Micros</th><th>Total</th></tr></thead>
+        <tbody id="reportBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
 </div></main>
 <dialog id="newUserDialog" class="modal" aria-labelledby="newUserTitle"><div class="modal-heading"><div><p class="eyebrow">EQUIPO Y PERMISOS</p><h2 id="newUserTitle">Crear usuario</h2></div><button id="closeUserDialog" class="icon-button" aria-label="Cerrar formulario">×</button></div><p class="modal-intro">Completa los datos de la cuenta. La contraseña deberá cambiarse en el primer ingreso.</p>
 <form id="newUserForm" class="user-form"><label>Usuario<input name="username" autofocus required pattern="[a-zA-Z0-9][a-zA-Z0-9_.-]{2,63}" minlength="3" maxlength="64" autocomplete="off" placeholder="nombre.apellido"></label><label>Correo<input name="email" type="email" required maxlength="254" autocomplete="off" placeholder="nombre@organizacion.com"></label><label>Nombre<input name="first_name" required maxlength="80" autocomplete="off"></label><label>Apellido<input name="last_name" required maxlength="80" autocomplete="off"></label><label>Rol<select name="role"><option value="operador">Operador</option><option value="administrador">Administrador</option></select></label><label>Contraseña temporal<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password" placeholder="Mínimo 12 caracteres"></label><p id="roleHelp" class="form-help">El operador puede consultar la información del corredor.</p><p id="newUserError" class="status error" role="alert"></p><div class="form-actions"><button id="cancelUserDialog" type="button">Cancelar</button><button id="createUser" type="submit" class="primary">Crear usuario</button></div></form></dialog>

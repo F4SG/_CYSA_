@@ -235,12 +235,16 @@ internal sealed partial class Instance
         if (!Configured || !File.Exists(Path.Combine(Root, "configurado"))) throw new InvalidOperationException("Pulsa Configurar esta PC para completar la instalación.");
     }
 
-    public async Task StartAll()
+    bool ejemplosPreparados;
+    public Task StartAll() => StartAll(false);
+
+    async Task StartAll(bool renovarEjemplos)
     {
         RequireConfigured();
         await PreparePanelNavigation();
         await EnsureDocker();
         await Compose("up", "-d");
+        await EnsureReportsApi();
         await WaitUrl($"http://127.0.0.1:{Ports.Identity}/realms/cysa", 180);
         await Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(Repo, "dotnet", "scripts", "Preparar-Demo.ps1"), "-Directorio", Path.Combine(Repo, "dotnet", "runtime")]);
         foreach (var (name, port) in new[] { ("Cysa.Evaluaciones.Api", Ports.Evaluation), ("Cysa.Decisiones.Api", Ports.Decision) })
@@ -256,13 +260,31 @@ internal sealed partial class Instance
         foreach (var port in new[] { Ports.Panel, Ports.Evaluation, Ports.Decision }) await WaitUrl($"http://127.0.0.1:{port}/health", 90);
         await StartWebIII();
         await StartOperation();
+        if (renovarEjemplos || !ejemplosPreparados)
+            ejemplosPreparados = await PrepararEjemplos();
         Write("Sistema listo: monitoreo, módulos de gestión, banco S2 y controlador emulado disponibles. No se actúa sobre semáforos reales.");
     }
 
     public async Task OpenPanel()
     {
-        await StartAll();
+        await StartAll(true);
         Open(PanelUrl);
+    }
+
+    async Task EnsureReportsApi()
+    {
+        var health = PanelUrl + "/health";
+        await WaitUrl(health, 90);
+        const string probe = "/api/reportes/conteos?desde=2026-01-01T00:00:00Z&hasta=2026-01-02T00:00:00Z";
+        using var response = await http.GetAsync(PanelUrl + probe);
+        if (response.StatusCode != HttpStatusCode.NotFound) return;
+        Write("Actualizando la API de monitoreo para habilitar reportes…");
+        await Compose("up", "-d", "--build", "--no-deps", "api");
+        await Compose("exec", "-T", "panel", "nginx", "-s", "reload");
+        await WaitUrl(health, 90);
+        using var updated = await http.GetAsync(PanelUrl + probe);
+        if (updated.StatusCode != HttpStatusCode.Unauthorized)
+            throw new InvalidOperationException("La API actualizada todavía no ofrece el reporte protegido.");
     }
 
     async Task PreparePanelNavigation()
@@ -313,6 +335,7 @@ internal sealed partial class Instance
             catch (OperationCanceledException) { sumoDriver.Kill(true); await sumoDriver.WaitForExitAsync(); }
         }
         sumoDriver?.Dispose(); sumoDriver = null;
+        ejemplosPreparados = false;
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
         foreach (var process in apis.Values) { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } process.Dispose(); }
         apis.Clear();

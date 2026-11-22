@@ -4,6 +4,7 @@ import {panelView} from './navigation.js';
 import {takeDraft} from './project-api.js';
 import {initConfigurations, loadConfigurations, restoreConfiguration} from './configuraciones.js';
 import {initPlans, loadPlans, restoreDecision} from './planes.js';
+import {initReports, loadReports} from './reportes.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
 $('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
@@ -37,7 +38,7 @@ const login=()=>{
  return oidc.login().catch(e=>{$('status').classList.add('error');$('status').textContent=e.message;});
 };
 $('login').addEventListener('click',login);$('welcomeLogin').addEventListener('click',login);$('logout').addEventListener('click',oidc.logout);
-const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuario y roles','Gestiona tu equipo y sus permisos de acceso.'],configuraciones:['CORREDOR','Gestionar configuraciones del corredor','Consulta las versiones y los cambios de configuración.'],planes:['OPERACIÓN','Gestionar planes semafóricos','Decisiones y seguimiento del banco emulado S2.'],reportes:['REPORTES','Consultar reportes de desempeño','Función futura del proyecto.']};
+const views={conteos:['MONITOREO','Monitorear operación semafórica','Conteos por intersección, acceso y carril.'],inventario:['INFRAESTRUCTURA','Gestionar infraestructura','Activos y conexiones de tu corredor.'],estados:['MONITOREO','Comunicación','Estado y última información de cada intersección.'],usuarios:['ADMINISTRACIÓN','Administrar usuario y roles','Gestiona tu equipo y sus permisos de acceso.'],configuraciones:['CORREDOR','Gestionar configuraciones del corredor','Consulta las versiones y los cambios de configuración.'],planes:['OPERACIÓN','Gestionar planes semafóricos','Decisiones y seguimiento del banco emulado S2.'],reportes:['REPORTES','Consultar reportes de desempeño','Totales del corredor desagregados por tipo de vehículo.']};
 let currentView;
 async function showView(id) {
  const selected=Object.hasOwn(views,id) && (id!=='usuarios'||oidc.hasRole('administrador'))?id:'conteos';
@@ -52,6 +53,7 @@ async function showView(id) {
  if(selected==='usuarios')await loadUsers();
  if(selected==='configuraciones')await loadConfigurations();
  if(selected==='planes')await loadPlans();
+ if(selected==='reportes')await loadReports();
 }
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
  location.hash=button.dataset.tab;
@@ -59,6 +61,7 @@ document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener(
 window.addEventListener('hashchange',()=>{if(currentView)showView(panelView(location));});
 initConfigurations();
 initPlans();
+initReports(api, localDate);
 try {
  const response=await fetch('/config.json',{cache:'no-store'});
  if(!response.ok)throw new Error('No se pudo cargar la configuración de CYSA.');

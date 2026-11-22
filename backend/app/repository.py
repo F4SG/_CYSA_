@@ -28,6 +28,25 @@ class Repository:
              AND (%s::text IS NULL OR carril=%s) AND (%s::boolean IS NULL OR prueba=%s)
              ORDER BY inicio,interseccion,acceso,carril,clase,mensaje_id LIMIT %s OFFSET %s''',
              (desde,hasta,interseccion,interseccion,carril,carril,prueba,prueba,limit,offset)).fetchall()
+    def count_report(self, start, end, intersection=None, prueba=None):
+        with self.connection() as connection:
+            rows = connection.execute("""
+                SELECT interseccion, acceso, carril, prueba,
+                       COALESCE(SUM(cantidad) FILTER (WHERE clase = 'auto'), 0) AS autos,
+                       COALESCE(SUM(cantidad) FILTER (WHERE clase = 'moto'), 0) AS motos,
+                       COALESCE(SUM(cantidad) FILTER (WHERE clase = 'micro'), 0) AS micros
+                  FROM conteos
+                 WHERE inicio >= %s AND inicio < %s
+                   AND (%s::text IS NULL OR interseccion = %s)
+                   AND (%s::boolean IS NULL OR prueba = %s)
+                 GROUP BY interseccion, acceso, carril, prueba
+                 ORDER BY prueba, interseccion, acceso, carril
+            """, (start, end, intersection, intersection, prueba, prueba)).fetchall()
+            options = connection.execute("""
+                SELECT DISTINCT interseccion FROM conteos
+                 WHERE inicio >= %s AND inicio < %s ORDER BY interseccion
+            """, (start, end)).fetchall()
+        return rows, [option['interseccion'] for option in options]
     def states(self):
         with self.connection() as c:return c.execute('SELECT * FROM estados ORDER BY interseccion').fetchall()
     def inventory(self):

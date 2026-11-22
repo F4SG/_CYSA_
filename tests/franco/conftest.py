@@ -17,6 +17,21 @@ class MemoryRepository:
         rows=[r for r in self.events.values() if start<=r['inicio']<end and (not intersection or r['interseccion']==intersection)
           and (not lane or r['carril']==lane) and (prueba is None or r['prueba']==prueba)]
         return sorted(rows,key=lambda r:(r['inicio'],str(r['mensaje_id'])))[offset:offset+limit]
+    def count_report(self, start, end, intersection, prueba):
+        groups = {}
+        intersections = set()
+        names = {'auto': 'autos', 'moto': 'motos', 'micro': 'micros'}
+        for event in self.events.values():
+            if not start <= event['inicio'] < end:
+                continue
+            intersections.add(event['interseccion'])
+            if intersection and event['interseccion'] != intersection or prueba is not None and event['prueba'] != prueba:
+                continue
+            key = tuple(event[field] for field in ('interseccion', 'acceso', 'carril', 'prueba'))
+            row = groups.setdefault(key, dict(zip(('interseccion', 'acceso', 'carril', 'prueba'), key),
+                                              autos=0, motos=0, micros=0))
+            row[names[event['clase']]] += event['cantidad']
+        return list(groups.values()), sorted(intersections)
     def states(self):return list(self.status.values())
     def inventory(self):return list(self.assets.values())
     def upsert_assets(self,assets):

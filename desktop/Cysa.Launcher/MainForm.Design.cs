@@ -58,7 +58,7 @@ internal sealed partial class MainForm
         layout.Controls.Add(buttons);
         Add("Configurar esta PC", "Instala y crea tus cuentas", instance.Configure, "INSTALACIÓN", afterHardware: true);
         Add("Iniciar sistema", "Inicia todos los módulos de Proyecto de Sistemas", instance.StartAll, "SISTEMA", primary: true);
-        Add("Abrir panel", "Inicia los servicios y abre el proyecto", instance.OpenPanel, "PANEL");
+        Add("Abrir panel", "Abre el proyecto y renueva cinco ejemplos", instance.OpenPanel, "PANEL");
         Add("Credenciales", "Cuentas de esta PC", Credentials, "ACCESO");
         Add("Contar con cámara", "Conteo desde una cámara", () => { var device = SelectedDevice(); using var dialog = new CameraDialog(); ApplyControlTheme(dialog); if (dialog.ShowDialog(this) == DialogResult.OK) instance.StartDetector(dialog.Source, device); return Task.CompletedTask; }, "CÁMARA");
         Add("Contar con video", "Conteo desde un archivo", () => { var device = SelectedDevice(); using var dialog = new OpenFileDialog { Filter = "Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this) == DialogResult.OK) instance.StartDetector(dialog.FileName, device); return Task.CompletedTask; }, "VIDEO");

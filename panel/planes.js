@@ -11,22 +11,34 @@ let decision;
 let sending = false;
 let redirecting = false;
 const modes = {webster: 'Webster', micros: 'Prioridad para micros', emergencia: 'Emergencia'};
-const states = {validado: 'Validado', no_aprobado: 'No aprobado', autorizado: 'Autorizado', rechazado: 'Rechazado'};
+const states = {validado: 'Validado', no_aprobado: 'No aprobado', autorizado: 'Autorizado',
+    rechazado: 'Rechazado', vencido: 'Vencido'};
+const evaluationLifetime = 15 * 60 * 1000;
+const expiredMessage = 'La evaluación venció; repetir la simulación';
+const unavailableMessage = 'Este plan ya no admite una decisión.';
+const expired = (plan, now = Date.now()) => plan.estado === 'validado'
+    && now - Date.parse(plan.creado) > evaluationLifetime;
 
 function drawPlans() {
+    const now = Date.now();
+    let available = false;
     const rows = plansShown.map(snapshot => {
         const plan = snapshot.estado === 'validado' ? resolved.get(snapshot.id) || snapshot : snapshot;
         const doc = plan.documento;
         const gain = plan.validacion.mejora_porcentaje;
+        const evaluationExpired = expired(plan, now);
+        const canDecide = plan.estado === 'validado' && !evaluationExpired && !resolved.has(plan.id);
+        available ||= canDecide;
         const row = rowCells([
             doc.plan_id, modes[doc.modo] || doc.modo, `${doc.verdes.NS} / ${doc.verdes.EO}`,
             Number.isFinite(gain) ? gain.toFixed(2) + ' %' : null,
-            states[plan.estado] || plan.estado, [plan.estado_envio || 'Sin envío', plan.detalle_envio].filter(Boolean).join(' · '),
+            evaluationExpired ? 'Vencido' : states[plan.estado] || plan.estado,
+            [plan.estado_envio || 'Sin envío', plan.detalle_envio].filter(Boolean).join(' · '),
         ]);
         const buttons = row.insertCell();
         buttons.className = 'module-actions';
         const operations = [['Evidencia', () => openEvidence(plan)]];
-        if (plan.estado === 'validado' && !resolved.has(plan.id) && oidc.hasRole('operador')) {
+        if (canDecide && oidc.hasRole('operador')) {
             for (const [label, accion] of [['Autorizar', 'autorizar'], ['Rechazar', 'rechazar']]) {
                 operations.push([label, () => openDecision({id: plan.id, label: doc.plan_id, accion}),
                     sending && decision?.id === plan.id]);
@@ -42,6 +54,7 @@ function drawPlans() {
         return row;
     });
     $('plansBody').replaceChildren(...(rows.length ? rows : [emptyRow(7, 'Todavía no hay propuestas evaluadas.')]));
+    $('plansExamples').hidden = available;
 }
 
 export function loadPlans() {
@@ -73,11 +86,19 @@ async function refreshPlans() {
     finally { $('plansRefresh').disabled = false; }
 }
 
+function decisionIssue(id) {
+    const snapshot = plansShown.find(plan => plan.id === id);
+    if (snapshot && expired(snapshot)) return expiredMessage;
+    if (resolved.has(id) || snapshot && snapshot.estado !== 'validado') return unavailableMessage;
+    return '';
+}
+
 function openDecision(draft, restored = false) {
-    if (sending || resolved.has(draft.id) || $('planDecision').open) return;
-    const snapshot = plansShown.find(plan => plan.id === draft.id);
-    if (snapshot && snapshot.estado !== 'validado') {
-        setStatus($('plansStatus'), 'Este plan ya no admite una decisión.');
+    if (sending || $('planDecision').open) return;
+    const issue = decisionIssue(draft.id);
+    if (issue) {
+        drawPlans();
+        setStatus($('plansStatus'), issue);
         return;
     }
     decision = draft;
@@ -132,7 +153,14 @@ export function initPlans() {
     $('planEvidenceClose').onclick = () => $('planEvidence').close();
     $('planDecisionForm').onsubmit = async event => {
         event.preventDefault();
-        if (sending || !dialog.open || !decision || resolved.has(decision.id)) return;
+        if (sending || !dialog.open || !decision) return;
+        const issue = decisionIssue(decision.id);
+        if (issue) {
+            dialog.close();
+            drawPlans();
+            setStatus($('plansStatus'), issue);
+            return;
+        }
         const motivo = $('planReason').value.trim();
         const status = $('planDecisionStatus');
         if (motivo.length < 5) { setStatus(status, 'Escribe un motivo de al menos cinco caracteres.', true); return; }
@@ -158,10 +186,11 @@ export function initPlans() {
             setStatus($('plansStatus'), 'Decisión registrada.');
         } catch (error) {
             if (error.status === 409 || error.status === 404) {
-                resolved.set(id, null);
+                const plan = plansShown.find(row => row.id === id);
+                resolved.set(id, plan && error.message === expiredMessage ? {...plan, estado: 'vencido'} : null);
                 requests.delete(key);
                 dialog.close();
-                setStatus($('plansStatus'), 'Este plan ya no admite una decisión.');
+                setStatus($('plansStatus'), error.message || unavailableMessage);
             } else {
                 setStatus(status, error.message, true);
             }

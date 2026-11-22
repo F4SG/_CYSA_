@@ -6,6 +6,7 @@ from .sqlserver import connection as sql_connection,crear_base
 
 def Jsonb(value):return json.dumps(value,ensure_ascii=True,allow_nan=False)
 DDL=(Path(__file__).parent/'sql/001_operacion.sql').read_text(encoding='utf-8')
+FUENTE_EJEMPLOS = 'ejemplos-autorizacion'
 
 class EstadoInvalido(ValueError):pass
 
@@ -15,17 +16,63 @@ class Almacen:
         crear_base()
         with self.connection() as c:c.execute(DDL)
     def guardar(self,id,documento,validacion,origen,usuario):
-        estado='validado' if validacion['aprobada'] else 'no_aprobado'
         with self.connection() as c:
-            c.execute('INSERT INTO control_planes(id,documento,validacion,origen,estado) VALUES(%s,%s,%s,%s,%s)',
-                      (id,Jsonb(documento),Jsonb(validacion),Jsonb(origen),estado))
-            self.audit(c,id,usuario,'simular','Comparación SUMO terminada',{},dict(estado=estado,huella=huella(documento)))
+            self.insertar_plan(c,id,documento,validacion,origen,usuario)
         return self.obtener(id)
+    def insertar_plan(self,c,id,documento,validacion,origen,usuario):
+        estado='validado' if validacion['aprobada'] else 'no_aprobado'
+        c.execute('INSERT INTO control_planes(id,documento,validacion,origen,estado) VALUES(%s,%s,%s,%s,%s)',
+                  (id,Jsonb(documento),Jsonb(validacion),Jsonb(origen),estado))
+        self.audit(c,id,usuario,'simular','Comparación SUMO terminada',{},dict(estado=estado,huella=huella(documento)))
+    def reemplazar_ejemplos(self, examples):
+        if len(examples) != 5 or len({example[0] for example in examples}) != 5:
+            raise ValueError('El lote debe contener cinco ejemplos distintos.')
+        if any(not validation['aprobada'] or not validation.get('sumo_real')
+               or validation['huella_plan'] != huella(plan) for _, plan, validation, _ in examples):
+            raise ValueError('Todos los ejemplos deben estar validados por SUMO.')
+        with self.connection() as c:
+            c.execute("""
+                IF @@TRANCOUNT = 0 BEGIN TRANSACTION;
+                DECLARE @resultado int;
+                EXEC @resultado = sp_getapplock @Resource='CYSA_ejemplos_autorizacion',
+                    @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000;
+                IF @resultado < 0 THROW 51000, 'No se pudo bloquear el lote de ejemplos', 1;
+            """)
+            previous = c.execute("""
+                SELECT p.id, d.plan_id AS decidido
+                FROM control_planes p WITH (UPDLOCK,HOLDLOCK)
+                LEFT JOIN control_decisiones d ON d.plan_id=p.id
+                WHERE COALESCE(JSON_VALUE(p.origen,'$.archivado'),'0')<>'1'
+                  AND (
+                    JSON_VALUE(p.origen,'$.fuente')=%s OR (
+                      JSON_VALUE(p.documento,'$.modo')='webster'
+                      AND EXISTS (SELECT 1 FROM OPENJSON(p.origen,'$.mensajes'))
+                      AND NOT EXISTS (
+                        SELECT 1 FROM OPENJSON(p.origen,'$.mensajes') m
+                        LEFT JOIN control_conteos x ON x.mensaje_id=TRY_CONVERT(uniqueidentifier,m.value)
+                          AND x.prueba=1 AND x.interseccion='DEMO_INT_01'
+                          AND (LEFT(x.carril,10)='DEMO_PLAN_' OR LEFT(x.carril,6)='QA_QR_')
+                        WHERE x.mensaje_id IS NULL
+                      )
+                    )
+                  )
+            """, (FUENTE_EJEMPLOS,)).fetchall()
+            for old in previous:
+                if old['decidido']:
+                    c.execute("UPDATE control_planes SET origen=JSON_MODIFY(origen,'$.archivado',1) WHERE id=%s",
+                              (old['id'],))
+                else:
+                    c.execute('DELETE FROM control_auditoria WHERE plan_id=%s', (old['id'],))
+                    c.execute('DELETE FROM control_planes WHERE id=%s', (old['id'],))
+            for ident, plan, validation, origin in examples:
+                self.insertar_plan(c,ident,plan,validation,{**origin,'fuente':FUENTE_EJEMPLOS},'lanzador-demo')
     def listar(self):
         with self.connection() as c:
             return c.execute('''SELECT p.*, d.usuario,d.accion,d.motivo,e.estado AS estado_envio,e.detalle AS detalle_envio
                 FROM control_planes p LEFT JOIN control_decisiones d ON d.plan_id=p.id
-                LEFT JOIN control_envios e ON e.solicitud_id=d.solicitud_id ORDER BY p.creado DESC LIMIT 100''').fetchall()
+                LEFT JOIN control_envios e ON e.solicitud_id=d.solicitud_id
+                WHERE COALESCE(JSON_VALUE(p.origen,'$.archivado'),'0')<>'1'
+                ORDER BY p.creado DESC LIMIT 100''').fetchall()
     def obtener(self,id):
         with self.connection() as c:
             return c.execute('''SELECT p.*,d.solicitud_id,d.usuario,d.accion,d.motivo,e.estado AS estado_envio,e.detalle AS detalle_envio

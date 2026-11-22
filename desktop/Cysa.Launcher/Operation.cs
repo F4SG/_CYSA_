@@ -18,6 +18,23 @@ internal sealed partial class Instance
         ["CYSA_PANEL_URL"]=PanelUrl+"/"
     };
 
+    async Task<bool> PrepararEjemplos()
+    {
+        Write("Validando cinco propuestas de práctica en SUMO…");
+        try
+        {
+            var code = await Run(Venv, ["tools/franco/preparar_planes_demo.py", "--instalacion", Root],
+                environment: OperationEnvironment(), check: false, timeoutMinutes: 3);
+            if (code == 0) return true;
+        }
+        catch (InvalidOperationException error)
+        {
+            Write(error.Message);
+        }
+        Write("No se pudo renovar el lote de práctica. Se conserva el lote anterior.");
+        return false;
+    }
+
     async Task StartOperation()
     {
         var environment=OperationEnvironment();

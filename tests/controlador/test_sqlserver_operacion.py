@@ -3,7 +3,7 @@ import os,time
 from uuid import uuid4
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from operacion.almacen import Almacen,EstadoInvalido
+from operacion.almacen import Almacen,EstadoInvalido,FUENTE_EJEMPLOS
 from operacion.planes import proponer,huella
 from tests.controlador.test_planificacion import demanda
 
@@ -44,3 +44,35 @@ def test_confirmacion_de_version_exacta_se_conserva_al_reabrir(store):
     store.confirmar(dict(solicitud_id=str(sid),huella_plan=huella(p),estado='aplicado',detalle='Prueba'))
     assert Almacen().obtener(id)['estado_envio']=='aplicado'
     assert len(store.auditoria(id))==3
+
+
+def test_reemplazo_de_ejemplos_mantiene_cinco_y_conserva_decisiones_y_otros_planes(store):
+    def lote():
+        result = []
+        for number in range(5):
+            ident = uuid4()
+            plan = proponer(demanda())
+            plan['plan_id'] = 'EJEMPLO_' + ident.hex
+            validation = dict(aprobada=True, huella_plan=huella(plan), sumo_real=True)
+            result.append((ident, plan, validation, {'caso': number}))
+        return result
+
+    def visibles():
+        return {str(plan['id']) for plan in store.listar() if plan['origen'].get('fuente') == FUENTE_EJEMPLOS}
+
+    unrelated, _ = candidato(store)
+    previous, replacement = lote(), lote()
+    store.reemplazar_ejemplos(previous)
+    assert visibles() == {str(row[0]) for row in previous}
+    retained = previous[0][0]
+    store.decidir(retained, uuid4(), 'rechazar', 'Se conserva en el historial', 'operador-test', {})
+    audit = store.auditoria(retained)
+    with pytest.raises(ValueError):
+        store.reemplazar_ejemplos(replacement[:4])
+    assert visibles() == {str(row[0]) for row in previous}
+    store.reemplazar_ejemplos(replacement)
+    assert visibles() == {str(row[0]) for row in replacement}
+    assert all(store.obtener(row[0]) is None and not store.auditoria(row[0]) for row in previous[1:])
+    assert store.obtener(retained)['origen']['archivado'] == 1
+    assert store.auditoria(retained) == audit
+    assert store.obtener(unrelated)['estado'] == 'validado'

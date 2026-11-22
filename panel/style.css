@@ -11,6 +11,9 @@
 .module-tabs button[aria-pressed=true]{background:var(--green-soft);color:var(--green-ink);border-color:var(--green-soft)}
 td.module-actions button{padding:6px 9px;margin:3px;font-size:11px}
 .module-fields{border:0;margin:0;padding:0;min-width:0}
+#reportFilters{margin-bottom:18px}
+#reportResults h3{font-size:14px;margin:16px 0 8px}
+#reportResults .report-summary table{min-width:390px}
 .module-checkbox{display:flex;align-items:center;gap:8px}
 .modal .status:not(:empty){margin-top:14px}
 .modal textarea{width:100%;resize:vertical;font:inherit;color:var(--text);background:var(--surface-soft);border:1px solid var(--line);border-radius:8px;padding:10px}
