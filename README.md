@@ -15,9 +15,32 @@ prueba de `mmu_cysa`. La parte superior explica la secuencia y qué demuestra ca
 paso. La comprobación de los LEDs es visual; las respuestas del firmware se
 comprueban automáticamente. No conecta la placa por registrar un activo.
 
+Al terminar en **TODO CORRECTO**, confirma visualmente los LEDs y continúa con
+**integración MFA**. El lanzador conecta la placa seleccionada y abre el panel:
+el operador autoriza una propuesta con su autenticador y confirma de nuevo al
+volver de MFA. La vista espera el recibo de aplicación y muestra el plan, la fase
+y las luces ordenadas al Arduino. **Sí, los LEDs coinciden** termina la prueba
+guiada y oculta los botones de confirmación; la operación sigue en marcha.
+
+En el bloque Arduino del lanzador, **Detener Arduino** deja el banco en rojo
+intermitente. **Reanudar Arduino** recupera el último plan con autorización MFA
+y aplicación confirmada en SQL Server, después de una transición segura. No
+reanuda prioridades temporales de emergencia ni propuestas pendientes. Al volver
+a abrir el lanzador, una placa previamente seleccionada queda detenida hasta que
+pulses Reanudar.
+
 Desde esta copia de fuentes, `abrir_cysa_actualizado.bat` compila y abre el
 lanzador actualizado. Requiere el SDK .NET 10. Para los requisitos de la placa,
 consulta [controlador/README.md](controlador/README.md).
+
+**Instalar en otra PC:** descarga y extrae todo el repositorio, instala los
+requisitos de [la guía Windows](desktop/README.md) y ejecuta
+`abrir_cysa_actualizado.bat`. Pulsa **Configurar esta PC** para crear las cuentas,
+claves y servicios de esa instalación. Para el banco S2 se necesitan SQL Server
+local, ODBC Driver 18, Docker Desktop con WSL 2 y acceso a internet durante la
+preparación. Selecciona el puerto de tu placa y carga el firmware `mmu_cysa`
+siguiendo la guía del controlador. No se requieren carpetas, bases ni
+credenciales de la PC que desarrolló el proyecto.
 
 [Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i) · [Casos de uso: ubicación y acceso](#casos-de-uso-ubicación-y-acceso)
 

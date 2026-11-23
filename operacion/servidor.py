@@ -59,6 +59,11 @@ def create_app(store=None,directory=None,worker=True):
         return dict(issuer=os.environ['OIDC_ISSUER'],clientId='cysa-panel',redirectUri=os.environ.get('CYSA_OPERACION_URL','http://localhost:5184')+'/',panelUrl=origin+'/' if origin else None)
     @app.get('/api/estados',dependencies=[Depends(read_access)])
     def estados():return dict(items=store.states())
+    @app.get('/api/banco/arduino',dependencies=[Depends(read_access)])
+    def arduino():
+        from .arduino import estado_arduino
+        path = Path(os.environ.get('CYSA_INSTALACION_DIR', ROOT))/'infra/runtime/control/arduino-estado.json'
+        return estado_arduino(path)
     @app.get('/')
     def index():
         if not origin:

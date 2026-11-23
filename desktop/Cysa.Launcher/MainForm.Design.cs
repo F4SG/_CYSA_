@@ -17,8 +17,8 @@ internal sealed partial class MainForm
         MinimumSize = new Size(1040, 850); Size = new Size(1240, 1020);
         StartPosition = FormStartPosition.CenterScreen; Font = new Font("Segoe UI", 10); Padding = new Padding(28, 22, 28, 18);
         var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Top, Height = 1080, ColumnCount = 1, RowCount = 9 };
-        foreach (var height in new[] { 62, 30, 160, 146, 385, 32 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var layout = new TableLayoutPanel { Dock = DockStyle.Top, Height = 1130, ColumnCount = 1, RowCount = 9 };
+        foreach (var height in new[] { 62, 30, 210, 146, 385, 32 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         viewport.Controls.Add(layout); Controls.Add(viewport);

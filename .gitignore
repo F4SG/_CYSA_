@@ -42,3 +42,5 @@ launcher-review.txt
 docs/entrega-webiii/
 .launcher-setup/
 infra/launcher.override.yaml
+arduino-control.json
+controlador-*.stop

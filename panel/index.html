@@ -40,6 +40,27 @@
   <div class="table-footer"><span id="configPage">Página 1</span><div class="pagination"><button id="configPrevious" type="button" disabled>Anterior</button><button id="configNext" type="button" disabled>Siguiente</button></div></div>
 </section>
 <section id="planes" class="module-stack" hidden aria-label="Banco operativo S2">
+  <article id="arduinoIntegration" class="card module-card" hidden aria-labelledby="arduinoTitle">
+    <div class="section-heading"><div><h2 id="arduinoTitle">Arduino → MFA → Plan aplicado</h2>
+      <p>Banco seleccionado: <strong id="arduinoPort"></strong> · NS = norte-sur · EO = este-oeste.</p></div>
+      <button id="arduinoProposals" type="button">Ir a propuestas</button></div>
+    <p id="arduinoProgress" class="status" role="status">Esperando el reporte de esta sesión…</p>
+    <div class="arduino-summary">
+      <p>Plan autorizado: <strong id="arduinoTarget">Todavía no seleccionado</strong><br>Plan activo: <strong id="arduinoActive">Sin confirmar</strong></p>
+      <p>Fase reportada: <strong id="arduinoPhase">Sin confirmar</strong><br>Último reporte: <span id="arduinoTimestamp">Sin reporte</span></p>
+    </div>
+    <div class="arduino-signals" aria-label="Luces ordenadas al Arduino">
+      <div><strong>NS</strong><div id="arduinoLightsNS" class="signal"><span data-light="R"></span><span data-light="Y"></span><span data-light="G"></span></div><strong id="arduinoColorNS">Sin confirmar</strong></div>
+      <div><strong>EO</strong><div id="arduinoLightsEO" class="signal"><span data-light="R"></span><span data-light="Y"></span><span data-light="G"></span></div><strong id="arduinoColorEO">Sin confirmar</strong></div>
+    </div>
+    <p>Las luces muestran las órdenes del controlador físico. Compáralas con los LEDs; no hay lectura óptica del montaje. Puede existir un pequeño retraso de actualización.</p>
+    <div id="arduinoConfirmation" class="module-actions"><button id="arduinoMatch" type="button" disabled>Sí, los LEDs coinciden</button><button id="arduinoMismatch" type="button" disabled>No coinciden</button></div>
+    <p id="arduinoVisual" class="status" role="status">La confirmación visual se habilita después de aplicar el plan.</p>
+    <div id="arduinoFinished" hidden>
+      <p>La prueba guiada terminó. El Arduino continúa ejecutando el plan autorizado; las luces y fases de arriba muestran su operación en vivo.</p>
+      <button id="arduinoReturn" type="button">Volver al panel</button>
+    </div>
+  </article>
   <article class="card module-card">
     <div class="section-heading"><div><h2>Propuestas evaluadas</h2><p>Las propuestas validadas se pueden decidir durante 15 minutos desde su evaluación.</p></div>
       <button id="plansRefresh" type="button">Actualizar</button></div>

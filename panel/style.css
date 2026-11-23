@@ -24,3 +24,11 @@ td.module-actions button{padding:6px 9px;margin:3px;font-size:11px}
 
 @media(max-width:500px){nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}nav button{width:100%}}
 #assetFields small{font-size:10px;color:var(--muted);font-weight:400}#inventoryStatus:not(:empty){margin-bottom:16px}#assetError{color:var(--amber,var(--text))}#assetForm .form-actions{flex-wrap:wrap}
+/* Seguimiento del banco físico: las luces solo se encienden con telemetría reciente. */
+.arduino-summary,.arduino-signals{display:flex;gap:2rem;flex-wrap:wrap}
+.arduino-signals>div{display:flex;align-items:center;gap:.75rem}
+.signal{display:flex;gap:.5rem;padding:.65rem;background:#182128;border-radius:1rem}
+.signal span{display:block;width:28px;height:28px;border-radius:50%;background:#414a50;border:2px solid #77828a}
+.signal [data-light="R"].lit{background:#ff4b50;box-shadow:0 0 9px #ff4b50}
+.signal [data-light="Y"].lit{background:#ffcf33;box-shadow:0 0 9px #ffcf33}
+.signal [data-light="G"].lit{background:#32df83;box-shadow:0 0 9px #32df83}

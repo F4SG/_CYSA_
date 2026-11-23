@@ -4,6 +4,99 @@ namespace Cysa.Launcher;
 
 internal sealed partial class Instance
 {
+    string? arduinoControllerPort;
+    string? arduinoSession;
+    string? controllerStopFile;
+    string? arduinoResumePlan;
+    bool arduinoPaused;
+    public bool ArduinoRunning => arduinoControllerPort is not null && apis.TryGetValue("Controlador S2", out var controller) && !controller.HasExited;
+    public bool ArduinoCanResume => arduinoControllerPort is not null && !ArduinoRunning;
+
+    void SaveArduinoControl() => File.WriteAllText(Path.Combine(Root, "arduino-control.json"),
+        JsonSerializer.Serialize(new { Port = arduinoControllerPort, Session = arduinoSession, Plan = arduinoResumePlan }));
+
+    void RestoreArduinoControl()
+    {
+        var path = Path.Combine(Root, "arduino-control.json");
+        if (!File.Exists(path)) return;
+        try {
+            using var saved = JsonDocument.Parse(File.ReadAllText(path));
+            var data = saved.RootElement;
+            var port = data.GetProperty("Port").GetString();
+            if (port is null || !System.Text.RegularExpressions.Regex.IsMatch(port, @"^COM\d+$")) return;
+            arduinoControllerPort = port;
+            arduinoSession = data.GetProperty("Session").GetString() ?? Guid.NewGuid().ToString("N");
+            arduinoResumePlan = data.GetProperty("Plan").GetString();
+            arduinoPaused = true; // Reiniciar el lanzador nunca arranca la placa sin pulsar Reanudar.
+        }
+        catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException) {
+            Write("No se pudo recuperar la selección Arduino; repite Probar Arduino.");
+        }
+    }
+
+    public async Task StopArduino()
+    {
+        if (!ArduinoRunning) throw new InvalidOperationException("No hay un controlador Arduino ejecutándose.");
+        var path = Path.Combine(Repo,"infra/runtime/control/arduino-estado.json");
+        var stopped = new Dictionary<string,JsonElement>();
+        try {
+            using var snapshot = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+            var data = snapshot.RootElement;
+            if (data.GetProperty("sesion").GetString() != arduinoSession) throw new InvalidOperationException("Sesión distinta");
+            var active = data.GetProperty("plan_activo").GetString();
+            if (active is not null && active is not ("INTERMITENTE" or "LOCAL_SEGURO")) arduinoResumePlan = active == "DEMO_FIJO" ? null : active;
+            stopped = JsonSerializer.Deserialize<Dictionary<string,JsonElement>>(data.GetRawText())!;
+        }
+        catch (Exception error) when (error is IOException or JsonException or KeyNotFoundException or InvalidOperationException) {
+            arduinoResumePlan ??= "NO_CONFIRMADO";
+            Write("No se pudo identificar el plan para reanudar. Se detiene igualmente el Arduino; revisa el registro antes de reanudar.");
+        }
+        arduinoPaused = true;
+        SaveArduinoControl();
+        await StopController();
+        await Task.Delay(1200);
+        stopped["sesion"] = JsonSerializer.SerializeToElement(arduinoSession);
+        stopped["puerto"] = JsonSerializer.SerializeToElement(arduinoControllerPort);
+        stopped["timestamp"] = JsonSerializer.SerializeToElement(DateTimeOffset.UtcNow);
+        stopped["detenido"] = JsonSerializer.SerializeToElement(true);
+        stopped["fase_actual"] = JsonSerializer.SerializeToElement("ARDUINO_DETENIDO");
+        stopped["estado_controlador"] = JsonSerializer.SerializeToElement("desconectado");
+        stopped["luces"] = JsonSerializer.SerializeToElement<object?>(null);
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(stopped));
+        Write("Arduino DETENIDO. Sin órdenes por USB, el MMU queda en rojo intermitente. Pulsa Reanudar Arduino para continuar.");
+    }
+
+    public async Task ResumeArduino()
+    {
+        if (!ArduinoCanResume) throw new InvalidOperationException("Primero prueba y selecciona el Arduino; no debe haber otro controlador ejecutándose.");
+        arduinoPaused = true;
+        await StartAll();
+        arduinoPaused = false;
+        try {
+            StartController(OperationEnvironment());
+            var path = Path.Combine(Repo,"infra/runtime/control/arduino-estado.json");
+            var started = DateTimeOffset.UtcNow;
+            for (var attempt = 0; attempt < 600; attempt++) {
+                if (apis["Controlador S2"].HasExited) throw new InvalidOperationException("El Arduino no pudo reanudarse. Revisa puerto, firmware y el plan autorizado en el registro.");
+                if (File.Exists(path)) {
+                    using var snapshot = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+                    var data = snapshot.RootElement;
+                    if (data.GetProperty("sesion").GetString() == arduinoSession && data.GetProperty("timestamp").GetDateTimeOffset() >= started) {
+                        if (data.GetProperty("fase_actual").GetString() == "INTERMITENTE") throw new InvalidOperationException("El MMU reportó una falla al reanudar.");
+                        if (data.GetProperty("estado_controlador").GetString() == "conectado" &&
+                            data.GetProperty("plan_activo").GetString() == (arduinoResumePlan ?? "DEMO_FIJO")) {
+                            SaveArduinoControl();
+                            Write($"Arduino REANUDADO en {arduinoControllerPort}. Plan {arduinoResumePlan ?? "DEMO_FIJO"} activo tras transición segura.");
+                            return;
+                        }
+                    }
+                }
+                await Task.Delay(100);
+            }
+            throw new InvalidOperationException("No se confirmó la recuperación del plan autorizado en el Arduino.");
+        }
+        catch { await StopController(); arduinoPaused = true; SaveArduinoControl(); throw; }
+    }
     public string OperationUrl=>$"http://localhost:{Ports.Operation}";
 
     Dictionary<string,string> OperationEnvironment()=>new()
@@ -55,12 +148,10 @@ internal sealed partial class Instance
             apis["Operacion S2"]=Start(Venv,["-m","operacion.servidor"],environment:environment);
         }
         await WaitOperationReady();
-        if(!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited)
+        if(!arduinoPaused && (!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited))
         {
             // El arranque general usa software. Nunca elige ni abre un puerto serial.
-            apis["Controlador S2"]=Start(Venv,["-m","cysa_controlador.run","--config","controlador/config/demo_int_01.yaml",
-                "--sin-placa","--mqtt","--credenciales",Path.Combine(Repo,"infra/runtime/clientes/emulador.env"),
-                "--clave-planes",Path.Combine(Repo,"infra/runtime/control/clave.key")],environment:environment);
+            StartController(environment);
             await Task.Delay(1000);
             if(apis["Controlador S2"].HasExited)throw new InvalidOperationException("El controlador S2 no pudo iniciar. Revisa el registro.");
         }
@@ -68,7 +159,76 @@ internal sealed partial class Instance
         var config=JsonSerializer.Deserialize<Dictionary<string,JsonElement>>(await File.ReadAllTextAsync(path))!;
         config["operacionBase"]=JsonSerializer.SerializeToElement(OperationUrl);
         await File.WriteAllTextAsync(path,JsonSerializer.Serialize(config));
-        Write("Banco S2 listo con SQL Server, MQTT y MMU simulado. La placa física y la fuente de cámara se seleccionan aparte.");
+        Write(arduinoPaused ? "Arduino detenido. Pulsa Reanudar Arduino para continuar; los servicios del panel siguen disponibles." : arduinoControllerPort is null
+            ? "Banco S2 listo con SQL Server, MQTT y MMU simulado. La placa física y la fuente de cámara se seleccionan aparte."
+            : $"Banco S2 listo con Arduino físico en {arduinoControllerPort}; recibe planes autorizados con MFA.");
+    }
+
+    void StartController(Dictionary<string,string> environment)
+    {
+        controllerStopFile = Path.Combine(Root, "controlador-" + Guid.NewGuid().ToString("N") + ".stop");
+        var args = new List<string> { "-m", "cysa_controlador.run", "--config", "controlador/config/demo_int_01.yaml",
+            "--mqtt", "--credenciales", Path.Combine(Repo,"infra/runtime/clientes/emulador.env"),
+            "--clave-planes", Path.Combine(Repo,"infra/runtime/control/clave.key"), "--stop-file", controllerStopFile };
+        if (arduinoControllerPort is null) args.Add("--sin-placa");
+        else args.AddRange(["--puerto", arduinoControllerPort, "--telemetria", Path.Combine(Repo,"infra/runtime/control/arduino-estado.json"),
+            "--sesion", arduinoSession!]);
+        if (arduinoControllerPort is not null && arduinoResumePlan is not null) args.AddRange(["--reanudar-plan", arduinoResumePlan]);
+        apis["Controlador S2"] = Start(Venv, args, environment: environment);
+    }
+
+    async Task StopController()
+    {
+        if (!apis.Remove("Controlador S2", out var controller)) return;
+        try {
+            if (!controller.HasExited) {
+                if (controllerStopFile is not null) await File.WriteAllTextAsync(controllerStopFile, "stop");
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                try { await controller.WaitForExitAsync(timeout.Token); }
+                catch (OperationCanceledException) { controller.Kill(true); await controller.WaitForExitAsync(); }
+            }
+        }
+        finally {
+            controller.Dispose();
+            if (controllerStopFile is not null && File.Exists(controllerStopFile)) File.Delete(controllerStopFile);
+            controllerStopFile = null;
+        }
+    }
+
+    public async Task StartArduinoIntegration(string port)
+    {
+        RequireConfigured();
+        // Preparar los servicios antes de sustituir el controlador que ya estaba funcionando.
+        await StartAll(true);
+        await StopController();
+        arduinoControllerPort = port;
+        arduinoSession = Guid.NewGuid().ToString("N");
+        arduinoPaused = false;
+        arduinoResumePlan = null;
+        SaveArduinoControl();
+        StartController(OperationEnvironment());
+        try {
+            var path = Path.Combine(Repo,"infra/runtime/control/arduino-estado.json");
+            for (var attempt = 0; attempt < 150; attempt++) {
+                if (apis["Controlador S2"].HasExited) throw new InvalidOperationException("El controlador Arduino terminó. Revisa puerto, firmware y registro.");
+                if (File.Exists(path)) {
+                    using var snapshot = JsonDocument.Parse(await File.ReadAllTextAsync(path));
+                    var data = snapshot.RootElement;
+                    if (data.GetProperty("sesion").GetString() == arduinoSession) {
+                        if (data.GetProperty("fase_actual").GetString() == "INTERMITENTE")
+                            throw new InvalidOperationException("El Arduino reportó una falla del MMU. Revisa el registro y repite la prueba.");
+                        if (data.GetProperty("estado_controlador").GetString() == "conectado") {
+                            Write($"Integración física lista en {port}. Autoriza con MFA; el panel esperará el recibo de aplicación y mostrará las luces ordenadas.");
+                            Open(PanelUrl + "/?modulo=planes&volver=1&arduino=" + Uri.EscapeDataString(port) + "&sesion=" + arduinoSession);
+                            return;
+                        }
+                    }
+                }
+                await Task.Delay(100);
+            }
+            throw new InvalidOperationException("El Arduino no confirmó conexión con el centro. Revisa MQTT y el registro.");
+        }
+        catch { await StopController(); arduinoControllerPort = arduinoSession = null; throw; }
     }
 
     async Task WaitOperationReady()

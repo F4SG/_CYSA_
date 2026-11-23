@@ -1,5 +1,6 @@
 import * as oidc from './oidc.js';
 import {projectRequest, rememberDraft, rowCells, emptyRow, setStatus} from './project-api.js';
+import {arduinoGuided, arduinoTargetId, initArduinoGuide, renderArduinoGuide, followArduinoPlan} from './arduino.js';
 
 const $ = id => document.getElementById(id);
 const operation = (path, options) => projectRequest('operacionBase', '/api/' + path, options);
@@ -7,6 +8,7 @@ const requests = new Map();
 const resolved = new Map();
 let loading;
 let plansShown = [];
+let renderedPlans = '';
 let decision;
 let sending = false;
 let redirecting = false;
@@ -66,11 +68,21 @@ async function refreshPlans() {
     const status = $('plansStatus');
     $('plansRefresh').disabled = true;
     try {
-        const [plans, controller] = await Promise.all([
+        const [plans, controller, arduino] = await Promise.all([
             operation('operacion/planes'), operation('estados'),
+            arduinoGuided() ? operation('banco/arduino') : Promise.resolve(null),
         ]);
         plansShown = plans.items;
-        drawPlans();
+        // Conservar los botones y el foco mientras solo cambian las fases del Arduino.
+        const signature = JSON.stringify(plans.items.map(plan => [plan, expired(plan)]));
+        if (signature !== renderedPlans) {
+            drawPlans();
+            renderedPlans = signature;
+        }
+        const targetId = arduinoTargetId();
+        const trackedPlans = targetId && !plans.items.some(plan => plan.id === targetId)
+            ? [...plans.items, await operation(`operacion/planes/${encodeURIComponent(targetId)}`)] : plans.items;
+        renderArduinoGuide(trackedPlans, arduino);
         const reports = controller.items.map(item => {
             const time = Date.parse(item.timestamp);
             const fresh = Number.isFinite(time) && Date.now() - time <= 30000;
@@ -82,7 +94,7 @@ async function refreshPlans() {
         });
         $('controllerBody').replaceChildren(...(reports.length ? reports : [emptyRow(5, 'El emulador aún no ha reportado su estado.')]));
         if (status.classList.contains('error')) setStatus(status);
-    } catch (error) { setStatus(status, error.message, true); }
+    } catch (error) { setStatus(status, error.message, true); renderArduinoGuide(plansShown, null); }
     finally { $('plansRefresh').disabled = false; }
 }
 
@@ -140,6 +152,7 @@ async function openEvidence(plan) {
 }
 
 export function initPlans() {
+    initArduinoGuide();
     $('plansRefresh').onclick = loadPlans;
     const dialog = $('planDecision');
     $('planDecisionCancel').onclick = () => { if (!sending) dialog.close(); };
@@ -181,6 +194,10 @@ export function initPlans() {
                 method: 'POST', body: {solicitud_id: requests.get(key), accion, motivo},
             });
             resolved.set(id, saved);
+            if (accion === 'autorizar') {
+                const plan = plansShown.find(row => row.id === id);
+                if (plan) followArduinoPlan(plan);
+            }
             requests.delete(key);
             dialog.close();
             setStatus($('plansStatus'), 'Decisión registrada.');

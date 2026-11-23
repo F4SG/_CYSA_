@@ -37,6 +37,12 @@ internal sealed partial class Instance
 
     public async Task TestArduino(string port)
     {
+        // La prueba necesita el puerto libre y no debe convivir con otro emulador publicando estados.
+        await StopController();
+        arduinoControllerPort = arduinoSession = null;
+        arduinoPaused = false;
+        arduinoResumePlan = null;
+        SaveArduinoControl();
         Write($"Probando Arduino en {port}. Cierra el Monitor Serie y otros controladores que usen ese puerto.");
         Write("La prueba cambia los LEDs y provoca fallas controladas del MMU en el banco de pruebas. No verifica visualmente el cableado.");
         var environment = new Dictionary<string, string> {
@@ -55,21 +61,48 @@ internal sealed partial class MainForm
     readonly Label arduinoStep = new() { Dock = DockStyle.Fill, AutoEllipsis = true,
         Text = "Preparado · Pulsa Probar Arduino para comenzar.", AccessibleName = "Paso actual de la prueba Arduino" };
     bool testingArduino;
+    readonly Button stopArduino = new ThemedButton { Text = "Detener Arduino", AutoSize = true, Enabled = false };
+    readonly Button resumeArduino = new ThemedButton { Text = "Reanudar Arduino", AutoSize = true, Enabled = false };
+
+    void UpdateArduinoButtons()
+    {
+        stopArduino.Enabled = !busy && instance.ArduinoRunning;
+        resumeArduino.Enabled = !busy && instance.ArduinoCanResume;
+    }
 
     Control BuildArduinoExplanation()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4,
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5,
             Padding = new Padding(14, 8, 14, 8), Margin = new Padding(0, 0, 0, 10), Tag = "surface" };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         panel.Controls.Add(new Label { Text = "ARDUINO · SECUENCIA Y DEMOSTRACIÓN", Dock = DockStyle.Fill,
             Font = new Font(Font.FontFamily, 9, FontStyle.Bold) });
         panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "1 Conexión USB  →  2 Verde / ámbar / rojo por sentido  →  3 Pérdida de señal\n4 Verdes en conflicto  →  5 Ámbar corto · Se reinicia la placa entre las pruebas de falla." });
         panel.Controls.Add(arduinoStep);
         panel.Controls.Add(new Label { Dock = DockStyle.Fill, Tag = "muted", Font = new Font(Font.FontFamily, 8),
             Text = "Comprueba comunicación y protecciones del Arduino. Observa los LEDs: el software no verifica el cableado ni la gestión del tráfico." });
+        var controls = new FlowLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        controls.Controls.AddRange([stopArduino, resumeArduino]);
+        panel.Controls.Add(controls);
+        actions.AddRange([stopArduino, resumeArduino]);
+        stopArduino.Click += async (_, _) => await Execute(async () => {
+            await instance.StopArduino();
+            arduinoStep.Text = "ARDUINO DETENIDO · Rojo intermitente. El último plan confirmado se conserva para reanudar.";
+        }, "ARDUINO", "Detener Arduino");
+        resumeArduino.Click += async (_, _) => await Execute(async () => {
+            arduinoStep.Text = "REANUDANDO · Reiniciando la placa y esperando la transición segura al plan confirmado…";
+            await instance.ResumeArduino();
+            arduinoStep.Text = "ARDUINO EN MARCHA · Último plan autorizado recuperado. Puedes comparar las fases en el panel.";
+        }, "ARDUINO", "Reanudar Arduino");
+        var refreshButtons = new System.Windows.Forms.Timer { Interval = 1000 };
+        refreshButtons.Tick += (_, _) => UpdateArduinoButtons();
+        refreshButtons.Start();
+        FormClosed += (_, _) => refreshButtons.Dispose();
+        UpdateArduinoButtons();
         return panel;
     }
 
@@ -120,5 +153,16 @@ internal sealed partial class MainForm
         }
         catch { arduinoStep.Text = "PRUEBA CON PROBLEMAS · Revisa el registro: comunicación, firmware o reinicio de la placa."; throw; }
         finally { testingArduino = false; }
+        var continueIntegration = MessageBox.Show(this,
+            "La prueba automática terminó en TODO CORRECTO. ¿Los LEDs coincidieron con los pasos indicados?\n\n" +
+            "Si coincidieron, pulsa Sí para continuar con la integración MFA: se conectará este Arduino, " +
+            "abrirá el panel y podrás autorizar un plan y comparar sus fases con los LEDs.\n\n" +
+            "Si no coincidieron, pulsa No y revisa el montaje antes de continuar.",
+            "Arduino comprobado · Continuar con MFA", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (continueIntegration == DialogResult.Yes) {
+            arduinoStep.Text = "INTEGRACIÓN MFA · Preparando servicios y conectando el Arduino probado…";
+            await instance.StartArduinoIntegration(((ArduinoPort)choice.SelectedItem!).Device);
+            arduinoStep.Text = "INTEGRACIÓN MFA · Panel abierto. Autoriza un plan con tu segundo factor; revisa la confirmación y compara las fases con los LEDs.";
+        }
     }
 }

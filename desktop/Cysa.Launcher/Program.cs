@@ -79,6 +79,7 @@ internal sealed partial class Instance
         Ports = File.Exists(settings) ? JsonSerializer.Deserialize<Ports>(File.ReadAllText(settings))! : Ports.Select(IsFree);
         if (!File.Exists(settings)) File.WriteAllText(settings, JsonSerializer.Serialize(Ports));
         Docker = FindDocker();
+        RestoreArduinoControl();
     }
 
     public static bool IsFree(int port)
@@ -336,6 +337,8 @@ internal sealed partial class Instance
         }
         sumoDriver?.Dispose(); sumoDriver = null;
         ejemplosPreparados = false;
+        if (ArduinoRunning) await StopArduino();
+        else await StopController();
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
         foreach (var process in apis.Values) { if (!process.HasExited) { process.Kill(true); await process.WaitForExitAsync(); } process.Dispose(); }
         apis.Clear();

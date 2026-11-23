@@ -66,7 +66,7 @@ def describir(ctrl):
     return texto
 
 
-def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print,receptor=None, solicitudes_peatonales=()):
+def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, duracion_s=None, stop_file=None, imprimir=print,receptor=None, solicitudes_peatonales=(), telemetria=None):
     inicio = reloj()
     solicitudes = iter(sorted(solicitudes_peatonales))
     solicitud = next(solicitudes, None)
@@ -103,6 +103,9 @@ def ejecutar(ctrl, mmu, centro, *, reloj=time.monotonic, dormir=time.sleep, dura
             centro.publicar_estado(ctrl.estado())
             previo, ultimo_estado = actual, ahora
         anterior = ctrl.luces
+        if telemetria:
+            try: telemetria(ctrl)
+            except OSError: pass  # Un fallo de la vista no debe detener el envío seguro al MMU.
         dormir(PERIODO_S)
 
 
@@ -124,9 +127,17 @@ def main(argv=None):
     p.add_argument('--stop-file', type=Path, help='Detener cuando exista este archivo')
     p.add_argument('--clave-planes',type=Path,help='Clave del banco para recibir planes firmados por MQTT')
     p.add_argument('--recibos',type=Path,default=REPO/'resultados/controlador/recibos.json')
+    p.add_argument('--telemetria',type=Path,help='Estado local del banco Arduino para la vista autenticada')
+    p.add_argument('--sesion',help='Identificador de la demostración iniciada por el lanzador')
+    p.add_argument('--reanudar-plan',help='Recuperar de SQL Server un plan ya autorizado con MFA y aplicado')
     a = p.parse_args(argv)
+    if a.telemetria and (not a.puerto or not a.sesion):
+        p.error('La telemetría Arduino requiere --puerto y --sesion')
     try:
         datos, cruce, plan_centro, plan_local = cargar_config(a.config)
+        if a.reanudar_plan:
+            from .reanudacion import recuperar_plan
+            plan_centro = recuperar_plan(a.reanudar_plan)
     except (KeyError, ValueError) as error:
         p.error(f'Configuración inválida: {error}')
     ahora = time.monotonic()
@@ -154,8 +165,10 @@ def main(argv=None):
             from .recepcion import ReceptorPlanes
             from operacion.mensajes import clave
             receptor=ReceptorPlanes(ctrl,clave(a.clave_planes),a.recibos,enlace.confirmar_plan)
+        from .telemetria import TelemetriaArduino
+        telemetria = TelemetriaArduino(a.telemetria, a.puerto, a.sesion) if a.telemetria else None
         ejecutar(ctrl, mmu, enlace, duracion_s=a.duracion, stop_file=a.stop_file,receptor=receptor,
-                 solicitudes_peatonales=a.solicitar_cruce_en)
+                 solicitudes_peatonales=a.solicitar_cruce_en, telemetria=telemetria)
     except KeyboardInterrupt:
         pass
     finally:

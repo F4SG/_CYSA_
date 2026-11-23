@@ -33,6 +33,17 @@ PROYECTO IOT COMPLETO - FLUJO ANTERIOR
 5. Cuando termine, pulsa Credenciales y Abrir panel.
 
 BOTONES
+- Probar Arduino: elige el puerto USB de TU equipo con mmu_cysa cargado.
+  Al terminar en TODO CORRECTO, comprueba los LEDs y continua con integracion
+  MFA. Autoriza una propuesta como operador con tu autenticador y confirma
+  al volver. El panel muestra el recibo, el plan activo y las fases fisicas.
+  Confirmar que los LEDs coinciden cierra la prueba guiada.
+- Detener Arduino: deja el banco en rojo intermitente y mantiene el panel.
+- Reanudar Arduino: recupera el ultimo plan autorizado con MFA y aplicado,
+  tras una transicion segura. No activa propuestas pendientes ni emergencias
+  temporales. Una placa seleccionada queda detenida al reabrir el lanzador.
+  El banco S2 requiere SQL Server local y ODBC Driver 18. Las cuentas, claves,
+  certificados y planes se crean en cada instalacion; no usa datos de otra PC.
 - Tema: el selector superior permite elegir Claro u Oscuro. Se guarda para
   cada usuario. El registro distingue las acciones y los avisos por colores.
   Limpiar vista no borra el archivo de registro.

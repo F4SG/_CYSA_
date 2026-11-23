@@ -25,7 +25,39 @@ continúa; los datos se conservan. No se apaga Docker Desktop ni el motor SQL Se
 El archivo `CYSA.exe` copiado por separado no contiene todo el proyecto. Para usarlo
 sin fuentes ni SDK, extraer completo el ZIP Windows, con `app` y `services` junto al EXE.
 
-## Construcción
+## Prueba Arduino, MFA y operación física
+
+Con la instalación preparada, pulsa **Probar Arduino** y elige el puerto USB de
+tu equipo. La placa debe tener cargado el firmware `controlador/arduino/mmu_cysa`.
+Comprueba los LEDs durante la prueba y, al finalizar en **TODO CORRECTO**, acepta
+continuar con la integración MFA. El lanzador cierra la prueba serial, sustituye
+el MMU simulado por esa placa y abre **Gestionar planes semafóricos**.
+
+Ingresa como operador, autoriza una propuesta validada, completa el segundo
+factor y confirma la decisión al volver. El panel distingue autorización, envío
+y aplicación: solo muestra el éxito cuando coinciden el recibo y el plan activo
+de la sesión física. Las luces mostradas son órdenes del controlador, no una
+lectura óptica. Al confirmar que los LEDs coinciden, aparecen el cierre de la
+prueba y **Volver al panel**, sin detener la operación.
+
+**Detener Arduino** y **Reanudar Arduino** están en el bloque Arduino del
+lanzador. Detener deja la placa en rojo intermitente y conserva el plan
+confirmado. Reanudar reinicia el enlace y consulta en SQL Server su validación,
+autorización MFA y aplicación anterior; recupera ese plan después de ámbar y
+todo rojo. No activa propuestas sin confirmar ni emergencias temporales. Los
+botones se habilitan según el estado; el panel permanece disponible al detener.
+Tras cerrar y volver a abrir el lanzador, la placa espera un clic en Reanudar.
+
+El puerto y el plan seleccionado se guardan en `arduino-control.json`, dentro
+de la carpeta de datos de cada usuario. La telemetría se genera en
+`workspace/infra/runtime/control/arduino-estado.json` y su consulta requiere
+sesión. Ambos son datos de ejecución de esa instalación: no se descargan del
+repositorio ni deben copiarse entre equipos. Otra PC genera sus propias cuentas,
+certificados y claves con **Configurar esta PC**, selecciona su propia instancia
+SQL y su puerto USB, y autoriza sus propios planes. Se requieren SQL Server,
+ODBC Driver 18 y Docker Desktop/WSL 2 además del SDK .NET 10 si se usan fuentes.
+
+## Construcción del paquete Windows
 
 Desde PowerShell 7, con Git y SDK .NET 10:
 

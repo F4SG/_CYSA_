@@ -4,6 +4,7 @@ import {panelView} from './navigation.js';
 import {takeDraft} from './project-api.js';
 import {initConfigurations, loadConfigurations, restoreConfiguration} from './configuraciones.js';
 import {initPlans, loadPlans, restoreDecision} from './planes.js';
+import {arduinoGuided} from './arduino.js';
 import {initReports, loadReports} from './reportes.js';
 import {initInventory, inventoryActions} from './inventario.js';
 const $=id=>document.getElementById(id);
@@ -90,6 +91,6 @@ try {
   if(draft?.view==='configuraciones'&&currentView==='configuraciones')restoreConfiguration(draft.data);
   if(draft?.view==='planes'&&currentView==='planes')restoreDecision(draft.data);
   setInterval(()=>{if(!document.hidden&&$('live').checked&&['conteos','inventario','estados'].includes(currentView))refresh();},15000);
-  setInterval(()=>{if(!document.hidden&&currentView==='planes')loadPlans();},10000);
+  setInterval(()=>{if(!document.hidden&&currentView==='planes')loadPlans();},arduinoGuided()?1000:10000);
  }else if(returning)await login();
 } catch(error){$('status').textContent=error.message;}
