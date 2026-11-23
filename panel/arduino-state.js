@@ -1,11 +1,30 @@
+export const isArduinoSession = (port, id) => /^COM\d+$/i.test(port ?? '') && /^[a-f0-9]{32}$/i.test(id ?? '');
+
+function hasRecentReport(board, now) {
+    const age = now - Date.parse(board?.timestamp);
+    return board?.activo === true && !board.detenido && age >= -1000 && age <= 3000;
+}
+
+export function arduinoSessionFromReport(board, now = Date.now()) {
+    if (!hasRecentReport(board, now) || !isArduinoSession(board.puerto, board.sesion)) return null;
+    return {port: board.puerto, id: board.sesion, created: now};
+}
+
+const matchesSession = (session, board) =>
+    Boolean(session && board && board.sesion === session.id && board.puerto === session.port);
+
+export function hasCurrentArduinoLights(session, board, now = Date.now()) {
+    return matchesSession(session, board) && hasRecentReport(board, now)
+        && board.estado_controlador === 'conectado' && board.fase_actual !== 'INTERMITENTE';
+}
+
 // La autorización sola no acredita ejecución ni una conexión física vigente.
 export function integrationState(session, target, plans, board, now = Date.now()) {
-    if (board?.detenido && board.sesion === session.id && board.puerto === session.port)
+    if (!session) return {kind: 'idle', text: 'Sin conexión física reciente. En el lanzador, pulsa Probar Arduino y continúa con la integración.'};
+    if (board?.detenido && matchesSession(session, board))
         return {kind:'stopped', text:'Arduino detenido por el usuario. Los rojos quedan intermitentes; pulsa Reanudar Arduino en el lanzador para continuar.'};
-    const age = now - Date.parse(board?.timestamp);
-    const live = Boolean(board?.activo && board.sesion === session.id && board.puerto === session.port
-        && Number.isFinite(age) && age >= -1000 && age <= 3000);
-    if (!live) return {kind: 'offline', text: 'Sin reporte reciente del Arduino de esta sesión. No se puede confirmar la aplicación.'};
+    if (!matchesSession(session, board) || !hasRecentReport(board, now))
+        return {kind: 'offline', text: 'Sin reporte reciente del Arduino de esta sesión. No se puede confirmar la aplicación.'};
     if (board.fase_actual === 'INTERMITENTE')
         return {kind: 'error', text: 'El MMU reportó una falla. Observa el rojo intermitente y revisa el registro del lanzador.'};
     if (board.estado_controlador !== 'conectado')

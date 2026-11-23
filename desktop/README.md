@@ -48,6 +48,11 @@ Comprueba los LEDs durante la prueba y, al finalizar en **TODO CORRECTO**, acept
 continuar con la integración MFA. El lanzador cierra la prueba serial, sustituye
 el MMU simulado por esa placa y abre **Gestionar planes semafóricos**.
 
+La tarjeta **Luces del Arduino** también aparece al abrir **Gestionar planes
+semafóricos** desde el menú. Sus indicadores se encienden al recibir telemetría
+reciente de la placa. Si no hay propuestas disponibles, usa **Cargar datos de
+práctica** en el lanzador.
+
 Ingresa como operador, autoriza una propuesta validada, completa el segundo
 factor y confirma la decisión al volver. El panel distingue autorización, envío
 y aplicación: solo muestra el éxito cuando coinciden el recibo y el plan activo

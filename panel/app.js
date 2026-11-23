@@ -3,7 +3,7 @@ import {initUsers,loadUsers} from './users.js';
 import {panelView} from './navigation.js';
 import {takeDraft} from './project-api.js';
 import {initConfigurations, loadConfigurations, restoreConfiguration} from './configuraciones.js';
-import {initPlans, loadPlans, restoreDecision} from './planes.js';
+import {initPlans, loadPlans, loadArduino, restoreDecision} from './planes.js';
 import {arduinoGuided} from './arduino.js';
 import {initReports, loadReports} from './reportes.js';
 import {initInventory, inventoryActions} from './inventario.js';
@@ -67,7 +67,7 @@ async function showView(id) {
  if(monitoring)await refresh();
  if(selected==='usuarios')await loadUsers();
  if(selected==='configuraciones')await loadConfigurations();
- if(selected==='planes')await loadPlans();
+ if(selected==='planes')await Promise.all([loadPlans(),loadArduino()]);
  if(selected==='reportes')await loadReports();
 }
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
@@ -103,6 +103,11 @@ try {
   if(draft?.view==='configuraciones'&&currentView==='configuraciones')restoreConfiguration(draft.data);
   if(draft?.view==='planes'&&currentView==='planes')restoreDecision(draft.data);
   setInterval(()=>{if(!document.hidden&&$('live').checked&&['conteos','inventario','estados'].includes(currentView))refresh();},15000);
-  setInterval(()=>{if(!document.hidden&&currentView==='planes')loadPlans();},arduinoGuided()?1000:10000);
+  setInterval(()=>{
+   if(document.hidden||currentView!=='planes')return;
+   loadArduino();
+   if(arduinoGuided())loadPlans();
+  },1000);
+  setInterval(()=>{if(!document.hidden&&currentView==='planes'&&!arduinoGuided())loadPlans();},10000);
  }else if(returning)await login();
 } catch(error){$('status').textContent=error.message;}

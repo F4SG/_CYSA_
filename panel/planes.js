@@ -1,12 +1,15 @@
 import * as oidc from './oidc.js';
 import {projectRequest, rememberDraft, rowCells, emptyRow, setStatus} from './project-api.js';
-import {arduinoGuided, arduinoTargetId, initArduinoGuide, renderArduinoGuide, followArduinoPlan} from './arduino.js';
+import {arduinoTargetId, initArduinoGuide, renderArduinoGuide, followArduinoPlan} from './arduino.js';
 
 const $ = id => document.getElementById(id);
 const operation = (path, options) => projectRequest('operacionBase', '/api/' + path, options);
 const requests = new Map();
 const resolved = new Map();
 let loading;
+let loadingArduino;
+let lastArduinoReport;
+let trackedPlan;
 let plansShown = [];
 let renderedPlans = '';
 let decision;
@@ -64,14 +67,28 @@ export function loadPlans() {
     return loading;
 }
 
+export function loadArduino() {
+    const render = board => {
+        const plans = trackedPlan ? [...plansShown, trackedPlan] : plansShown;
+        renderArduinoGuide(plans, board);
+    };
+    // Reevaluar la frescura mientras una consulta lenta sigue en curso.
+    render(lastArduinoReport);
+    loadingArduino ??= operation('banco/arduino').then(board => {
+        lastArduinoReport = board;
+        render(board);
+    }, () => {
+        lastArduinoReport = null;
+        render(null);
+    }).finally(() => { loadingArduino = null; });
+    return loadingArduino;
+}
+
 async function refreshPlans() {
     const status = $('plansStatus');
     $('plansRefresh').disabled = true;
     try {
-        const [plans, controller, arduino] = await Promise.all([
-            operation('operacion/planes'), operation('estados'),
-            arduinoGuided() ? operation('banco/arduino') : Promise.resolve(null),
-        ]);
+        const [plans, controller] = await Promise.all([operation('operacion/planes'), operation('estados')]);
         plansShown = plans.items;
         // Conservar los botones y el foco mientras solo cambian las fases del Arduino.
         const signature = JSON.stringify(plans.items.map(plan => [plan, expired(plan)]));
@@ -80,9 +97,8 @@ async function refreshPlans() {
             renderedPlans = signature;
         }
         const targetId = arduinoTargetId();
-        const trackedPlans = targetId && !plans.items.some(plan => plan.id === targetId)
-            ? [...plans.items, await operation(`operacion/planes/${encodeURIComponent(targetId)}`)] : plans.items;
-        renderArduinoGuide(trackedPlans, arduino);
+        trackedPlan = targetId && !plans.items.some(plan => plan.id === targetId)
+            ? await operation(`operacion/planes/${encodeURIComponent(targetId)}`) : null;
         const reports = controller.items.map(item => {
             const time = Date.parse(item.timestamp);
             const fresh = Number.isFinite(time) && Date.now() - time <= 30000;
@@ -94,7 +110,7 @@ async function refreshPlans() {
         });
         $('controllerBody').replaceChildren(...(reports.length ? reports : [emptyRow(5, 'El emulador aún no ha reportado su estado.')]));
         if (status.classList.contains('error')) setStatus(status);
-    } catch (error) { setStatus(status, error.message, true); renderArduinoGuide(plansShown, null); }
+    } catch (error) { setStatus(status, error.message, true); }
     finally { $('plansRefresh').disabled = false; }
 }
 
@@ -153,7 +169,7 @@ async function openEvidence(plan) {
 
 export function initPlans() {
     initArduinoGuide();
-    $('plansRefresh').onclick = loadPlans;
+    $('plansRefresh').onclick = () => Promise.all([loadPlans(), loadArduino()]);
     const dialog = $('planDecision');
     $('planDecisionCancel').onclick = () => { if (!sending) dialog.close(); };
     dialog.addEventListener('cancel', event => { if (sending) event.preventDefault(); });

@@ -40,11 +40,11 @@
   <div class="table-footer"><span id="configPage">Página 1</span><div class="pagination"><button id="configPrevious" type="button" disabled>Anterior</button><button id="configNext" type="button" disabled>Siguiente</button></div></div>
 </section>
 <section id="planes" class="module-stack" hidden aria-label="Banco operativo S2">
-  <article id="arduinoIntegration" class="card module-card" hidden aria-labelledby="arduinoTitle">
-    <div class="section-heading"><div><h2 id="arduinoTitle">Arduino → MFA → Plan aplicado</h2>
-      <p>Banco seleccionado: <strong id="arduinoPort"></strong> · NS = norte-sur · EO = este-oeste.</p></div>
+  <article id="arduinoIntegration" class="card module-card" aria-labelledby="arduinoTitle">
+    <div class="section-heading"><div><h2 id="arduinoTitle">Luces del Arduino</h2>
+      <p>Puerto: <strong id="arduinoPort">Sin conexión</strong> · NS = norte-sur · EO = este-oeste.</p></div>
       <button id="arduinoProposals" type="button">Ir a propuestas</button></div>
-    <p id="arduinoProgress" class="status" role="status">Esperando el reporte de esta sesión…</p>
+    <p id="arduinoProgress" class="status" role="status">Esperando el reporte del controlador…</p>
     <div class="arduino-summary">
       <p>Plan autorizado: <strong id="arduinoTarget">Todavía no seleccionado</strong><br>Plan activo: <strong id="arduinoActive">Sin confirmar</strong></p>
       <p>Fase reportada: <strong id="arduinoPhase">Sin confirmar</strong><br>Último reporte: <span id="arduinoTimestamp">Sin reporte</span></p>
@@ -69,7 +69,7 @@
       <thead><tr><th>Plan</th><th>Modo</th><th>Verdes NS / EO (s)</th><th>Mejora SUMO</th><th>Estado</th><th>Envío al controlador</th><th>Acciones</th></tr></thead>
       <tbody id="plansBody"></tbody></table></div>
     <div id="plansExamples" class="table-footer" hidden>
-      <span>Para preparar cinco ejemplos nuevos, pulsa Abrir panel en el lanzador.</span>
+      <span>Para preparar cinco ejemplos nuevos, pulsa Cargar datos de práctica en el lanzador.</span>
     </div>
   </article>
   <article class="card module-card">

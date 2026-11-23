@@ -204,7 +204,6 @@ internal sealed partial class Instance
         RequireConfigured();
         // Preparar los servicios antes de sustituir el controlador que ya estaba funcionando.
         await StartAll();
-        await PrepararEjemplos();
         await StopController();
         arduinoControllerPort = port;
         arduinoSession = Guid.NewGuid().ToString("N");
@@ -212,6 +211,7 @@ internal sealed partial class Instance
         arduinoResumePlan = null;
         SaveArduinoControl();
         StartController(OperationEnvironment());
+        var panelAbierto = false;
         try {
             var path = Path.Combine(Repo,"infra/runtime/control/arduino-estado.json");
             for (var attempt = 0; attempt < 150; attempt++) {
@@ -225,15 +225,22 @@ internal sealed partial class Instance
                         if (data.GetProperty("estado_controlador").GetString() == "conectado") {
                             Write($"Integración física lista en {port}. Autoriza con MFA; el panel esperará el recibo de aplicación y mostrará las luces ordenadas.");
                             Open(PanelUrl + "/?modulo=planes&volver=1&arduino=" + Uri.EscapeDataString(port) + "&sesion=" + arduinoSession);
-                            return;
+                            panelAbierto = true;
+                            break;
                         }
                     }
                 }
                 await Task.Delay(100);
             }
-            throw new InvalidOperationException("El Arduino no confirmó conexión con el centro. Revisa MQTT y el registro.");
+            if (!panelAbierto)
+                throw new InvalidOperationException("El Arduino no confirmó conexión con el centro. Revisa MQTT y el registro.");
         }
         catch { await StopController(); arduinoControllerPort = arduinoSession = null; throw; }
+        try { await PrepararEjemplos(conservarVigentes: true); }
+        catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            Write($"ADVERTENCIA: El Arduino sigue conectado. No se renovaron las propuestas: {error.Message}");
+        }
     }
 
     async Task WaitOperationReady()
