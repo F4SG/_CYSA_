@@ -141,3 +141,21 @@ Para una comprobación completa de un paquete ya generado, sin usar la instalaci
 Este modo ejecuta la misma configuración que el botón, verifica disponibilidad de servicios y rechazo de consultas sin sesión, prueba las APIs HTTP y las pruebas Python, detiene/reinicia y comprueba que no cambian los secretos. El ingreso de ambos roles con OTP se valida desde el navegador; el diagnóstico no utiliza contraseñas guardadas para intentar omitir MFA. Al terminar detiene solo el proyecto del ensayo; conserva sus datos para diagnóstico. Requiere Docker, SQL Server, ODBC Driver 18 e internet como la primera instalación normal.
 
 Las verificaciones añaden exclusivamente registros marcados como prueba. No demuestran precisión con tráfico real ni sustituyen la calibración de la cámara. El ejecutable aún no tiene firma comercial; el instalador Python conserva su firma oficial.
+
+## Prueba automática del Arduino
+
+El botón **Probar Arduino** detecta los puertos serie disponibles y permite elegir el de la placa.
+Cierra antes el Monitor Serie de Arduino y cualquier controlador que use ese puerto. La placa debe
+tener cargado `controlador/arduino/mmu_cysa/mmu_cysa.ino`. Esta prueba es para el banco de LEDs.
+No necesita iniciar Docker, SQL Server, cámara ni los servicios del sistema.
+
+Al pulsar **Probar** ejecuta la prueba existente de conexión, ciclo seguro, pérdida de señal,
+conflicto de verdes y ámbar corto. Los pasos y el resultado aparecen en el registro de actividad.
+La prueba cambia físicamente las luces; el cableado y los LEDs se comprueban mirando la placa.
+Si hace falta RESET manual, termina con un aviso en lugar de bloquearse esperando una tecla.
+Al terminar, el puerto se cierra y la placa puede quedar en rojo intermitente hasta reiniciar el controlador.
+
+La parte superior del lanzador muestra la secuencia completa y explica el paso actual mientras
+se ejecuta la prueba Arduino. Durante el ciclo normal indica las luces ordenadas para NS
+(norte-sur) y EO (este-oeste). El resultado indica qué verificó el programa y recuerda observar
+los LEDs. La ventana permite desplazamiento vertical para conservar visibles los textos de los botones.

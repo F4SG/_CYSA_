@@ -16,11 +16,12 @@ internal sealed partial class MainForm
         Text = "CYSA · Centro de pruebas";
         MinimumSize = new Size(1040, 850); Size = new Size(1240, 1020);
         StartPosition = FormStartPosition.CenterScreen; Font = new Font("Segoe UI", 10); Padding = new Padding(28, 22, 28, 18);
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
-        foreach (var height in new[] { 62, 42, 146, 316, 32 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var viewport = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Top, Height = 1080, ColumnCount = 1, RowCount = 9 };
+        foreach (var height in new[] { 62, 30, 160, 146, 385, 32 }) layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        Controls.Add(layout);
+        viewport.Controls.Add(layout); Controls.Add(viewport);
 
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 225));
@@ -39,6 +40,7 @@ internal sealed partial class MainForm
         appearance.Controls.Add(new Label { Text = "TEMA", AutoSize = true, Tag = "muted", Font = new Font(Font.FontFamily, 8, FontStyle.Bold), Margin = new Padding(0, 7, 8, 0) });
         header.Controls.Add(appearance); layout.Controls.Add(header);
         layout.Controls.Add(new Label { Text = "Configura tu equipo, prueba cada apartado y sigue su actividad en un solo lugar.", Dock = DockStyle.Fill, Tag = "muted", Margin = new Padding(0, 0, 0, 10) });
+        layout.Controls.Add(BuildArduinoExplanation());
 
         var hardwarePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(14, 8, 14, 8), Margin = new Padding(0, 0, 0, 12), Tag = "surface" };
         hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); hardwarePanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -53,8 +55,9 @@ internal sealed partial class MainForm
         cpu.CheckedChanged += (_, _) => { if (!busy && cpu.Checked) instance.SaveDevice("cpu"); };
         gpu.CheckedChanged += (_, _) => { if (!busy && gpu.Checked && hardware != null) instance.SaveDevice(hardware.GpuDevice); };
 
-        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 4, Margin = new Padding(-4, 0, -4, 0) };
-        for (var i = 0; i < 4; i++) { buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 25)); }
+        var buttons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 5, Margin = new Padding(-4, 0, -4, 0) };
+        for (var i = 0; i < 4; i++) { buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));  }
+        for (var row = 0; row < 5; row++) buttons.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
         layout.Controls.Add(buttons);
         Add("Configurar esta PC", "Instala y crea tus cuentas", instance.Configure, "INSTALACIÓN", afterHardware: true);
         Add("Iniciar sistema", "Inicia todos los módulos de Proyecto de Sistemas", instance.StartAll, "SISTEMA", primary: true);
@@ -64,6 +67,7 @@ internal sealed partial class MainForm
         Add("Contar con video", "Conteo desde un archivo", () => { var device = SelectedDevice(); using var dialog = new OpenFileDialog { Filter = "Videos|*.mp4;*.avi;*.mov;*.mkv;*.wmv|Todos|*.*" }; if (dialog.ShowDialog(this) == DialogResult.OK) instance.StartDetector(dialog.FileName, device); return Task.CompletedTask; }, "VIDEO");
         Add("Evaluaciones", "Prueba la API de evaluaciones", () => { Instance.Open($"http://localhost:{instance.Ports.Evaluation}/swagger"); return Task.CompletedTask; }, "API");
         Add("Decisiones", "Prueba la API de decisiones", () => { Instance.Open($"http://localhost:{instance.Ports.Decision}/swagger"); return Task.CompletedTask; }, "API");
+        Add("Probar Arduino", "Prueba automática del banco de LEDs por USB", TestArduino, "ARDUINO");
         Add("Verificar sistema", "Revisa conexión y servicios", instance.Verify, "VERIFICACIÓN");
         Add("Ejecutar pruebas", "Comprueba los módulos", instance.Tests, "PRUEBAS");
         Add("SQL Server (Web III)", "Elige y prueba la instancia local", async () => { using var dialog = new SqlServerDialog(instance.SqlServerActual(), instance.SqlConnectionExterna, instance.ProbarSqlServer); ApplyControlTheme(dialog); if (dialog.ShowDialog(this) == DialogResult.OK) await instance.GuardarSqlServer(dialog.Instancia); }, "BASE DE DATOS");
@@ -162,6 +166,7 @@ internal sealed partial class MainForm
     {
         foreach (var line in text.Replace("\r", "").Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
+            ExplainArduino(line);
             var entry = ConsoleStyle.Parse(line, operation); entries.Add(entry);
             if (entries.Count > 800 || log.TextLength > 180000) { entries.RemoveRange(0, Math.Min(200, entries.Count - 1)); RenderEntries(); }
             else DrawEntry(entry);

@@ -134,15 +134,23 @@ def main(argv=None):
     p = argparse.ArgumentParser(description='Prueba automática de la placa MMU')
     p.add_argument('--config', required=True)
     p.add_argument('--puerto', required=True)
+    p.add_argument('--no-interactivo', action='store_true', help='Falla sin esperar entrada si la placa requiere RESET manual')
     a = p.parse_args(argv)
     _, cruce, _, _ = cargar_config(a.config)
     try:
-        placa = Placa(a.puerto, len(cruce.grupos))
+        def pedir_reset(mensaje):
+            if a.no_interactivo:
+                raise RuntimeError('La placa requiere RESET manual. Pulsa RESET y repite la prueba.')
+            input(mensaje)
+        placa = Placa(a.puerto, len(cruce.grupos), preguntar=pedir_reset)
     except OSError as error:
         p.error(f'No se pudo abrir {a.puerto}: {error}. Cerrar el Monitor Serie de Arduino si está abierto.')
     print(f'Probando la placa en {a.puerto} con {len(cruce.grupos)} grupos: {", ".join(cruce.grupos)}')
     try:
         resultados = probar(placa, cruce)
+    except (RuntimeError, OSError) as error:
+        print(f'ERROR: {error}')
+        return 1
     finally:
         placa.cerrar()
     fallidas = [r for r in resultados if not r[1]]

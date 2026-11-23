@@ -34,6 +34,10 @@ class MemoryRepository:
         return list(groups.values()), sorted(intersections)
     def states(self):return list(self.status.values())
     def inventory(self):return list(self.assets.values())
+    def create_asset(self,asset):
+        if asset.activo_id in self.assets:return False
+        self.assets[asset.activo_id]=asset.model_dump();return True
+    def delete_asset(self,asset_id):return self.assets.pop(asset_id,None) is not None
     def upsert_assets(self,assets):
         for a in assets:self.assets[a.activo_id]=a.model_dump()
     def replace_asset(self,asset_id,asset):

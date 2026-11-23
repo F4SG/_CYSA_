@@ -23,3 +23,4 @@ td.module-actions button{padding:6px 9px;margin:3px;font-size:11px}
 @media(max-width:800px){.sidebar button[data-tab]:not(:has(.nav-icon)){padding-left:10px}}
 
 @media(max-width:500px){nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}nav button{width:100%}}
+#assetFields small{font-size:10px;color:var(--muted);font-weight:400}#inventoryStatus:not(:empty){margin-bottom:16px}#assetError{color:var(--amber,var(--text))}#assetForm .form-actions{flex-wrap:wrap}

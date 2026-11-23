@@ -1,5 +1,24 @@
 # CYSA
 
+## Inventario y prueba del Arduino
+
+En **Gestionar infraestructura**, el administrador puede registrar, consultar,
+editar y eliminar activos. **Registrar activo → Rellenar ejemplo** prepara un
+controlador de laboratorio marcado como dato de prueba; se guarda al confirmar
+el formulario. Los identificadores duplicados se rechazan sin sobrescribir el
+registro existente. Eliminar requiere confirmación y solo quita el registro de
+inventario: no desconecta equipos ni elimina conteos o estados. El operador
+conserva acceso de consulta. El formulario usa intersección, sin campo de acceso.
+
+En el lanzador, **Probar Arduino** permite elegir el puerto USB y ejecutar la
+prueba de `mmu_cysa`. La parte superior explica la secuencia y qué demuestra cada
+paso. La comprobación de los LEDs es visual; las respuestas del firmware se
+comprueban automáticamente. No conecta la placa por registrar un activo.
+
+Desde esta copia de fuentes, `abrir_cysa_actualizado.bat` compila y abre el
+lanzador actualizado. Requiere el SDK .NET 10. Para los requisitos de la placa,
+consulta [controlador/README.md](controlador/README.md).
+
 [Web III: API, entrega y pruebas](#web-iii) · [Proyecto de Sistemas I: monitoreo IoT](#proyecto-de-sistemas-i) · [Casos de uso: ubicación y acceso](#casos-de-uso-ubicación-y-acceso)
 
 ## Web III

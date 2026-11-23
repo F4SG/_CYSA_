@@ -5,6 +5,7 @@ import {takeDraft} from './project-api.js';
 import {initConfigurations, loadConfigurations, restoreConfiguration} from './configuraciones.js';
 import {initPlans, loadPlans, restoreDecision} from './planes.js';
 import {initReports, loadReports} from './reportes.js';
+import {initInventory, inventoryActions} from './inventario.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
 $('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
@@ -18,10 +19,10 @@ function draw(){
  const match=row=>(!selected||row.interseccion===selected)&&Object.values(row).some(v=>String(v??'').toLocaleLowerCase('es').includes(q));
  for(const id of ['countsBody','inventoryBody','statesBody'])$(id).replaceChildren();
  data.counts.filter(match).forEach(x=>{const tr=document.createElement('tr');[x.interseccion,x.acceso+' / '+x.carril,x.clase,x.cantidad,fmt(x.inicio)+' — '+fmt(x.fin)].forEach(v=>cell(tr,v));source(tr,x.prueba);$('countsBody').append(tr);});
- data.inventory.filter(match).forEach(x=>{const tr=document.createElement('tr');[x.activo_id,x.interseccion+' / '+(x.acceso||'—'),x.tipo,x.ubicacion,x.protocolo].forEach(v=>cell(tr,v));source(tr,x.prueba);$('inventoryBody').append(tr);});
+ data.inventory.filter(match).forEach(x=>{const tr=document.createElement('tr');[x.activo_id,x.interseccion,x.tipo,x.ubicacion,x.protocolo].forEach(v=>cell(tr,v));source(tr,x.prueba);inventoryActions(tr,x);$('inventoryBody').append(tr);});
  data.states.filter(match).forEach(x=>{const tr=document.createElement('tr');const age=Math.max(0,(Date.now()-new Date(x.timestamp).getTime())/1000);if(age>30)tr.className='stale';[x.interseccion,x.fase_actual,x.plan_activo,x.estado_controlador,fmt(x.timestamp),Math.round(age)+' s'+(age>30?' · Sin actualización':'')].forEach(v=>cell(tr,v));source(tr,x.prueba);$('statesBody').append(tr);});
  $('summaryVehicles').textContent=data.counts.filter(match).reduce((n,x)=>n+x.cantidad,0).toLocaleString('es');$('summaryIntersections').textContent=new Set([...data.inventory,...data.states,...data.counts].filter(match).map(x=>x.interseccion)).size;$('summaryAssets').textContent=data.inventory.filter(match).length;
- empty($('countsBody'),6);empty($('inventoryBody'),6);empty($('statesBody'),7);$('loadMore').hidden=!hasMore;
+ empty($('countsBody'),6);empty($('inventoryBody'),7);empty($('statesBody'),7);$('loadMore').hidden=!hasMore;
 }
 async function api(path){const token=await oidc.accessToken();const r=await fetch(config.apiBase+path,{headers:{Authorization:'Bearer '+token},cache:'no-store'});if(!r.ok)throw new Error('API '+r.status+': '+(r.status===401?'sesión inválida':r.status===403?'rol sin permiso':'no disponible'));return r.json();}
 function range(){const start=new Date($('desde').value),end=new Date($('hasta').value);if(!Number.isFinite(+start)||!Number.isFinite(+end)||start>=end)throw new Error('Selecciona un rango de fechas válido');const params=new URLSearchParams({desde:start.toISOString(),hasta:end.toISOString(),limit:'200',offset:String(offset)});if($('intersectionFilter').value)params.set('interseccion',$('intersectionFilter').value);return params;}
@@ -43,6 +44,7 @@ let currentView;
 async function showView(id) {
  const selected=Object.hasOwn(views,id) && (id!=='usuarios'||oidc.hasRole('administrador'))?id:'conteos';
  currentView=selected;
+ $('search').placeholder=selected==='inventario'?'Activo, intersección o tipo':'Intersección, acceso o carril';
  document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.tab===selected)));
  $('panelHome').hidden=selected==='conteos';
  for(const id of Object.keys(views))$(id).hidden=id!==selected;
@@ -75,6 +77,12 @@ try {
   $('welcome').hidden=true;$('workspace').hidden=false;$('summary').after($('status'));
   $('login').hidden=true;$('logout').hidden=false;$('identity').textContent=oidc.identity();
   initUsers(config);
+  initInventory(config,async()=>{
+   data.inventory=(await api('/inventario')).items;
+   const ids=[...new Set([...data.inventory,...data.states,...data.counts].map(x=>x.interseccion))].sort();
+   $('intersectionFilter').replaceChildren(new Option('Todas',''),...ids.map(id=>new Option(id,id)));
+   $('search').value='';draw();
+  });
   $('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));
   $('desde').disabled=true;$('hasta').disabled=true;
   history.replaceState({},'','#'+view);

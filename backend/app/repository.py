@@ -51,6 +51,15 @@ class Repository:
         with self.connection() as c:return c.execute('SELECT * FROM estados ORDER BY interseccion').fetchall()
     def inventory(self):
         with self.connection() as c:return c.execute('SELECT * FROM inventario ORDER BY interseccion,tipo,activo_id').fetchall()
+    def create_asset(self,asset):
+        with self.connection() as c:
+            row=c.execute('''INSERT INTO inventario(activo_id,interseccion,acceso,tipo,ubicacion,protocolo,prueba)
+                VALUES(%(activo_id)s,%(interseccion)s,%(acceso)s,%(tipo)s,%(ubicacion)s,%(protocolo)s,%(prueba)s)
+                ON CONFLICT(activo_id) DO NOTHING RETURNING activo_id''',asset.model_dump()).fetchone()
+            return row is not None
+    def delete_asset(self,asset_id):
+        with self.connection() as c:
+            return c.execute('DELETE FROM inventario WHERE activo_id=%s RETURNING activo_id',(asset_id,)).fetchone() is not None
     def upsert_assets(self,assets):
         with self.connection() as c:
             for a in assets:
