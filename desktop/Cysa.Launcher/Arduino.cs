@@ -74,11 +74,11 @@ internal sealed partial class MainForm
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5,
             Padding = new Padding(14, 8, 14, 8), Margin = new Padding(0, 0, 0, 10), Tag = "surface" };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 49));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         panel.Controls.Add(new Label { Text = "ARDUINO · SECUENCIA Y DEMOSTRACIÓN", Dock = DockStyle.Fill,
             Font = new Font(Font.FontFamily, 9, FontStyle.Bold) });
         panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "1 Conexión USB  →  2 Verde / ámbar / rojo por sentido  →  3 Pérdida de señal\n4 Verdes en conflicto  →  5 Ámbar corto · Se reinicia la placa entre las pruebas de falla." });

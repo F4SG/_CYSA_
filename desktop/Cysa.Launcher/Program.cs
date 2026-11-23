@@ -236,10 +236,7 @@ internal sealed partial class Instance
         if (!Configured || !File.Exists(Path.Combine(Root, "configurado"))) throw new InvalidOperationException("Pulsa Configurar esta PC para completar la instalación.");
     }
 
-    bool ejemplosPreparados;
-    public Task StartAll() => StartAll(false);
-
-    async Task StartAll(bool renovarEjemplos)
+    public async Task StartAll()
     {
         RequireConfigured();
         await PreparePanelNavigation();
@@ -261,14 +258,12 @@ internal sealed partial class Instance
         foreach (var port in new[] { Ports.Panel, Ports.Evaluation, Ports.Decision }) await WaitUrl($"http://127.0.0.1:{port}/health", 90);
         await StartWebIII();
         await StartOperation();
-        if (renovarEjemplos || !ejemplosPreparados)
-            ejemplosPreparados = await PrepararEjemplos();
         Write("Sistema listo: monitoreo, módulos de gestión, banco S2 y controlador emulado disponibles. No se actúa sobre semáforos reales.");
     }
 
     public async Task OpenPanel()
     {
-        await StartAll(true);
+        await StartAll();
         Open(PanelUrl);
     }
 
@@ -336,7 +331,6 @@ internal sealed partial class Instance
             catch (OperationCanceledException) { sumoDriver.Kill(true); await sumoDriver.WaitForExitAsync(); }
         }
         sumoDriver?.Dispose(); sumoDriver = null;
-        ejemplosPreparados = false;
         if (ArduinoRunning) await StopArduino();
         else await StopController();
         if (Detector is { HasExited: false }) { Detector.Kill(true); await Detector.WaitForExitAsync(); }
@@ -458,7 +452,6 @@ internal sealed partial class MainForm : Form
     readonly RadioButton cpu = new() { Text="CPU", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
     readonly RadioButton gpu = new() { Text="GPU NVIDIA (CUDA)", AutoSize=true, Padding=new Padding(12,8,12,8), Enabled=false };
     readonly Label hardwareDetail = new() { Text="Configura esta PC para medir CPU y GPU. La opción recomendada se marcará en verde.", Dock=DockStyle.Fill };
-    readonly ThemedButton detectHardware = new() { Text="Detectar y recomendar", AutoSize=true };
     readonly ThemedButton prepareGpu = new() { Text="Preparar GPU", AutoSize=true, Enabled=false };
     HardwareReport? hardware;
     bool busy;
@@ -497,10 +490,10 @@ internal sealed partial class MainForm : Form
     {
         if (busy) return;
         operation=category; failed=false; instance.Write("▶ " + (title ?? category)); status.ForeColor=theme.GreenInk;
-        busy=true; actions.ForEach(b=>b.Enabled=false); cpu.Enabled=false; gpu.Enabled=false; detectHardware.Enabled=false; prepareGpu.Enabled=false; status.Text="Trabajando…"; UseWaitCursor=true;
+        busy=true; actions.ForEach(b=>b.Enabled=false); cpu.Enabled=false; gpu.Enabled=false; prepareGpu.Enabled=false; status.Text="Trabajando…"; UseWaitCursor=true;
         try { await action(); status.Text="● Operación completada"; instance.Write("Completado: " + (title ?? category)); }
         catch (Exception error) { failed=true; status.ForeColor=theme.Danger; instance.Write("ERROR: " + error.Message); status.Text="Revisa el aviso y vuelve a intentar"; MessageBox.Show(this,error.Message,"CYSA",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
-        finally { busy=false; actions.ForEach(b=>b.Enabled=true); cpu.Enabled=hardware!=null; gpu.Enabled=hardware?.GpuReady==true; detectHardware.Enabled=true; prepareGpu.Enabled=hardware?.NvidiaDetected==true && !hardware.GpuReady; UseWaitCursor=false; }
+        finally { busy=false; actions.ForEach(b=>b.Enabled=true); cpu.Enabled=hardware!=null; gpu.Enabled=hardware?.GpuReady==true; prepareGpu.Enabled=hardware?.NvidiaDetected==true && !hardware.GpuReady; UseWaitCursor=false; }
     }
     Task Credentials()
     {

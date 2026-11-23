@@ -15,9 +15,10 @@ public partial class Program
     public static async Task Main(string[] args)
     {
         var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo"); var verify=args.Contains("--verificar-demo"); var probe=args.Contains("--probar-conexion");
-        if(new[]{prepare,reset,verify,probe}.Count(a=>a)>1)throw new ArgumentException("Usa solo una operación de preparación, recreación, verificación o prueba de conexión.");
-        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo" or "--probar-conexion")).ToArray());
-        if(prepare || reset || verify || probe)
+        var practice = args.Contains("--preparar-practica");
+        if(new[]{prepare,reset,verify,probe,practice}.Count(a=>a)>1)throw new ArgumentException("Usa solo una operación de preparación, recreación, verificación o prueba de conexión.");
+        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo" or "--probar-conexion" or "--preparar-practica")).ToArray());
+        if(prepare || reset || verify || probe || practice)
         {
             builder.Configuration["Demo:Enabled"]="true";
             builder.Configuration["Security:Mode"]="Demo";
@@ -89,6 +90,13 @@ public partial class Program
             await using var scope=app.Services.CreateAsyncScope();
             var demo=scope.ServiceProvider.GetRequiredService<DemoDatabase>(); await demo.Preparar(reset);
             Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(await demo.Conteos())); return;
+        }
+        if (practice)
+        {
+            await using var scope = app.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<DemoDatabase>().PrepararPractica();
+            Console.WriteLine("Configuración y carriles de práctica disponibles para DEMO_INT_01.");
+            return;
         }
         app.UseExceptionHandler();
         app.Use(async(context,next)=>

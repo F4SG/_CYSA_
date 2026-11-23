@@ -12,6 +12,21 @@ Web III solo preparan su propia API.
 La primera compilación requiere SDK .NET 10 y acceso a NuGet si faltan dependencias.
 Los siguientes arranques reutilizan las APIs mientras no cambien sus fuentes.
 
+## Datos de práctica de Proyecto de Sistemas
+
+En **2. Pruebas y práctica**, pulsa **2.2 Cargar datos de práctica**. El lanzador
+inicia los servicios necesarios, completa el inventario y la configuración de
+`DEMO_INT_01` e inserta muestras de conteo de las últimas 24 horas. En
+**Consultar reportes de desempeño**, selecciona **Validación** para ver los
+agregados de esos mismos conteos. Si vuelves a cargar el escenario, se conservan
+los registros existentes y se agregan únicamente los nuevos intervalos.
+
+El cargador valida cinco propuestas con SUMO. Si el lote coincide y aún se puede
+practicar con él, conserva sus identificadores. Las decisiones anteriores
+quedan en el historial. El operador autoriza cada plan
+con MFA. El estado de comunicación procede de los mensajes del controlador.
+Abrir el panel por sí solo ya no renueva los ejemplos.
+
 SQL Server debe estar instalado y accesible. Después de compilar la API, el lanzador
 aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.
 No requiere Docker, Python, cámara ni YOLO para Web III.

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text.Json;
 using Cysa.Core;
 using Cysa.Infrastructure;
@@ -8,6 +9,58 @@ namespace Cysa.Web.Api.Data;
 
 public static class DemoSeeder
 {
+    public static async Task PrepararBanco(CysaDb db, CancellationToken ct = default)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var intersection = await db.Set<Interseccion>().Where(i => i.Nombre == "DEMO_INT_01" && i.Prueba)
+            .OrderBy(i => i.Id).FirstOrDefaultAsync(ct);
+        if (intersection is null)
+        {
+            const string name = "Corredor de práctica CYSA";
+            var corridor = await db.Set<Corredor>().SingleOrDefaultAsync(c => c.Nombre == name, ct);
+            if (corridor is { Prueba: false })
+                throw new InvalidOperationException("El nombre del corredor de práctica pertenece a un corredor operativo.");
+            if (corridor is null)
+            {
+                corridor = new Corredor { Nombre = name, Descripcion = "Corredor sintético de Proyecto de Sistemas" };
+                db.Add(corridor);
+                await db.SaveChangesAsync(ct);
+            }
+            if (await db.Set<Interseccion>().AnyAsync(i => i.CorredorId == corridor.Id && i.Nombre == "DEMO_INT_01", ct))
+                throw new InvalidOperationException("DEMO_INT_01 pertenece a una intersección operativa en este corredor.");
+            intersection = new Interseccion { CorredorId = corridor.Id, Nombre = "DEMO_INT_01", EstadoOperativo = "activo" };
+            db.Add(intersection);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var accesses = await db.Set<Acceso>().Where(a => a.InterseccionId == intersection.Id)
+            .ToDictionaryAsync(a => a.Identificador, StringComparer.OrdinalIgnoreCase, ct);
+        foreach (var (id, direction) in new[] { ("N", "Norte"), ("S", "Sur"), ("E", "Este"), ("W", "Oeste") })
+        {
+            if (!accesses.TryGetValue(id, out var access))
+            {
+                access = new Acceso { InterseccionId = intersection.Id, Identificador = id, Aproximacion = direction,
+                    LongitudCrucePeatonalMetros = 6 };
+                db.Add(access);
+                await db.SaveChangesAsync(ct);
+            }
+            if (access.Prueba && !await db.Set<Carril>().AnyAsync(c => c.AccesoId == access.Id && c.Numero == 1, ct))
+                db.Add(new Carril { AccesoId = access.Id, Numero = 1, Sentido = "entrada" });
+        }
+
+        var configurations = db.Set<ConfigTecnica>().Where(c => c.InterseccionId == intersection.Id);
+        if (!await configurations.AnyAsync(c => c.Prueba, ct))
+        {
+            var lastVersion = await configurations.MaxAsync(c => (int?)c.Version, ct) ?? 0;
+            db.Add(new ConfigTecnica { InterseccionId = intersection.Id, Version = lastVersion + 1,
+                VerdeMinSegundos = 10, VerdeMaxSegundos = 90, AmbarSegundos = 3, TodoRojoSegundos = 2,
+                ExtensionPrioridadSegundos = 10, ResponsableTecnico = "Configuración base de laboratorio",
+                AprobadaUtc = DateTimeOffset.UtcNow, Estado = "aprobada" });
+        }
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
     public static async Task Cargar(CysaDb db,CancellationToken ct=default)
     {
         // La semilla pertenece exclusivamente a la base de demostración, no a una base operativa.

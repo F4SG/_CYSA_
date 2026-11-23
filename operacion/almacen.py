@@ -8,6 +8,10 @@ def Jsonb(value):return json.dumps(value,ensure_ascii=True,allow_nan=False)
 DDL=(Path(__file__).parent/'sql/001_operacion.sql').read_text(encoding='utf-8')
 FUENTE_EJEMPLOS = 'ejemplos-autorizacion'
 
+def firma_ejemplo(plan, origen):
+    return huella(dict(caso=origen.get('caso'), demanda=origen.get('autos_por_acceso'),
+                       plan={k: v for k, v in plan.items() if k != 'plan_id'}))
+
 class EstadoInvalido(ValueError):pass
 
 class Almacen:
@@ -24,7 +28,7 @@ class Almacen:
         c.execute('INSERT INTO control_planes(id,documento,validacion,origen,estado) VALUES(%s,%s,%s,%s,%s)',
                   (id,Jsonb(documento),Jsonb(validacion),Jsonb(origen),estado))
         self.audit(c,id,usuario,'simular','Comparación SUMO terminada',{},dict(estado=estado,huella=huella(documento)))
-    def reemplazar_ejemplos(self, examples):
+    def reemplazar_ejemplos(self, examples, *, conservar_vigentes=False):
         if len(examples) != 5 or len({example[0] for example in examples}) != 5:
             raise ValueError('El lote debe contener cinco ejemplos distintos.')
         if any(not validation['aprobada'] or not validation.get('sumo_real')
@@ -39,7 +43,7 @@ class Almacen:
                 IF @resultado < 0 THROW 51000, 'No se pudo bloquear el lote de ejemplos', 1;
             """)
             previous = c.execute("""
-                SELECT p.id, d.plan_id AS decidido
+                SELECT p.id, p.documento, p.origen, p.estado, p.creado, d.plan_id AS decidido
                 FROM control_planes p WITH (UPDLOCK,HOLDLOCK)
                 LEFT JOIN control_decisiones d ON d.plan_id=p.id
                 WHERE COALESCE(JSON_VALUE(p.origen,'$.archivado'),'0')<>'1'
@@ -57,6 +61,16 @@ class Almacen:
                     )
                   )
             """, (FUENTE_EJEMPLOS,)).fetchall()
+            if conservar_vigentes and len(previous) == len(examples):
+                now = time.time()
+                current = {
+                    firma_ejemplo(p['documento'], p['origen']) for p in previous
+                    if p['origen'].get('fuente') == FUENTE_EJEMPLOS and not p['decidido']
+                    and p['estado'] == 'validado' and 0 <= now - p['creado'].timestamp() < 600
+                }
+                requested = {firma_ejemplo(plan, origin) for _, plan, _, origin in examples}
+                if len(current) == len(examples) and current == requested:
+                    return False
             for old in previous:
                 if old['decidido']:
                     c.execute("UPDATE control_planes SET origen=JSON_MODIFY(origen,'$.archivado',1) WHERE id=%s",
@@ -66,6 +80,7 @@ class Almacen:
                     c.execute('DELETE FROM control_planes WHERE id=%s', (old['id'],))
             for ident, plan, validation, origin in examples:
                 self.insertar_plan(c,ident,plan,validation,{**origin,'fuente':FUENTE_EJEMPLOS},'lanzador-demo')
+        return True
     def listar(self):
         with self.connection() as c:
             return c.execute('''SELECT p.*, d.usuario,d.accion,d.motivo,e.estado AS estado_envio,e.detalle AS detalle_envio

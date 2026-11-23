@@ -111,21 +111,25 @@ internal sealed partial class Instance
         ["CYSA_PANEL_URL"]=PanelUrl+"/"
     };
 
-    async Task<bool> PrepararEjemplos()
+    public async Task LoadPracticeData()
+    {
+        await StartAll();
+        var web = await EnsureWebExecutable();
+        await Run(web, ["--preparar-practica"], Path.GetDirectoryName(web), WebEnvironment(), timeoutMinutes: 2);
+        Write("Cargando el inventario y los conteos de Validación en PostgreSQL…");
+        var sql = await File.ReadAllTextAsync(Path.Combine(Repo, "data", "franco", "ejemplos", "practica.sql"));
+        await Compose("exec", "-T", "db", "psql", "-X", "-U", "cysa", "-d", "cysa", "-v", "ON_ERROR_STOP=1", "-c", sql);
+        await PrepararEjemplos(conservarVigentes: true);
+        Write("Datos de práctica listos para DEMO_INT_01. En Reportes elige Validación; en Planes autoriza con MFA en el banco de pruebas.");
+    }
+
+    async Task PrepararEjemplos(bool conservarVigentes = false)
     {
         Write("Validando cinco propuestas de práctica en SUMO…");
-        try
-        {
-            var code = await Run(Venv, ["tools/franco/preparar_planes_demo.py", "--instalacion", Root],
-                environment: OperationEnvironment(), check: false, timeoutMinutes: 3);
-            if (code == 0) return true;
-        }
-        catch (InvalidOperationException error)
-        {
-            Write(error.Message);
-        }
-        Write("No se pudo renovar el lote de práctica. Se conserva el lote anterior.");
-        return false;
+        string[] args = ["tools/franco/preparar_planes_demo.py", "--instalacion", Root];
+        if (conservarVigentes) args = [.. args, "--conservar-vigentes"];
+        await Run(Venv, args,
+            environment: OperationEnvironment(), timeoutMinutes: 3);
     }
 
     async Task StartOperation()
@@ -199,7 +203,8 @@ internal sealed partial class Instance
     {
         RequireConfigured();
         // Preparar los servicios antes de sustituir el controlador que ya estaba funcionando.
-        await StartAll(true);
+        await StartAll();
+        await PrepararEjemplos();
         await StopController();
         arduinoControllerPort = port;
         arduinoSession = Guid.NewGuid().ToString("N");

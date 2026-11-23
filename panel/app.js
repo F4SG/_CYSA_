@@ -21,7 +21,19 @@ function draw(){
  for(const id of ['countsBody','inventoryBody','statesBody'])$(id).replaceChildren();
  data.counts.filter(match).forEach(x=>{const tr=document.createElement('tr');[x.interseccion,x.acceso+' / '+x.carril,x.clase,x.cantidad,fmt(x.inicio)+' — '+fmt(x.fin)].forEach(v=>cell(tr,v));source(tr,x.prueba);$('countsBody').append(tr);});
  data.inventory.filter(match).forEach(x=>{const tr=document.createElement('tr');[x.activo_id,x.interseccion,x.tipo,x.ubicacion,x.protocolo].forEach(v=>cell(tr,v));source(tr,x.prueba);inventoryActions(tr,x);$('inventoryBody').append(tr);});
- data.states.filter(match).forEach(x=>{const tr=document.createElement('tr');const age=Math.max(0,(Date.now()-new Date(x.timestamp).getTime())/1000);if(age>30)tr.className='stale';[x.interseccion,x.fase_actual,x.plan_activo,x.estado_controlador,fmt(x.timestamp),Math.round(age)+' s'+(age>30?' · Sin actualización':'')].forEach(v=>cell(tr,v));source(tr,x.prueba);$('statesBody').append(tr);});
+ const knownIntersections=new Map();
+ for(const asset of data.inventory)knownIntersections.set(asset.interseccion,knownIntersections.get(asset.interseccion)!==false&&asset.prueba);
+ for(const state of data.states)knownIntersections.delete(state.interseccion);
+ const states=data.states.concat([...knownIntersections].map(([interseccion,prueba])=>({interseccion,prueba})));
+ states.filter(match).forEach(x=>{
+  const tr=document.createElement('tr');
+  const age=x.timestamp?Math.max(0,(Date.now()-new Date(x.timestamp).getTime())/1000):null;
+  const stale=age===null||age>30;
+  if(stale)tr.className='stale';
+  [x.interseccion,x.fase_actual,x.plan_activo,stale?'Sin señal':x.estado_controlador,fmt(x.timestamp),
+   age===null?'—':Math.round(age)+' s'+(stale?' · Sin actualización':'')].forEach(v=>cell(tr,v));
+  source(tr,x.prueba);$('statesBody').append(tr);
+ });
  $('summaryVehicles').textContent=data.counts.filter(match).reduce((n,x)=>n+x.cantidad,0).toLocaleString('es');$('summaryIntersections').textContent=new Set([...data.inventory,...data.states,...data.counts].filter(match).map(x=>x.interseccion)).size;$('summaryAssets').textContent=data.inventory.filter(match).length;
  empty($('countsBody'),6);empty($('inventoryBody'),7);empty($('statesBody'),7);$('loadMore').hidden=!hasMore;
 }

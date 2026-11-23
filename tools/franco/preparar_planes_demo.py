@@ -40,6 +40,8 @@ def main():
     parser.add_argument('--instalacion', type=Path, default=default_install,
                         help='Carpeta de datos del lanzador que contiene workspace')
     parser.add_argument('--solo-validar', action='store_true', help='Evalúa en SUMO sin guardar planes')
+    parser.add_argument('--conservar-vigentes', action='store_true',
+                        help='Conserva un lote idéntico, pendiente y con tiempo para decidir')
     options = parser.parse_args()
     try:
         configurar(options.instalacion.resolve())
@@ -67,8 +69,9 @@ def main():
             prepared.append((ident, plan, validation, origin))
         if options.solo_validar:
             return
-        store.reemplazar_ejemplos(prepared)
-        print('Se cargaron cinco propuestas de práctica validadas.', flush=True)
+        changed = store.reemplazar_ejemplos(prepared, conservar_vigentes=options.conservar_vigentes)
+        print('Se cargaron cinco propuestas de práctica validadas.' if changed else
+              'Se conservaron las cinco propuestas vigentes, con sus identificadores.', flush=True)
     except (KeyError, OSError, RuntimeError, ValueError) as error:
         parser.exit(1, f'No se pudieron preparar los casos: {error}\n')
 

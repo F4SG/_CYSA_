@@ -36,6 +36,11 @@ public sealed class DemoDatabase(CysaDb db,IConfiguration config,IHostEnvironmen
         await db.Database.MigrateAsync(ct);
         await DemoSeeder.Cargar(db,ct);
     }
+    public async Task PrepararPractica(CancellationToken ct = default)
+    {
+        ExigirDemo();
+        await DemoSeeder.PrepararBanco(db, ct);
+    }
     public async Task<Dictionary<string,int>> Conteos(CancellationToken ct=default)
     {
         var result=new Dictionary<string,int>();
