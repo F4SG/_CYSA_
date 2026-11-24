@@ -1,5 +1,22 @@
 # CYSA
 
+## Flujo de prueba del piloto hasta el sprint 2
+
+| Paso | Acción | Resultado que hay que observar |
+| --- | --- | --- |
+| 1. Arranque | Abre `abrir_cysa_actualizado.bat`. En una PC nueva pulsa **Configurar esta PC**. Luego usa **Iniciar sistema** y **Abrir panel**. | El panel abre y permite iniciar sesión con Keycloak. Comprueba que SQL Server y Docker estén disponibles. |
+| 2. Inventario y roles | En **Gestionar infraestructura**, registra como administrador la fuente de video y el controlador de laboratorio. Consulta ambos como operador. | Los dos activos aparecen en el inventario. El operador tiene acceso de lectura. |
+| 3. Conteo real | Pulsa **Contar con video**, abre el archivo y calibra tres carriles del mismo sentido. Guarda con **S**. En **Monitorear operación semafórica**, selecciona la intersección, el contexto de validación y la hora de la corrida. | El panel recibe por MQTT/TLS conteos agregados de autos, motos y micros por carril. Para aceptar RF-03, una persona cuenta el mismo tramo y los mismos cruces. El error absoluto del total debe ser ≤ 20 % del conteo manual. |
+| 4. Configuración | Como administrador, registra los límites aprobados y escribe el motivo. Completa MFA y confirma al volver. Consulta **Bitácora**. | Aparecen el usuario, la fecha, el motivo y los valores anterior y nuevo. |
+| 5. Evaluación | Pulsa **2.2 Cargar datos de práctica**. En **Gestionar planes semafóricos**, revisa una propuesta vigente. Compara plan fijo y Webster con la misma demanda, duración y semilla de SUMO. | Se muestran ambas demoras y el resultado de validación. El servidor rechaza un candidato si aumenta más del 15 % la demora de un acceso. Los ejemplos de práctica son sintéticos. |
+| 6. Placa | Cierra el Monitor Serie. Pulsa **Probar Arduino**, elige el puerto que Windows identifica como Arduino y pulsa **Probar**. Observa los seis LEDs durante el ciclo. | El primer paso ordena verde NS y rojo EO. Después deben verse las transiciones de ámbar y todo rojo. Confirma los LEDs únicamente si coinciden. Si sale **TODO CORRECTO** pero quedan apagados, revisa GND, polaridad y pines antes de continuar. |
+| 7. Autorización y ejecución | Desde la prueba de Arduino, continúa con **integración MFA**. Como operador, autoriza una propuesta validada, completa el OTP y confirma al volver. | Anota el ID, espera el recibo **aplicado** y comprueba que coincidan el plan activo, la fase del panel y las luces de la placa. Durante la prueba breve de S2, comprueba intervalos de estado ≤ 30 s. |
+| 8. Emergencia en el corredor | Abre **Simulación SUMO (demo)**, pulsa **Ctrl+A** y espera a que termine. | En `eventos_corredor.csv` verifica el aviso recibido en B, el verde de prioridad, el retorno al plan fijo y `corrida_completada`. Esta demo usa dos cruces simulados. |
+
+Para calcular RF-03, prepara las nueve filas del mismo tramo con [preparar_calibracion.py](tools/cristhian/preparar_calibracion.py) y ejecuta `python tools/cristhian/aceptar_rf03.py calibracion.csv resultado.json`. Incluye los ceros de cada clase. Con un total manual de cero hace falta otro tramo para calcular el porcentaje.
+
+En el banco con seis LEDs individuales, los pines de rojo, ámbar y verde son **D2, D3, D4** para NS y **D5, D6, D7** para EO. Consulta la [prueba de la placa](controlador/PRUEBA_COMPLETA.md) y la [guía del lanzador](desktop/README.md).
+
 ## Inventario y prueba del Arduino
 
 En **Gestionar infraestructura**, el administrador puede registrar, consultar,
@@ -320,7 +337,7 @@ conectado por COM3.
 | --- | --- |
 | Controlador y MMU | Fases de verde, ámbar y todo rojo; comprobación de conflictos en Arduino; watchdog y modo local seguro ante pérdida del centro. |
 | Cálculo y simulación | Conteos de prueba → SQL Server → propuesta Webster → comparación con el plan fijo usando SUMO real. |
-| Decisión y envío | El administrador calcula; el operador autoriza con MFA reciente. La orden viaja firmada por MQTT/TLS y cambia de plan al terminar un todo rojo. |
+| Decisión y envío | El servidor calcula y valida; el operador autoriza con MFA reciente. La orden viaja firmada por MQTT/TLS y cambia de plan al terminar un todo rojo. |
 | Confirmación y consulta | Vista **Gestionar planes semafóricos** con evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
 | Prioridades del banco | Comparación de prioridad para micros y eventos de emergencia definidos por fecha/hora, conservando los tiempos de seguridad. |
 
@@ -342,7 +359,7 @@ desde la raíz del repositorio, ejecuta cada línea en una PowerShell distinta y
 ```
 
 Abre **Gestionar planes semafóricos** en el panel de Proyecto de Sistemas. SQL Server local
-y ODBC Driver 18 deben estar instalados. El administrador calcula; el operador autoriza
+y ODBC Driver 18 deben estar instalados. El servidor calcula y valida; el operador autoriza
 con OTP real de Keycloak. El QR se configura en la primera acción crítica, no al ingresar para consultar. La base
 operativa es `CYSA_Control_S2`, independiente de `CYSA_WebIII_Demo`. El monitoreo IoT
 anterior conserva su almacén histórico; los nuevos planes, decisiones, envíos, conteos
@@ -486,7 +503,7 @@ Si PowerShell bloquea los scripts, usa esta alternativa directa con Python:
 
 Para marcar únicamente una línea de dos puntos por carril, agrega `-Linea` al comando de PowerShell. La línea no debe atravesar otros flujos.
 
-Los pesos YOLO `.pt` no vienen en Git. Prepara `deteccion/modelos/yolo26s.pt` antes de la presentación; Ultralytics puede descargarlo al primer uso con internet. Si la descarga automática falla, coloca el peso en esa ruta y vuelve a iniciar.
+Los pesos YOLO `.pt` no vienen en Git. El lanzador usa `deteccion/modelos/yolo26n.pt` para el video y `deteccion/modelos/yolo26s.pt` para la cámara. Prepara el peso correspondiente antes de la presentación; Ultralytics puede descargarlo al primer uso con internet. Si la descarga automática falla, coloca el peso en esa ruta y vuelve a iniciar.
 
 #### Dónde queda cada resultado
 
@@ -537,7 +554,7 @@ El segundo comando requiere Node.js. Estas pruebas validan el software; no susti
 5. Cambia al administrador y muestra la gestión de usuarios.
 6. Presenta la evidencia medida y sus límites.
 
-**Evidencia disponible:** en un video de 10:49 min se reportaron 197 vehículos frente a 194 manuales con marcado por línea (diferencia total de +1,5 %). La clase micro tuvo 57,1 % de error en esa corrida. Es una prueba ajustada sobre un solo video: no demuestra cumplimiento general de RF-03. Consulta la [evidencia completa](docs/cristhian/evidencia_conteo_video.md), incluida la corrida con marcado por zona.
+**Evidencia histórica con YOLO26s y una línea:** en un video de 10:49 min se reportaron 197 vehículos frente a 194 manuales con marcado por línea (diferencia total de +1,5 %). La clase micro tuvo 57,1 % de error en esa corrida. Es una prueba ajustada sobre un solo video: no demuestra cumplimiento general de RF-03. Consulta la [evidencia completa](docs/cristhian/evidencia_conteo_video.md), incluida la corrida con marcado por zona.
 
 ### 6. Encender y apagar otro día
 
@@ -643,9 +660,7 @@ Además usamos **Publish–Subscribe mediante MQTT** para distribuir eventos; es
 - **Configurar OTP en cada instalación:** habilitar y enrolar el autenticador del
   operador antes de autorizar planes. La prueba integrada con OTP real ya se
   realizó en el entorno aislado.
-- **Validar la detección automática:** los eventos de emergencia del banco son
-  predefinidos. La detección automática de ambulancias y la precisión por clase
-  requieren validación con videos etiquetados.
+- **Completar RF-03:** verificar la calibración y comparar el total automático con un conteo humano independiente por carril. Las emergencias del piloto se prueban mediante eventos predefinidos en SUMO.
 - **Preparar el equipo para las pruebas:** descargar el ZIP no instala los
   servicios, no configura las cuentas ni programa la placa automáticamente.
   Seguir la [guía de integración](controlador/INTEGRACION.md).

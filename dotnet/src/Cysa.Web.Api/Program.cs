@@ -62,7 +62,7 @@ public partial class Program
         {
             if (panelOrigin is not null)
                 policy.WithOrigins(panelOrigin).WithMethods("GET", "POST", "PUT", "DELETE")
-                    .WithHeaders("Authorization", "Content-Type");
+                    .WithHeaders("Authorization", "Content-Type", "X-CYSA-Motivo");
         }));
         builder.Services.AddSingleton<SemaphoreSlim>(_=>new(1,1));
         builder.Services.AddDbContext<CysaDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));

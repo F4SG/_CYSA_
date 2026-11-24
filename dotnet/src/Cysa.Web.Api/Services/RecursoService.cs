@@ -92,9 +92,16 @@ public sealed class RecursoService<T,TEntrada,TSalida>(CysaDb db, ReglasDominio 
         if(actor is null)throw new ReglaException("El usuario autenticado debe tener un perfil local registrado para conservar la auditoría.",403);
         if(actor is not null)
         {
+            var motivo = "Operación realizada mediante la API";
+            if(projectIdentity && e is ConfigTecnica)
+            {
+                var header = accessor.HttpContext!.Request.Headers["X-CYSA-Motivo"];
+                if(header.Count != 1) throw new ReglaException("Indica el motivo del cambio de configuración.");
+                motivo = Uri.UnescapeDataString(header.ToString()).Trim();
+                if(motivo.Length is 0 or > 240) throw new ReglaException("El motivo debe tener entre 1 y 240 caracteres.");
+            }
             db.Add(new Bitacora{UsuarioId=actor.Id,Operacion=operation,FechaUtc=DateTimeOffset.UtcNow,
-                Motivo=projectIdentity && e is ConfigTecnica ? "Configuración registrada mediante la API de Proyecto"
-                    : "Operación realizada mediante la API",ObjetoTipo=typeof(T).Name,ObjetoId=e.Id.ToString(),
+                Motivo=motivo,ObjetoTipo=typeof(T).Name,ObjetoId=e.Id.ToString(),
                 ValorAnterior=before,ValorPosterior=operation=="eliminar" ? "Eliminado" : JsonSerializer.Serialize(e),
                 MfaVerificado=principal is not null && ApiSetup.MfaReciente(principal,DateTimeOffset.UtcNow),Prueba=e.Prueba});
             await db.SaveChangesAsync(ct);

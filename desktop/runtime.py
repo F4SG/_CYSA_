@@ -198,12 +198,15 @@ def demo_test(args):
 
 def detector(source, device='cpu'):
     import yaml
-    from detector import FachadaConteo
+    from detector import FachadaConteo, parse_source
     from hardware import validate_device
     os.chdir(ROOT)
-    profile = yaml.safe_load((ROOT / 'deteccion/config/carriles_cristhian.yaml').read_text(encoding='utf-8'))
+    profile_name = 'video_santa_cruz.yaml' if parse_source(source)['tipo'] == 'video' else 'carriles_cristhian.yaml'
+    profile = yaml.safe_load((ROOT / 'deteccion/config' / profile_name).read_text(encoding='utf-8'))
     selected = validate_device(device)
-    profile.update(device=selected, imgsz=640, configuracion_verificada=False, model='deteccion/modelos/yolo26s.pt')
+    if profile_name == 'carriles_cristhian.yaml':
+        profile['imgsz'] = 640
+    profile.update(device=selected, configuracion_verificada=False)
     destination = ROOT / f'resultados/launcher-{device}.yaml'
     destination.parent.mkdir(exist_ok=True)
     destination.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding='utf-8')

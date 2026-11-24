@@ -148,7 +148,7 @@
       <label>Estado<select name="estado"><option value="aprobada">Aprobada</option><option value="retirada">Retirada</option></select></label>
       <label class="module-checkbox"><input name="prueba" type="checkbox" checked> Configuración de prueba</label>
     </fieldset>
-    <p id="configEditorStatus" class="status" role="status"></p>
+    <label>Motivo del cambio <input id="configMotivo" required maxlength="240"></label><p id="configEditorStatus" class="status" role="status"></p>
     <div class="form-actions"><button id="configCancel" type="button">Cancelar</button><button id="configSave" type="submit" class="primary">Guardar configuración</button></div>
   </form>
 </dialog>

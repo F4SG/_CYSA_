@@ -19,9 +19,9 @@ const views = {
         ],
     },
     bitacoras: {
-        headings: ['Fecha', 'Operación', 'Objeto', 'Motivo', 'MFA'],
-        cells: item => [date(item.fechaUtc), item.operacion, `${item.objetoTipo} · ${item.objetoId}`,
-            item.motivo, item.mfaVerificado ? 'Verificada' : '—'],
+        headings: ['Fecha', 'Usuario (ID)', 'Operación', 'Objeto', 'Motivo', 'Valor anterior', 'Valor nuevo', 'MFA'],
+        cells: item => [date(item.fechaUtc), item.usuarioId, item.operacion, `${item.objetoTipo} · ${item.objetoId}`,
+            item.motivo, item.valorAnterior, item.valorPosterior, item.mfaVerificado ? 'Verificada' : '—'],
     },
     'versiones-modelo': {
         headings: ['Tipo', 'Identificador', 'Descripción', 'Estado', 'Activación'],
@@ -104,6 +104,7 @@ function openEditor(draft, restored = false) {
         ? `Se eliminará la configuración ${draft.id} si no tiene referencias.`
         : 'La versión aprobada se usa al generar nuevas propuestas del banco.';
     form.reset();
+    document.getElementById('configMotivo').value = draft.motivo || '';
     form.elements.aprobadaUtc.value = localInput(Date.now());
     for (const [name, value] of Object.entries(draft.values || {})) {
         const input = form.elements.namedItem(name);
@@ -138,6 +139,8 @@ export function initConfigurations() {
         const status = $('configEditorStatus');
         const save = $('configSave');
         const {method, id} = action;
+        const motivo = document.getElementById('configMotivo').value.trim();
+        if (!motivo) { setStatus(status, 'Escribe el motivo del cambio.', true); return; }
         const values = {};
         if (method !== 'DELETE') {
             for (const input of $('configEditorFields').querySelectorAll('[name]')) {
@@ -149,12 +152,12 @@ export function initConfigurations() {
         save.disabled = true;
         try {
             if (!oidc.mfaReady()) {
-                rememberDraft('configuraciones', {method, id, values});
+                rememberDraft('configuraciones', {method, id, values, motivo});
                 await oidc.login({mfa: true});
                 return;
             }
             await resource('configuraciones' + (id ? '/' + id : ''), {
-                method, body: method === 'DELETE' ? undefined : values,
+                method, motivo, body: method === 'DELETE' ? undefined : values,
             });
             $('configEditor').close();
             await loadConfigurations();

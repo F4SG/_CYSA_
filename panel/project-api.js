@@ -3,7 +3,7 @@ import {serviceUrl} from './navigation.js';
 
 let readingConfig;
 
-export async function projectRequest(service, path, {method = 'GET', body} = {}) {
+export async function projectRequest(service, path, {method = 'GET', body, motivo} = {}) {
     readingConfig ??= fetch('/config.json', {cache: 'no-store'})
         .then(response => {
             if (!response.ok) throw new Error('No se pudo leer la configuración de CYSA.');
@@ -11,6 +11,7 @@ export async function projectRequest(service, path, {method = 'GET', body} = {})
         }).finally(() => { readingConfig = null; });
     const url = serviceUrl(await readingConfig, service, path);
     const headers = {Authorization: 'Bearer ' + await oidc.accessToken()};
+    if (motivo) headers['X-CYSA-Motivo'] = encodeURIComponent(motivo);
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     let response;
     try {

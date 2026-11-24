@@ -123,11 +123,18 @@ def test_detect_compares_cpu_and_gpu_and_recovers_from_gpu_failure(tmp_path, mon
 
 
 @pytest.mark.parametrize('device,expected', [('cpu', 'cpu'), ('1', 1)])
-def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, expected):
+@pytest.mark.parametrize('video', [True, False])
+def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, expected, video):
+    import detector
     import yaml
     root = tmp_path / 'usuario'
     (root / 'deteccion/config').mkdir(parents=True)
-    (root / 'deteccion/config/carriles_cristhian.yaml').write_text('device: cpu\n')
+    for name in ('carriles_cristhian.yaml', 'video_santa_cruz.yaml'):
+        profile = Path(__file__).resolve().parents[1] / 'deteccion/config' / name
+        (root / 'deteccion/config' / name).write_bytes(profile.read_bytes())
+    source = str(tmp_path / 'video con espacios.mp4') if video else '0'
+    if video:
+        Path(source).touch()
     captured = {}
     class Facade:
         def iniciar(self, profile, output, **kwargs):
@@ -135,10 +142,12 @@ def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, e
             captured['source'] = kwargs['fuente']
             return 0
     monkeypatch.setattr(runtime, 'ROOT', root)
-    monkeypatch.setitem(sys.modules, 'detector', types.SimpleNamespace(FachadaConteo=Facade))
+    monkeypatch.setattr(detector, 'FachadaConteo', Facade)
     monkeypatch.setitem(sys.modules, 'hardware', types.SimpleNamespace(validate_device=lambda _: expected))
     monkeypatch.chdir(tmp_path)
-    assert runtime.detector('video con espacios.mp4', device) == 0
+    assert runtime.detector(source, device) == 0
     assert captured['device'] == expected
-    assert captured['imgsz'] == 640
-    assert captured['source'] == 'video con espacios.mp4'
+    assert captured['imgsz'] == (960 if video else 640)
+    assert captured['model'].endswith('yolo26n.pt' if video else 'yolo26s.pt')
+    assert len(captured['lanes']) == 3
+    assert captured['source'] == source
