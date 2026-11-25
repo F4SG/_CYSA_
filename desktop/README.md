@@ -16,10 +16,12 @@ Los siguientes arranques reutilizan las APIs mientras no cambien sus fuentes.
 
 En **2. Pruebas y práctica**, elige el conjunto de la demostración:
 
-- **Cargar datos de práctica** repone las últimas 24 horas de muestras sintéticas,
-  con tres carriles en el acceso norte, cambios de demanda por hora y tres clases.
-  Las cinco propuestas de práctica usan autos, motos y micros y se evalúan en SUMO.
-  Busca `DEMO_INT_01` y el contexto **Validación** en los reportes.
+- **Cargar datos de práctica** simula 24 horas de tráfico sintético para `DEMO_INT_01`.
+  Detectores virtuales de SUMO miden los cruces de autos, motos y micros en intervalos
+  de 30 segundos. Busca `DEMO_INT_01` y el contexto **Validación** en los reportes.
+  Las cinco propuestas de práctica tienen sus propios casos de evaluación en SUMO.
+- **Ver práctica en SUMO** abre y reproduce el escenario que generó
+  los conteos cargados. Puedes pausar y ajustar la velocidad en SUMO-GUI.
 - **Cargar datos con video** abre el archivo que elijas. Marca tres carriles y pulsa
   **S**. Cuando termine el video, o al pulsar **Q**, el lanzador reemplaza la última
   importación con los intervalos procesados. Busca `DEMO_VIDEO` y **Validación**.

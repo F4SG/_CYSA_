@@ -69,11 +69,14 @@ if __name__ == '__main__':
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--report', type=Path)
     mode.add_argument('--drive', type=Path)
+    mode.add_argument('--gui-binary', action='store_true')
     parser.add_argument('--port', type=int)
     args = parser.parse_args()
     try:
         if args.report:
             prepare_demo(ROOT, args.report)
+        elif args.gui_binary:
+            print(gui_binary())
         elif args.port and 1 <= args.port <= 65535:
             drive(args.drive, args.port)
         else:

@@ -1,7 +1,10 @@
 """La demo visual conserva corridas anteriores y aísla los datos por usuario."""
 import csv
+from datetime import datetime, timezone
 import importlib.util
 from pathlib import Path
+import subprocess
+from uuid import uuid4
 from xml.etree.ElementTree import parse
 
 import pytest
@@ -75,3 +78,37 @@ def test_missing_gui_explains_how_to_repair(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, 'sumo', types.SimpleNamespace(__file__=str(tmp_path / '__init__.py')))
     with pytest.raises(RuntimeError, match='Configurar esta PC'):
         gui.gui_binary()
+
+
+def test_practice_counts_match_the_saved_sumo_scenario(tmp_path, monkeypatch, binaries):
+    monkeypatch.syspath_prepend(str(ROOT / 'desktop'))
+    import sumo_practica
+
+    batch = uuid4()
+    folder = tmp_path / 'usuario con espacios' / str(batch)
+    total = sumo_practica.generar(folder, datetime(2026, 11, 25, 20, 7, tzinfo=timezone.utc))
+    with (folder / 'conteos.csv').open(encoding='utf-8') as file:
+        rows = list(csv.DictReader(file))
+    assert rows[0]['mensaje_id'] == str(batch)
+    assert (rows[0]['carril'], rows[0]['clase']) == ('E_0', 'auto')
+    assert rows[0]['inicio'] == '2026-11-24T20:05:00+00:00'
+    assert rows[-1]['fin'] == '2026-11-25T20:05:00+00:00'
+    assert len(rows) == 2880 * 6 * 3
+    assert all((datetime.fromisoformat(r['fin']) - datetime.fromisoformat(r['inicio'])).total_seconds() == 30
+               for r in rows)
+    assert sum(int(r['cantidad']) for r in rows) == total > 0
+    assert {(r['carril'], r['clase']) for r in rows if int(r['cantidad']) > 0} == {
+        (c, t) for c in sumo_practica.CARRILES for t in sumo_practica.CLASES
+    }
+
+    subprocess.run([binaries / 'sumo.exe', '-c', sumo_practica.CONFIG, '--output-prefix', 'reproduccion-',
+                    '--no-step-log', 'true'], cwd=folder, check=True)
+    def measurements(name):
+        return {(i.get('begin'), i.get('id')): i.get('nVehContrib')
+                for i in parse(folder / name).getroot().iterfind('interval')}
+
+    original = measurements(sumo_practica.SALIDA)
+    assert original == measurements('reproduccion-' + sumo_practica.SALIDA)
+    beginning = datetime.fromisoformat(rows[0]['inicio'])
+    assert all(r['cantidad'] == original[f'{(datetime.fromisoformat(r["inicio"]) - beginning).total_seconds():.2f}',
+                                              f'{r["carril"]}:{r["clase"]}'] for r in rows)

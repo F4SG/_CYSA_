@@ -33,25 +33,29 @@ def load_counts(path):
         if any(a['fin_dt']>b['inicio_dt'] for a,b in zip(ordered,ordered[1:])):raise ValueError('Intervalos superpuestos')
     return rows
 
-def demo_network(out, *, peatonal=False):
+def demo_network(out, *, peatonal=False, carriles_norte=1, netconvert=None):
     nodes=Element('nodes')
     for name,x,y,kind in [('C',0,0,'traffic_light'),('N',0,300,'priority'),('S',0,-300,'priority'),('E',300,0,'priority'),('W',-300,0,'priority')]:
         SubElement(nodes,'node',id=name,x=str(x),y=str(y),type=kind)
     edges=Element('edges');connections=Element('connections');mapping={}
     for idx,(acc,target) in enumerate([('N','S'),('S','N'),('E','W'),('W','E')]):
         extra={'sidewalkWidth':'2'} if peatonal else {}
-        SubElement(edges,'edge',id=acc+'_in',**{'from':acc,'to':'C','numLanes':'1','speed':'13.89'},**extra)
-        SubElement(edges,'edge',id=acc+'_out',**{'from':'C','to':acc,'numLanes':'1','speed':'13.89'},**extra)
-        lane='1' if peatonal else '0'
-        SubElement(connections,'connection',**{'from':acc+'_in','to':target+'_out','fromLane':lane,'toLane':lane,'tl':'C','linkIndex':str(idx)})
+        entradas = carriles_norte if acc == 'N' else 1
+        salidas = carriles_norte if acc == 'S' else 1
+        SubElement(edges,'edge',id=acc+'_in',**{'from':acc,'to':'C','numLanes':str(entradas),'speed':'13.89'},**extra)
+        SubElement(edges,'edge',id=acc+'_out',**{'from':'C','to':acc,'numLanes':str(salidas),'speed':'13.89'},**extra)
+        for number in range(entradas):
+            lane = str(number + int(peatonal))
+            attrs = {'linkIndex': str(idx)} if carriles_norte == 1 else {}
+            SubElement(connections,'connection',**{'from':acc+'_in','to':target+'_out','fromLane':lane,'toLane':lane,'tl':'C'},**attrs)
         mapping[acc]=(acc+'_in',target+'_out')
     if peatonal:
         SubElement(connections,'crossing',node='C',edges='N_in N_out',width='3',priority='true')
     tls=Element('additional');logic=SubElement(tls,'tlLogic',id='C',type='static',programID='DEMO_FIJO',offset='0')
     for duration,state in [(30,'GGrr'),(3,'yyrr'),(2,'rrrr'),(30,'rrGG'),(3,'rryy'),(2,'rrrr')]:SubElement(logic,'phase',duration=str(duration),state=state)
     for name,root in [('demo.nod.xml',nodes),('demo.edg.xml',edges),('demo.con.xml',connections),('demo.tll.xml',tls)]:write_xml(out/name,root)
-    opciones=[] if peatonal else ['--tllogic-files',str(out/'demo.tll.xml')]
-    subprocess.run([binary('netconvert'),'--node-files',str(out/'demo.nod.xml'),'--edge-files',str(out/'demo.edg.xml'),
+    opciones=[] if peatonal or carriles_norte != 1 else ['--tllogic-files',str(out/'demo.tll.xml')]
+    subprocess.run([netconvert or binary('netconvert'),'--node-files',str(out/'demo.nod.xml'),'--edge-files',str(out/'demo.edg.xml'),
       '--connection-files',str(out/'demo.con.xml'),*opciones,'--output-file',str(out/'red.net.xml')],check=True)
     # netconvert puede reordenar linkIndex. Derivar los verdes de las conexiones finales,
     # no de los índices solicitados en PlainXML (evita verdes en conflicto).

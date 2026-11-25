@@ -59,6 +59,61 @@ internal sealed partial class Instance
         await Compose("up", "-d", "--wait", "db");
     }
 
+    string PracticeRuns => Path.Combine(Root, "sumo-practica");
+
+    async Task LoadPracticeCounts()
+    {
+        var folder = Path.Combine(PracticeRuns, Guid.NewGuid().ToString());
+        Write("Ejecutando un día de tráfico sintético en SUMO y midiendo cruces por carril y clase…");
+        await Run(Venv, ["desktop/sumo_practica.py", folder], timeoutMinutes: 3);
+        var counts = (await File.ReadAllTextAsync(Path.Combine(folder, "conteos.csv"))).ReplaceLineEndings("\n");
+        if (!counts.StartsWith("mensaje_id,interseccion,acceso,carril,clase,cantidad,inicio,fin\n",
+            StringComparison.Ordinal) || counts.Contains("\n\\.\n") || !counts.EndsWith('\n'))
+            throw new InvalidOperationException("SUMO no produjo el formato de conteos esperado.");
+
+        var cleanup = await DemoSql("limpiar_conteos_practica.sql");
+        var inventory = await DemoSql("practica.sql");
+        await RunDemoSql(cleanup + "\n" + inventory + "\n" + """
+            CREATE TEMP TABLE practica_sumo (
+                mensaje_id uuid, interseccion text, acceso text, carril text, clase text,
+                cantidad integer, inicio timestamptz, fin timestamptz
+            ) ON COMMIT DROP;
+            COPY practica_sumo FROM STDIN WITH (FORMAT csv, HEADER true);
+            """ + "\n" + counts + "\\.\n" + """
+            INSERT INTO conteos (mensaje_id, interseccion, acceso, carril, clase, cantidad, inicio, fin, prueba, origen_demo)
+            SELECT mensaje_id, interseccion, acceso, carril, clase, cantidad, inicio, fin, true, 'practica'
+            FROM practica_sumo;
+            """);
+    }
+
+    public async Task OpenPracticeSumo()
+    {
+        PrepareDemoSources();
+        RequireSumoClosed();
+        await StartDemoDatabase();
+        Guid? batch = null;
+        await RunDemoSql("""
+            SELECT mensaje_id FROM conteos
+            WHERE origen_demo = 'practica' AND interseccion = 'DEMO_INT_01' AND carril = 'E_0' AND clase = 'auto'
+            ORDER BY inicio LIMIT 1;
+            """, line => { if (Guid.TryParse(line, out var id)) batch = id; });
+        var config = batch is Guid run ? Path.Combine(PracticeRuns, run.ToString(), "practica.sumocfg") : null;
+        if (config is null || !File.Exists(config))
+            throw new InvalidOperationException("No hay una simulación asociada a los conteos actuales. Pulsa Cargar datos de práctica para generarla.");
+
+        string? executable = null;
+        var exit = await Run(Venv, ["desktop/sumo_gui.py", "--gui-binary"], check: false, output: false,
+            onStandardOutput: line => executable = line);
+        if (exit != 0 || !File.Exists(executable))
+            throw new InvalidOperationException("Falta SUMO-GUI. Pulsa Configurar esta PC para reparar la instalación.");
+        SumoGui = Start(executable!, ["-c", config, "--start", "--delay", "15", "--window-size", "1100,750",
+            "--output-prefix", "reproduccion-"], Path.GetDirectoryName(config));
+        await Task.Delay(1000);
+        if (SumoGui.HasExited)
+            throw new InvalidOperationException("La simulación de práctica no pudo abrirse. Revisa el registro de la ventana.");
+        Write("SUMO-GUI reproduce el escenario de DEMO_INT_01 que generó los conteos de práctica. Puedes pausar y ajustar la velocidad.");
+    }
+
     public async Task LoadVideoData(string file, string device)
     {
         RequireDetectorStopped();
@@ -158,6 +213,14 @@ internal sealed partial class Instance
         await Run(web, ["--vaciar-proyecto"], Path.GetDirectoryName(web), webEnvironment, timeoutMinutes: 5);
         await Run(Venv, ["-m", "operacion.restablecer"], environment: environment, timeoutMinutes: 2);
         await RunDemoSql(await DemoSql("restablecer_postgresql.sql"));
+        try
+        {
+            if (Directory.Exists(PracticeRuns)) Directory.Delete(PracticeRuns, recursive: true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Write("Los conteos se eliminaron, pero no se pudieron quitar todos los archivos de simulación guardados.");
+        }
         Write("Datos de Proyecto de Sistemas eliminados. Preparando el panel vacío…");
         await StartAll(prepareWebIII: false);
         await PublishCountRevision();

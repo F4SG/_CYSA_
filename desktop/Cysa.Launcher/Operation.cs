@@ -118,15 +118,14 @@ internal sealed partial class Instance
         await StartAll();
         var web = await EnsureWebExecutable();
         await Run(web, ["--preparar-practica"], Path.GetDirectoryName(web), WebEnvironment(), timeoutMinutes: 2);
-        Write("Cargando el inventario y los conteos de Validación en PostgreSQL…");
-        await RunDemoSql(await DemoSql("limpiar_conteos_practica.sql") + "\n" + await DemoSql("practica.sql"));
+        await LoadPracticeCounts();
+        await PublishCountRevision();
         await PrepararEjemplos(conservarVigentes: true);
         if (ControllerIdle)
         {
             File.Delete(ControllerIdleFile);
             await StartOperation();
         }
-        await PublishCountRevision();
         Write("Datos de práctica listos para DEMO_INT_01. En Reportes elige Validación; en Planes autoriza con MFA en el banco de pruebas.");
     }
 

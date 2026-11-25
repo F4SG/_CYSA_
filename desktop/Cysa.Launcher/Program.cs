@@ -493,13 +493,19 @@ internal sealed partial class Instance
         Write("Marca cuatro esquinas, ajusta carriles con 1–8 y pulsa S. D invierte el sentido; Q termina.");
     }
 
-    public async Task OpenSumo()
+    void RequireSumoClosed()
     {
-        RequireConfigured();
         if (SumoGui is { HasExited: false }) throw new InvalidOperationException("SUMO ya está abierto. Usa su ventana o ciérrala antes de abrir otra simulación.");
         if (sumoDriver is { HasExited: false }) throw new InvalidOperationException("SUMO está cerrando la corrida anterior. Espera unos segundos antes de abrir otra.");
         SumoGui?.Dispose();
         sumoDriver?.Dispose();
+        SumoGui = sumoDriver = null;
+    }
+
+    public async Task OpenSumo()
+    {
+        RequireConfigured();
+        RequireSumoClosed();
         var report = Path.Combine(Root, "sumo-scenario.json");
         await Run(Venv, ["desktop/sumo_gui.py", "--report", report]);
         var scenario = JsonSerializer.Deserialize<SumoScenario>(File.ReadAllText(report))
