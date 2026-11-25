@@ -83,6 +83,7 @@ def test_missing_gui_explains_how_to_repair(monkeypatch, tmp_path):
 def test_practice_counts_match_the_saved_sumo_scenario(tmp_path, monkeypatch, binaries):
     monkeypatch.syspath_prepend(str(ROOT / 'desktop'))
     import sumo_practica
+    from sumo_vista_practica import VEHICULOS, preparar_vista
 
     batch = uuid4()
     folder = tmp_path / 'usuario con espacios' / str(batch)
@@ -101,8 +102,19 @@ def test_practice_counts_match_the_saved_sumo_scenario(tmp_path, monkeypatch, bi
         (c, t) for c in sumo_practica.CARRILES for t in sumo_practica.CLASES
     }
 
-    subprocess.run([binaries / 'sumo.exe', '-c', sumo_practica.CONFIG, '--output-prefix', 'reproduccion-',
-                    '--no-step-log', 'true'], cwd=folder, check=True)
+    routes_path = folder / 'flujos.rou.xml'
+    original_routes = routes_path.read_bytes()
+    visual = preparar_vista(folder / sumo_practica.CONFIG)
+    assert routes_path.read_bytes() == original_routes
+    visual_routes = parse(folder / 'flujos-visual.rou.xml')
+    legend = parse(folder / 'entorno-practica.add.xml')
+    for clase, etiqueta, figura, color, _ in VEHICULOS:
+        tipo = visual_routes.find(f"vType[@id='{clase}']")
+        assert (tipo.get('guiShape'), tipo.get('color')) == (figura, color)
+        assert legend.find(f"poi[@id='etiqueta_{clase}']").get('type') == etiqueta
+        assert legend.find(f"poly[@id='simbolo_{clase}']").get('color') == color
+
+    subprocess.run([binaries / 'sumo.exe', '-c', visual.name, '--no-step-log', 'true'], cwd=folder, check=True)
     def measurements(name):
         return {(i.get('begin'), i.get('id')): i.get('nVehContrib')
                 for i in parse(folder / name).getroot().iterfind('interval')}

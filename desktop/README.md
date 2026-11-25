@@ -21,7 +21,9 @@ En **2. Pruebas y práctica**, elige el conjunto de la demostración:
   de 30 segundos. Busca `DEMO_INT_01` y el contexto **Validación** en los reportes.
   Las cinco propuestas de práctica tienen sus propios casos de evaluación en SUMO.
 - **Ver práctica en SUMO** abre y reproduce el escenario que generó
-  los conteos cargados. Puedes pausar y ajustar la velocidad en SUMO-GUI.
+  los conteos cargados. La leyenda muestra un sedán celeste para **auto**, un bus
+  ámbar para **micro** y una silueta angosta verde para **moto**. Puedes pausar o
+  ajustar la velocidad en SUMO-GUI.
 - **Cargar datos con video** abre el archivo que elijas. Marca tres carriles y pulsa
   **S**. Cuando termine el video, o al pulsar **Q**, el lanzador reemplaza la última
   importación con los intervalos procesados. Busca `DEMO_VIDEO` y **Validación**.

@@ -69,14 +69,18 @@ if __name__ == '__main__':
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--report', type=Path)
     mode.add_argument('--drive', type=Path)
-    mode.add_argument('--gui-binary', action='store_true')
+    mode.add_argument('--practice-config', type=Path)
     parser.add_argument('--port', type=int)
     args = parser.parse_args()
     try:
         if args.report:
             prepare_demo(ROOT, args.report)
-        elif args.gui_binary:
-            print(gui_binary())
+        elif args.practice_config:
+            from sumo_vista_practica import preparar_vista
+
+            executable = gui_binary()
+            config = preparar_vista(args.practice_config)
+            print(json.dumps({'Executable': str(executable), 'Config': str(config)}))
         elif args.port and 1 <= args.port <= 65535:
             drive(args.drive, args.port)
         else:

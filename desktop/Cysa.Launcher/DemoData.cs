@@ -101,18 +101,20 @@ internal sealed partial class Instance
         if (config is null || !File.Exists(config))
             throw new InvalidOperationException("No hay una simulación asociada a los conteos actuales. Pulsa Cargar datos de práctica para generarla.");
 
-        string? executable = null;
-        var exit = await Run(Venv, ["desktop/sumo_gui.py", "--gui-binary"], check: false, output: false,
-            onStandardOutput: line => executable = line);
-        if (exit != 0 || !File.Exists(executable))
-            throw new InvalidOperationException("Falta SUMO-GUI. Pulsa Configurar esta PC para reparar la instalación.");
-        SumoGui = Start(executable!, ["-c", config, "--start", "--delay", "15", "--window-size", "1100,750",
-            "--output-prefix", "reproduccion-"], Path.GetDirectoryName(config));
+        string? launch = null;
+        await Run(Venv, ["desktop/sumo_gui.py", "--practice-config", config], onStandardOutput: line => launch = line);
+        var view = launch is null ? null : JsonSerializer.Deserialize<PracticeSumoView>(launch);
+        if (view is null || !File.Exists(view.Executable) || !File.Exists(view.Config))
+            throw new InvalidOperationException("No se pudo preparar la vista de SUMO para estos conteos.");
+        SumoGui = Start(view.Executable, ["-c", view.Config, "--start", "--delay", "65", "--window-size", "1100,750"],
+            Path.GetDirectoryName(view.Config));
         await Task.Delay(1000);
         if (SumoGui.HasExited)
             throw new InvalidOperationException("La simulación de práctica no pudo abrirse. Revisa el registro de la ventana.");
         Write("SUMO-GUI reproduce el escenario de DEMO_INT_01 que generó los conteos de práctica. Puedes pausar y ajustar la velocidad.");
     }
+
+    sealed record PracticeSumoView(string Executable, string Config);
 
     public async Task LoadVideoData(string file, string device)
     {
