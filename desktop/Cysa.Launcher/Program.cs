@@ -267,6 +267,11 @@ internal sealed partial class Instance
 
     public async Task Configure()
     {
+        if (!File.Exists(Path.Combine(Root, "configurado")))
+        {
+            await IsolateProjectData();
+            await KeepControllerIdle();
+        }
         Seed();
         await EnsureDocker();
         if (!File.Exists(Python))
@@ -310,7 +315,9 @@ internal sealed partial class Instance
         if (!Configured || !File.Exists(Path.Combine(Root, "configurado"))) throw new InvalidOperationException("Pulsa Configurar esta PC para completar la instalación.");
     }
 
-    public async Task StartAll()
+    public Task StartAll() => StartAll(prepareWebIII: true);
+
+    async Task StartAll(bool prepareWebIII)
     {
         RequireConfigured();
         await PreparePanelNavigation();
@@ -333,7 +340,7 @@ internal sealed partial class Instance
                 ["Logging__LogLevel__Default"]="Warning", ["Logging__LogLevel__Microsoft.AspNetCore"]="Warning" });
         }
         foreach (var port in new[] { Ports.Panel, Ports.Evaluation, Ports.Decision }) await WaitUrl($"http://127.0.0.1:{port}/health", 90);
-        await StartWebIII();
+        await StartWebIII(prepareWebIII);
         await StartOperation();
         Write("Sistema listo: monitoreo, módulos de gestión, banco S2 y controlador emulado disponibles. No se actúa sobre semáforos reales.");
     }
@@ -432,9 +439,11 @@ internal sealed partial class Instance
             using var response=await http.GetAsync(url);
             if(response.StatusCode!=HttpStatusCode.Unauthorized)throw new InvalidOperationException("Una consulta protegida no rechazó el acceso sin sesión.");
         }
-        if(!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited)
+        if (!ControllerIdle && !arduinoPaused && !OwnsRunningService("Controlador S2"))
             throw new InvalidOperationException("El controlador emulado S2 no está iniciado. Pulsa Iniciar sistema.");
-        Write("Verificados: módulos de gestión, SQL Server, banco S2, MQTT y controlador emulado.");
+        Write(ControllerIdle
+            ? "Verificados: módulos de gestión, SQL Server, banco S2 y MQTT. El controlador espera una carga de práctica."
+            : "Verificados: módulos de gestión, SQL Server, banco S2 y MQTT.");
         Write("Las consultas sin sesión se rechazan. El ingreso por rol con OTP se comprueba desde el navegador; no se intenta omitir MFA con una contraseña guardada.");
     }
 

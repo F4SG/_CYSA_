@@ -105,6 +105,7 @@ internal sealed partial class Instance
         ["CYSA_INSTALACION_DIR"]=Repo,
         ["CYSA_SQL_SERVER"]=SqlServerActual(),
         ["CYSA_SQL_DATABASE"]="CYSA_Control_S2",
+        ["CYSA_CONFIG_DATABASE"]=ProjectDataIsolated ? "CYSA_Proyecto" : "CYSA_WebIII_Demo",
         ["CYSA_OPERACION_PORT"]=Ports.Operation.ToString(),
         ["CYSA_OPERACION_URL"]=OperationUrl,
         ["CYSA_WEB_URL"]=WebUrl,
@@ -120,6 +121,12 @@ internal sealed partial class Instance
         Write("Cargando el inventario y los conteos de Validación en PostgreSQL…");
         await RunDemoSql(await DemoSql("limpiar_conteos_practica.sql") + "\n" + await DemoSql("practica.sql"));
         await PrepararEjemplos(conservarVigentes: true);
+        if (ControllerIdle)
+        {
+            File.Delete(ControllerIdleFile);
+            await StartOperation();
+        }
+        await PublishCountRevision();
         Write("Datos de práctica listos para DEMO_INT_01. En Reportes elige Validación; en Planes autoriza con MFA en el banco de pruebas.");
     }
 
@@ -132,27 +139,32 @@ internal sealed partial class Instance
             environment: OperationEnvironment(), timeoutMinutes: 3);
     }
 
+    async Task EnsureOperationRequirements(Dictionary<string,string> environment)
+    {
+        var requirements=new[]{"backend/requirements.txt","simulacion/requirements.txt","controlador/requirements.txt","operacion/requirements.txt"};
+        var fingerprint=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n",requirements.Select(p=>File.ReadAllText(Path.Combine(Repo,p)))))));
+        var marker=Path.Combine(Root,"s2-requisitos.sha256");
+        if(!File.Exists(marker) || File.ReadAllText(marker)!=fingerprint)
+        {
+            Write("Preparando dependencias del banco S2; se reutiliza el entorno Python de esta PC.");
+            await Run(Venv,new[]{"-m","pip","install","--disable-pip-version-check"}.Concat(requirements.SelectMany(p=>new[]{"-r",p})),environment:environment,timeoutMinutes:15);
+            await File.WriteAllTextAsync(marker,fingerprint);
+        }
+    }
+
     async Task StartOperation()
     {
         var environment=OperationEnvironment();
         if(!apis.TryGetValue("Operacion S2",out var server) || server.HasExited)
         {
             if(!IsFree(Ports.Operation))throw new InvalidOperationException($"El puerto del banco S2 ({Ports.Operation}) está ocupado por otro proceso.");
-            var requirements=new[]{"backend/requirements.txt","simulacion/requirements.txt","controlador/requirements.txt","operacion/requirements.txt"};
-            var fingerprint=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n",requirements.Select(p=>File.ReadAllText(Path.Combine(Repo,p)))))));
-            var marker=Path.Combine(Root,"s2-requisitos.sha256");
-            if(!File.Exists(marker) || File.ReadAllText(marker)!=fingerprint)
-            {
-                Write("Preparando dependencias del banco S2; se reutiliza el entorno Python de esta PC.");
-                await Run(Venv,new[]{"-m","pip","install","--disable-pip-version-check"}.Concat(requirements.SelectMany(p=>new[]{"-r",p})),environment:environment,timeoutMinutes:15);
-                await File.WriteAllTextAsync(marker,fingerprint);
-            }
+            await EnsureOperationRequirements(environment);
             await Run(Venv,["tools/franco/preparar_control.py","--repo",Repo],environment:environment);
             await Run(Venv,["tools/franco/configurar_mfa_control.py","--repo",Repo],environment:environment);
             apis["Operacion S2"]=Start(Venv,["-m","operacion.servidor"],environment:environment);
         }
         await WaitOperationReady();
-        if(!arduinoPaused && (!apis.TryGetValue("Controlador S2",out var controller) || controller.HasExited))
+        if (!ControllerIdle && !arduinoPaused && !OwnsRunningService("Controlador S2"))
         {
             // El arranque general usa software. Nunca elige ni abre un puerto serial.
             StartController(environment);
@@ -163,7 +175,9 @@ internal sealed partial class Instance
         var config=JsonSerializer.Deserialize<Dictionary<string,JsonElement>>(await File.ReadAllTextAsync(path))!;
         config["operacionBase"]=JsonSerializer.SerializeToElement(OperationUrl);
         await File.WriteAllTextAsync(path,JsonSerializer.Serialize(config));
-        Write(arduinoPaused ? "Arduino detenido. Pulsa Reanudar Arduino para continuar; los servicios del panel siguen disponibles." : arduinoControllerPort is null
+        Write(arduinoPaused ? "Arduino detenido. Pulsa Reanudar Arduino para continuar; los servicios del panel siguen disponibles."
+            : ControllerIdle && !OwnsRunningService("Controlador S2") ? "Banco S2 listo. El emulador espera Cargar datos de práctica."
+            : arduinoControllerPort is null
             ? "Banco S2 listo con SQL Server, MQTT y MMU simulado. La placa física y la fuente de cámara se seleccionan aparte."
             : $"Banco S2 listo con Arduino físico en {arduinoControllerPort}; recibe planes autorizados con MFA.");
     }
@@ -236,11 +250,7 @@ internal sealed partial class Instance
                 throw new InvalidOperationException("El Arduino no confirmó conexión con el centro. Revisa MQTT y el registro.");
         }
         catch { await StopController(); arduinoControllerPort = arduinoSession = null; throw; }
-        try { await PrepararEjemplos(conservarVigentes: true); }
-        catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
-        {
-            Write($"ADVERTENCIA: El Arduino sigue conectado. No se renovaron las propuestas: {error.Message}");
-        }
+        File.Delete(ControllerIdleFile);
     }
 
     async Task WaitOperationReady()

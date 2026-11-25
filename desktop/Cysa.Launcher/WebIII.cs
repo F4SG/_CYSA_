@@ -74,7 +74,7 @@ internal sealed partial class Instance
         return exe;
     }
     public string WebUrl => $"http://localhost:{Ports.Web}";
-    Dictionary<string,string> WebEnvironment() => new()
+    Dictionary<string,string> WebEnvironment(bool? isolatedProject = null) => new()
     {
         ["ASPNETCORE_ENVIRONMENT"]="Development", ["Security__Mode"]="Demo", ["Demo__Enabled"]="true",
         ["Storage__Directory"]=Path.Combine(Root,"webiii-runtime"),
@@ -82,9 +82,12 @@ internal sealed partial class Instance
         ["Security__PanelUrl"]=PanelUrl+"/",
         ["Evaluaciones__BaseUrl"]=WebUrl,
         ["ConnectionStrings__Cysa"]=SqlConnectionExterna ? Environment.GetEnvironmentVariable("CYSA_WEBIII_CONNECTION")! : new SqlServerOptions(SqlServerActual()).Cadena(),
+        ["ConnectionStrings__Proyecto"]=(isolatedProject ?? ProjectDataIsolated) ? new SqlServerOptions(SqlServerActual()).Cadena() : "",
         ["Logging__LogLevel__Default"]="Warning"
     };
-    public async Task StartWebIII()
+    public Task StartWebIII() => StartWebIII(prepareDemo: true);
+
+    async Task StartWebIII(bool prepareDemo)
     {
         const string name="Cysa.Web.Api";
         if(apis.TryGetValue(name,out var process) && !process.HasExited)return;
@@ -93,7 +96,10 @@ internal sealed partial class Instance
         var env=WebEnvironment();
         Write("Preparando SQL Server: CYSA_WebIII_Demo. El arranque conserva los datos existentes.");
         // No configura Docker, cámara, Python, YOLO, SUMO ni cuentas del sistema principal.
-        await Run(exe,["--preparar-demo"],Path.GetDirectoryName(exe),env,timeoutMinutes:5);
+        if (prepareDemo)
+            await Run(exe, ["--preparar-demo"], Path.GetDirectoryName(exe), env, timeoutMinutes: 5);
+        if (ProjectDataIsolated)
+            await Run(exe, ["--preparar-proyecto-esquema"], Path.GetDirectoryName(exe), env, timeoutMinutes: 5);
         apis[name]=Start(exe,["--urls",WebUrl],Path.GetDirectoryName(exe),env);
         await WaitUrl(WebUrl+"/health",60);
         var panelConfig=Path.Combine(Repo,"panel","config.json");

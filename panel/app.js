@@ -141,10 +141,20 @@ try {
   if(draft?.view==='planes'&&currentView==='planes')restoreDecision(draft.data);
   setInterval(()=>{if(!document.hidden&&$('live').checked&&['conteos','inventario','estados'].includes(currentView))refresh();},15000);
   if (config.conteosRevisionUrl === '/runtime/conteos.json') {
-   const checkCounts = pollCountRevision(config.conteosRevisionUrl, () =>
-    currentView === 'reportes' ? loadReports() : refresh());
+   const checkCounts = pollCountRevision(config.conteosRevisionUrl, async () => {
+    if (currentView === 'reportes') return loadReports();
+    if (currentView === 'configuraciones') {
+     await loadConfigurations({reloadIntersections: true});
+     return true;
+    }
+    if (currentView === 'planes') {
+     await Promise.all([loadPlans(), loadArduino()]);
+     return true;
+    }
+    return refresh();
+   });
    setInterval(() => {
-    if (!document.hidden && ['conteos', 'inventario', 'estados', 'reportes'].includes(currentView)) checkCounts();
+    if (!document.hidden && ['conteos', 'inventario', 'estados', 'reportes', 'configuraciones', 'planes'].includes(currentView)) checkCounts();
    }, 2500);
   }
   setInterval(()=>{

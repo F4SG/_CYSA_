@@ -16,8 +16,10 @@ internal static class SystemStartupTest
             await instance.StartAll();
             await instance.Verify();
             var first=instance.RunningServices();
-            foreach(var name in new[]{"Cysa.Evaluaciones.Api","Cysa.Decisiones.Api","Cysa.Web.Api","Operacion S2","Controlador S2"})
+            foreach(var name in new[]{"Cysa.Evaluaciones.Api","Cysa.Decisiones.Api","Cysa.Web.Api","Operacion S2"})
                 if(!first.ContainsKey(name))throw new Exception("Servicio no iniciado: "+name);
+            if (instance.ControllerIdle && first.ContainsKey("Controlador S2"))
+                throw new Exception("El controlador generó estados antes de cargar datos de práctica.");
             using var client=new HttpClient(new HttpClientHandler{AllowAutoRedirect=false});
             var panel=await client.GetStringAsync(instance.PanelUrl);
             if(!panel.Contains("data-tab=\"configuraciones\"") || !panel.Contains("data-tab=\"planes\"") || panel.Contains("Swagger (Web III)"))

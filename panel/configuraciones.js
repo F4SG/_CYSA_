@@ -35,7 +35,8 @@ let generation = 0;
 let loaded = false;
 let action;
 
-export async function loadConfigurations() {
+export async function loadConfigurations({reloadIntersections = false} = {}) {
+    if (reloadIntersections) loaded = false;
     const current = ++generation;
     const view = selected;
     const requestedPage = page;
@@ -45,6 +46,7 @@ export async function loadConfigurations() {
     const table = views[view];
     const columns = [...table.headings, ...(editable ? ['Acciones'] : [])];
     $('configNew').hidden = !editable;
+    $('configNew').disabled = true;
     $('configPrevious').disabled = $('configNext').disabled = true;
     $('configHelp').hidden = view !== 'versiones-modelo';
     $('configHead').replaceChildren(...columns.map(title => {
@@ -66,6 +68,7 @@ export async function loadConfigurations() {
             $('configForm').elements.interseccionId.replaceChildren(...available.map(item => new Option(item.nombre, item.id)));
             loaded = true;
         }
+        $('configNew').disabled = intersections.size === 0;
         const rows = items.map(item => {
             const row = rowCells(table.cells(item));
             if (editable) {

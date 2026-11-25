@@ -16,8 +16,20 @@ public partial class Program
     {
         var prepare=args.Contains("--preparar-demo"); var reset=args.Contains("--recrear-demo"); var verify=args.Contains("--verificar-demo"); var probe=args.Contains("--probar-conexion");
         var practice = args.Contains("--preparar-practica");
-        if(new[]{prepare,reset,verify,probe,practice}.Count(a=>a)>1)throw new ArgumentException("Usa solo una operación de preparación, recreación, verificación o prueba de conexión.");
-        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo" or "--probar-conexion" or "--preparar-practica")).ToArray());
+        var projectSchema = args.Contains("--preparar-proyecto-esquema");
+        var clearProject = args.Contains("--vaciar-proyecto");
+        if(new[]{prepare,reset,verify,probe,practice,projectSchema,clearProject}.Count(a=>a)>1)throw new ArgumentException("Usa solo una operación de preparación, recreación, verificación o prueba de conexión.");
+        var builder=WebApplication.CreateBuilder(args.Where(a=>a is not ("--preparar-demo" or "--recrear-demo" or "--verificar-demo" or "--probar-conexion" or "--preparar-practica" or "--preparar-proyecto-esquema" or "--vaciar-proyecto")).ToArray());
+        var projectSettings = builder.Configuration.GetConnectionString("Proyecto");
+        var projectConnection = string.IsNullOrWhiteSpace(projectSettings) ? null : ProyectoDatabase.ConnectionString(projectSettings);
+        if (projectSchema || clearProject || (practice && projectConnection is not null))
+        {
+            if (!builder.Environment.IsDevelopment() || projectConnection is null)
+                throw new InvalidOperationException("El mantenimiento de Proyecto de Sistemas requiere la base local CYSA_Proyecto.");
+            await ProyectoDatabase.Prepare(projectConnection, clearProject, practice);
+            Console.WriteLine(clearProject ? "Base de Proyecto de Sistemas vacía." : "Base de Proyecto de Sistemas preparada.");
+            return;
+        }
         if(prepare || reset || verify || probe || practice)
         {
             builder.Configuration["Demo:Enabled"]="true";
@@ -65,7 +77,13 @@ public partial class Program
                     .WithHeaders("Authorization", "Content-Type", "X-CYSA-Motivo");
         }));
         builder.Services.AddSingleton<SemaphoreSlim>(_=>new(1,1));
-        builder.Services.AddDbContext<CysaDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
+        var webConnection = builder.Configuration.GetConnectionString("Cysa");
+        builder.Services.AddDbContext<CysaDb>((services, options) =>
+        {
+            var request = services.GetRequiredService<IHttpContextAccessor>().HttpContext?.Request;
+            var esProyecto = request?.Path.StartsWithSegments("/api/proyecto") == true;
+            options.UseSqlServer(esProyecto && projectConnection is not null ? projectConnection : webConnection);
+        });
         builder.Services.AddDbContext<EvaluacionesDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
         builder.Services.AddDbContext<DecisionesDb>(o=>o.UseSqlServer(builder.Configuration.GetConnectionString("Cysa")));
         builder.Services.AddScoped<DemoDatabase>(); builder.Services.AddScoped<DemoVerifier>(); builder.Services.AddScoped<ReglasDominio>();

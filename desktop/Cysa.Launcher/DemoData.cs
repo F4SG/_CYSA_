@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+
 namespace Cysa.Launcher;
 
 internal sealed partial class Instance
@@ -25,7 +28,7 @@ internal sealed partial class Instance
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { revision = Guid.NewGuid().ToString("N") });
+            var payload = JsonSerializer.Serialize(new { revision = Guid.NewGuid().ToString("N") });
             await File.WriteAllTextAsync(path + ".tmp", payload);
             File.Move(path + ".tmp", path, true);
         }
@@ -33,25 +36,6 @@ internal sealed partial class Instance
         {
             Write("No se pudo avisar al panel. Pulsa Actualizar o Consultar para volver a cargar los conteos.");
         }
-    }
-
-    async Task<int> DeleteVideoRows(string script, params string[] variables)
-    {
-        EnsureVideoStopped();
-        PrepareDemoSources();
-        await StartDemoDatabase();
-
-        const string prefix = "CYSA_VIDEO_ELIMINADAS=";
-        int? deleted = null;
-        await RunDemoSql(await DemoSql(script), line =>
-        {
-            if (line.StartsWith(prefix, StringComparison.Ordinal) &&
-                int.TryParse(line.AsSpan(prefix.Length), out var count) && count >= 0)
-                deleted = count;
-        }, variables);
-
-        await PublishCountRevision();
-        return deleted ?? throw new InvalidOperationException("PostgreSQL no confirmó cuántas filas se eliminaron. Actualiza el panel y revisa el registro.");
     }
 
     Task<string> DemoSql(string name) => File.ReadAllTextAsync(Path.Combine(Repo, "data", "franco", "ejemplos", name));
@@ -135,39 +119,48 @@ internal sealed partial class Instance
         }
     }
 
-    void EnsureVideoStopped()
-    {
-        if (Detector is { HasExited: false })
-            throw new InvalidOperationException("Cierra el detector con Q y espera a que termine antes de eliminar los conteos.");
-    }
+    string ControllerIdleFile => Path.Combine(Root, "banco-sin-datos");
+    internal bool ControllerIdle => File.Exists(ControllerIdleFile);
 
-    public Task<int> DeletePreviousVideo(DateTimeOffset from, DateTimeOffset to)
-    {
-        if (to <= from || to - from > TimeSpan.FromSeconds(31))
-            throw new ArgumentException("Indica el inicio y el fin de un intervalo del panel, de hasta 31 segundos.");
-        return DeleteVideoRows("limpiar_video_anterior.sql",
-            "video_desde=" + from.ToString("O"), "video_hasta=" + to.ToString("O"));
-    }
+    Task KeepControllerIdle() => File.WriteAllTextAsync(ControllerIdleFile, "Espera una carga de práctica o la activación del Arduino.");
 
-    public Task<int> DeleteVideoData() => DeleteVideoRows("limpiar_conteos_video.sql");
+    string ProjectDataMarker => Path.Combine(Root, "proyecto-datos-aislados");
+    bool ProjectDataIsolated => File.Exists(ProjectDataMarker);
 
-    public async Task DeletePracticeData()
+    Task IsolateProjectData() => File.WriteAllTextAsync(ProjectDataMarker, "Configuraciones del panel en CYSA_Proyecto.");
+
+    public async Task ResetDemoData()
     {
         PrepareDemoSources();
-        await StartDemoDatabase();
+        await EnsureDocker();
+        var web = await EnsureWebExecutable();
+        var environment = OperationEnvironment();
+        var webEnvironment = WebEnvironment(isolatedProject: true);
+        await Run(web, ["--preparar-proyecto-esquema"], Path.GetDirectoryName(web), webEnvironment, timeoutMinutes: 5);
+        await EnsureOperationRequirements(environment);
+        await KeepControllerIdle();
+        await IsolateProjectData();
+        dockerSession.MarkUsed();
+        await StopAll();
 
-        await Run(Venv, ["tools/franco/preparar_planes_demo.py", "--instalacion", Root, "--eliminar"],
-            environment: OperationEnvironment(), timeoutMinutes: 2);
-        await RunDemoSql(await DemoSql("limpiar_conteos_practica.sql") + "\n" + """
-            DELETE FROM inventario
-            WHERE interseccion = 'DEMO_INT_01' AND prueba AND (
-                (activo_id IN ('DEMO_INT_01', 'DEMO_ACCESO_N', 'DEMO_ACCESO_S', 'DEMO_ACCESO_E', 'DEMO_ACCESO_W')
-                    AND ubicacion = 'UBICACION_SINTETICA' AND protocolo = 'no_aplica')
-                OR (activo_id = 'DEMO_CAM_01' AND tipo = 'camara' AND ubicacion = 'WEBCAM_DE_PRUEBA' AND protocolo = 'USB')
-                OR (activo_id = 'DEMO_CTL_01' AND tipo = 'controlador' AND ubicacion = 'CONTROLADOR_FICTICIO' AND protocolo = 'MQTT_TLS')
-            );
-            """);
-        Write("Datos de práctica retirados del panel. Las decisiones anteriores se conservan en el historial.");
+        arduinoResumePlan = null;
+        if (arduinoControllerPort is not null)
+        {
+            arduinoPaused = true;
+            SaveArduinoControl();
+        }
+        var telemetry = Path.Combine(Repo, "infra", "runtime", "control", "arduino-estado.json");
+        var receipts = Path.Combine(Repo, "resultados", "controlador", "recibos.json");
+        if (File.Exists(telemetry)) File.Delete(telemetry);
+        if (File.Exists(receipts)) File.Delete(receipts);
+
+        await StartDemoDatabase();
+        await Run(web, ["--vaciar-proyecto"], Path.GetDirectoryName(web), webEnvironment, timeoutMinutes: 5);
+        await Run(Venv, ["-m", "operacion.restablecer"], environment: environment, timeoutMinutes: 2);
+        await RunDemoSql(await DemoSql("restablecer_postgresql.sql"));
+        Write("Datos de Proyecto de Sistemas eliminados. Preparando el panel vacío…");
+        await StartAll(prepareWebIII: false);
+        await PublishCountRevision();
     }
 }
 
@@ -187,89 +180,15 @@ internal sealed partial class MainForm
 
     async Task DeleteDemoData()
     {
-        using var dialog = new Form
-        {
-            Text = "Eliminar datos", StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(470, 254), FormBorderStyle = FormBorderStyle.FixedDialog,
-            MinimizeBox = false, MaximizeBox = false, Padding = new Padding(16)
-        };
-        using var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        using var choices = new ComboBox { Width = 418, DropDownStyle = ComboBoxStyle.DropDownList, AccessibleName = "Conjunto de datos" };
-        choices.Items.AddRange(["Conteos de video (en vivo e importados)", "Datos precargados de práctica",
-            "Video anterior (buscar por intervalo)"]);
-        using var legacy = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, Visible = false };
-        legacy.Controls.Add(new Label { Text = "Copia la fecha y las dos horas del período mostrado en el panel.", AutoSize = true });
-        var now = DateTime.Now;
-        DateTimePicker AddTime(string label, DateTime value)
-        {
-            var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false };
-            row.Controls.Add(new Label { Text = label, Width = 76, TextAlign = ContentAlignment.MiddleLeft });
-            var field = new DateTimePicker
-            {
-                Format = DateTimePickerFormat.Custom, CustomFormat = "dd/MM/yyyy HH:mm:ss",
-                Width = 248, Value = value, AccessibleName = label
-            };
-            row.Controls.Add(field);
-            legacy.Controls.Add(row);
-            return field;
-        }
-        var from = AddTime("Desde", now.AddSeconds(-20));
-        var to = AddTime("Hasta", now);
-        using var buttons = new FlowLayoutPanel { AutoSize = true };
-        using var remove = new Button { Text = "Eliminar", AutoSize = true, Enabled = false };
-        using var cancel = new Button { Text = "Cancelar", AutoSize = true, DialogResult = DialogResult.Cancel };
-        choices.SelectedIndexChanged += (_, _) =>
-        {
-            remove.Enabled = choices.SelectedIndex >= 0;
-            legacy.Visible = choices.SelectedIndex == 2;
-        };
-        remove.Click += (_, _) =>
-        {
-            if (choices.SelectedIndex == 2 && (to.Value <= from.Value || to.Value - from.Value > TimeSpan.FromSeconds(31)))
-            {
-                MessageBox.Show(dialog, "Indica el inicio y el fin de un intervalo del panel, de hasta 31 segundos.", "Eliminar datos");
-                return;
-            }
-            var detail = choices.SelectedIndex switch
-            {
-                0 => "Se borrarán los conteos de video en vivo y los importados.",
-                2 => $"Se buscará un lote de video anterior en DEMO_INT_01 entre {from.Value:dd/MM/yyyy HH:mm:ss} y {to.Value:HH:mm:ss} (hora local). Confirma que corresponde al video.",
-                _ => "Se retirarán los conteos, activos de ejemplo y propuestas de práctica. Se conservarán las decisiones registradas."
-            };
-            if (MessageBox.Show(dialog, detail + "\n\n¿Confirmas la eliminación?", "Eliminar datos",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                dialog.DialogResult = DialogResult.OK;
-        };
-        buttons.Controls.AddRange([remove, cancel]);
-        layout.Controls.Add(new Label { Text = "Elige qué conjunto quieres eliminar.", AutoSize = true });
-        layout.Controls.Add(choices);
-        layout.Controls.Add(legacy);
-        layout.Controls.Add(buttons);
-        dialog.Controls.Add(layout);
-        dialog.CancelButton = cancel;
-        ApplyControlTheme(dialog);
-        if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        if (choices.SelectedIndex == 1)
-        {
-            await instance.DeletePracticeData();
-            return;
-        }
+        const string detail = "Se eliminarán los datos de Proyecto de Sistemas: conteos, inventario, estados, "
+            + "configuraciones del panel, planes, decisiones y bitácoras. Se conservarán los datos de Web III, "
+            + "tus cuentas de acceso, los ajustes de esta PC y los videos originales.\n\n"
+            + "¿Quieres restablecer Proyecto de Sistemas?";
+        if (MessageBox.Show(this, detail, "Eliminar datos", MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
 
-        var previous = choices.SelectedIndex == 2;
-        static DateTimeOffset ToSecond(DateTime value) =>
-            new(value.AddTicks(-(value.Ticks % TimeSpan.TicksPerSecond)));
-        var deleted = previous
-            ? await instance.DeletePreviousVideo(ToSecond(from.Value), ToSecond(to.Value))
-            : await instance.DeleteVideoData();
-        if (deleted == 0)
-        {
-            throw new InvalidOperationException(previous
-                ? "Se eliminaron 0 filas. No se encontró un lote único de tres carriles con esas horas. Revisa el período exacto en DEMO_INT_01."
-                : "Se eliminaron 0 filas. Si el video aparece como DEMO_INT_01, elige Video anterior (buscar por intervalo).");
-        }
-
-        var result = $"Filas de video eliminadas: {deleted}. El panel volverá a consultar los conteos.";
-        instance.Write(result);
-        MessageBox.Show(this, result, "Eliminar datos", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        await instance.ResetDemoData();
+        MessageBox.Show(this, "Proyecto de Sistemas quedó sin datos. Usa Cargar datos de práctica o Cargar datos con video cuando lo necesites.",
+            "Eliminar datos", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 }

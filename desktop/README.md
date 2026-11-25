@@ -26,18 +26,16 @@ En **2. Pruebas y práctica**, elige el conjunto de la demostración:
   Usa solo conteos agregados, con el ritmo de los intervalos del archivo. Para
   demostrar la recepción en vivo por MQTT/TLS, usa **Contar con video**. Los
   dos botones identifican sus conteos como `DEMO_VIDEO`.
-- **Eliminar datos** permite quitar los conteos de video en vivo e importados o
-  los datos sintéticos de práctica. Para una corrida anterior que aparece en
-  `DEMO_INT_01`, elige **Video anterior (buscar por intervalo)** y copia la
-  fecha, la hora de inicio y la de fin del período mostrado. El lanzador muestra
-  cuántas filas confirmó PostgreSQL y la vista abierta vuelve a consultar los
-  conteos después de importar o eliminar video. Conserva
-  el archivo de video, los registros ajenos al lanzador, la configuración del banco
-  y las decisiones ya auditadas. Si queda un envío de práctica pendiente, espera
-  su resultado antes de retirar los datos sintéticos.
+- **Eliminar datos** restablece Proyecto de Sistemas en una sola acción. Vacía
+  conteos, inventario, estados, configuraciones del panel, planes, decisiones y
+  bitácoras del banco. Conserva Web III, las cuentas, los ajustes de la PC y los
+  archivos originales. El emulador espera la carga de práctica o la activación
+  del Arduino.
 
-SQL Server debe estar instalado y accesible. Después de compilar la API, el lanzador
-aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.
+Las instalaciones nuevas y las ya restablecidas guardan las configuraciones de
+Proyecto de Sistemas en `CYSA_Proyecto`. Los registros de la base anteriormente
+compartida siguen disponibles en Web III. El arranque de Web III aplica sus
+migraciones y prepara su semilla igual que antes.
 No requiere Docker, Python, cámara ni YOLO para Web III.
 
 Al cerrar o pulsar **Detener sistema**, se detienen los procesos locales del lanzador.

@@ -88,7 +88,7 @@ internal sealed partial class MainForm
         Add(tests, "Verificar sistema", "Revisa la conexión y los servicios", instance.Verify, "VERIFICACIÓN");
         Add(tests, "Cargar datos de práctica", "Prepara inventario, conteos sintéticos y cinco planes", instance.LoadPracticeData, "PRUEBAS", primary: true);
         Add(tests, "Cargar datos con video", "Importa al panel únicamente los conteos del archivo", LoadVideoData, "VIDEO");
-        Add(tests, "Eliminar datos", "Elige conteos de video o datos precargados", DeleteDemoData, "PRUEBAS");
+        Add(tests, "Eliminar datos", "Restablece CYSA y deja las bases vacías", DeleteDemoData, "PRUEBAS");
         Add(tests, "Ejecutar pruebas", "Ejecuta las comprobaciones automáticas", instance.Tests, "PRUEBAS");
         Add(tests, "Probar Arduino", "Opcional · prueba los LEDs del banco por USB", TestArduino, "ARDUINO");
         Add(tests, "Simulación SUMO", "Opcional · abre la demostración de dos cruces", instance.OpenSumo, "SUMO");

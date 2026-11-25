@@ -6,11 +6,12 @@ from uuid import UUID
 JSON_COLUMNS={'documento','validacion','origen','mfa','payload','anterior','nuevo'}
 DATABASES={'CYSA_Control_S2','CYSA_Control_S2_Pruebas'}
 CONFIG_DATABASE='CYSA_WebIII_Demo'
+PROJECT_CONFIG_DATABASE='CYSA_Proyecto'
 SERVERS={'localhost','.',r'localhost\SQLEXPRESS',r'.\SQLEXPRESS',r'(localdb)\MSSQLLocalDB'}
 
 def cadena(database=None):
     server=os.environ.get('CYSA_SQL_SERVER','localhost');database=database or os.environ.get('CYSA_SQL_DATABASE','CYSA_Control_S2')
-    if server not in SERVERS or database not in DATABASES|{'master',CONFIG_DATABASE}:raise ValueError('Servidor/base fuera del banco SQL Server local')
+    if server not in SERVERS or database not in DATABASES|{'master',CONFIG_DATABASE,PROJECT_CONFIG_DATABASE}:raise ValueError('Servidor/base fuera del banco SQL Server local')
     return f'Driver={{ODBC Driver 18 for SQL Server}};Server={server};Database={database};Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=10'
 
 def crear_base():
@@ -57,7 +58,10 @@ def connection():return Conexion()
 def configuracion_aprobada():
     """Lee solo la versión aprobada cuya última escritura se hizo con MFA de Proyecto."""
     import pyodbc
-    with pyodbc.connect(cadena(CONFIG_DATABASE)) as db:
+    database = os.environ.get('CYSA_CONFIG_DATABASE', CONFIG_DATABASE)
+    if database not in (CONFIG_DATABASE, PROJECT_CONFIG_DATABASE):
+        raise ValueError('Base de configuraciones fuera de Proyecto de Sistemas')
+    with pyodbc.connect(cadena(database)) as db:
         row=db.execute("""
             SELECT TOP 1 c.Id,c.Version,c.VerdeMinSegundos,c.VerdeMaxSegundos,
                 c.AmbarSegundos,c.TodoRojoSegundos
@@ -72,9 +76,9 @@ def configuracion_aprobada():
             WHERE i.Nombre=N'DEMO_INT_01' AND i.Prueba=1 AND c.Prueba=1
                 AND c.Estado=N'aprobada' AND c.AprobadaUtc<=SYSUTCDATETIME()
                 AND a.MfaVerificado=1
-                AND a.Motivo=N'Configuración registrada mediante la API de Proyecto'
+                AND (?=1 OR a.Motivo=N'Configuración registrada mediante la API de Proyecto')
             ORDER BY c.Version DESC
-            """).fetchone()
+            """, int(database == PROJECT_CONFIG_DATABASE)).fetchone()
     if row is None:
         return None
     campos=('verde_min_s','verde_max_s','ambar_s','todo_rojo_s')
