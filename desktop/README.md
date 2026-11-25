@@ -30,7 +30,8 @@ En **2. Pruebas y práctica**, elige el conjunto de la demostración:
   los datos sintéticos de práctica. Para una corrida anterior que aparece en
   `DEMO_INT_01`, elige **Video anterior (buscar por intervalo)** y copia la
   fecha, la hora de inicio y la de fin del período mostrado. El lanzador muestra
-  cuántas filas confirmó PostgreSQL. Conserva
+  cuántas filas confirmó PostgreSQL y la vista abierta vuelve a consultar los
+  conteos después de importar o eliminar video. Conserva
   el archivo de video, los registros ajenos al lanzador, la configuración del banco
   y las decisiones ya auditadas. Si queda un envío de práctica pendiente, espera
   su resultado antes de retirar los datos sintéticos.
@@ -130,6 +131,10 @@ El perfil de demostración y la sesión de `/demo` corresponden exclusivamente a
 Web III, no al recorrido de Proyecto de Sistemas.
 
 El lanzador prepara las fuentes en `%LOCALAPPDATA%/CYSA/workspace`. Instala Python por usuario solo si no encuentra Python 3.12; crea un entorno virtual propio. Genera secretos mediante el configurador existente, en un directorio temporal local, y promueve el resultado de forma reanudable. No vuelve a generar credenciales al reintentar ni reiniciar.
+
+Si el puerto guardado de Evaluaciones o Decisiones está ocupado, el lanzador
+elige otro libre y actualiza sus enlaces. Los puertos del panel, identidad y
+MQTT se conservan para reutilizar la instalación.
 
 El nombre del proyecto Compose se deriva de la carpeta de datos del usuario; `docker compose -p` separa los volúmenes y redes. En el primer arranque elige seis puertos disponibles y los guarda. El override publica solo en `127.0.0.1`; OIDC y MQTT se configuran con esos puertos. Se requiere Compose 2.24.4+ por `!override`. Otros proyectos Docker existentes no se detienen ni se eliminan.
 

@@ -40,6 +40,27 @@ internal sealed record Ports(int Panel, int Identity, int Mqtt, int Evaluation, 
         }
         throw new InvalidOperationException("No se encontró un grupo de puertos libres.");
     }
+
+    public Ports RepairDemoApis(bool moveEvaluation, bool moveDecision, Func<int, bool> free)
+    {
+        var reserved = All.ToHashSet();
+        int Find()
+        {
+            for (var candidate = 15200; candidate < 18000; candidate++)
+                if (!reserved.Contains(candidate) && free(candidate))
+                {
+                    reserved.Add(candidate);
+                    return candidate;
+                }
+            throw new InvalidOperationException("No se encontraron puertos libres para Evaluaciones y Decisiones.");
+        }
+
+        return this with
+        {
+            Evaluation = moveEvaluation ? Find() : Evaluation,
+            Decision = moveDecision ? Find() : Decision
+        };
+    }
 }
 
 internal sealed partial class Instance
@@ -53,7 +74,7 @@ internal sealed partial class Instance
     public string Python => FindPython() ?? Path.Combine(Root, "python", "python.exe");
     public string Venv => Path.Combine(Repo, ".venv", "Scripts", "python.exe");
     public string Project => ProjectFor(Root);
-    public Ports Ports { get; }
+    public Ports Ports { get; private set; }
     public string PanelUrl => $"http://localhost:{Ports.Panel}";
     public string IdentityUrl => $"http://localhost:{Ports.Identity}";
     public bool Configured => File.Exists(Path.Combine(Repo, "infra", ".env")) && File.Exists(Path.Combine(Repo, "infra", "runtime", "clientes", "usuarios-locales.json"));
@@ -84,8 +105,44 @@ internal sealed partial class Instance
 
     public static bool IsFree(int port)
     {
-        try { var listener = new TcpListener(IPAddress.Loopback, port); listener.Start(); listener.Stop(); return true; }
-        catch (SocketException) { return false; }
+        static bool CanListen(IPAddress address, int port)
+        {
+            var listener = new TcpListener(address, port) { ExclusiveAddressUse = true };
+            try { listener.Start(); return true; }
+            catch (SocketException) { return false; }
+            finally { listener.Stop(); }
+        }
+
+        return CanListen(IPAddress.Loopback, port) &&
+            (!Socket.OSSupportsIPv6 || CanListen(IPAddress.IPv6Loopback, port));
+    }
+
+    bool OwnsRunningService(string name) => apis.TryGetValue(name, out var child) && !child.HasExited;
+
+    internal async Task RepairDemoPorts()
+    {
+        var before = Ports;
+        var evaluationBusy = !OwnsRunningService("Cysa.Evaluaciones.Api") && !IsFree(before.Evaluation);
+        var decisionBusy = !OwnsRunningService("Cysa.Decisiones.Api") && !IsFree(before.Decision);
+        if (!evaluationBusy && !decisionBusy) return;
+
+        var target = before.RepairDemoApis(evaluationBusy, decisionBusy, IsFree);
+        // Decisiones lee la URL de Evaluaciones al iniciarse.
+        if (evaluationBusy && OwnsRunningService("Cysa.Decisiones.Api"))
+        {
+            var decision = apis["Cysa.Decisiones.Api"];
+            decision.Kill(true);
+            await decision.WaitForExitAsync();
+            decision.Dispose();
+            apis.Remove("Cysa.Decisiones.Api");
+        }
+
+        var config = Path.Combine(Root, "puertos.json");
+        await File.WriteAllTextAsync(config + ".tmp", JsonSerializer.Serialize(target));
+        File.Move(config + ".tmp", config, true);
+        Ports = target;
+        if (evaluationBusy) Write($"El puerto {before.Evaluation} está ocupado. Evaluaciones usará el puerto {target.Evaluation}.");
+        if (decisionBusy) Write($"El puerto {before.Decision} está ocupado. Decisiones usará el puerto {target.Decision}.");
     }
 
     static string FindDocker()
@@ -262,11 +319,14 @@ internal sealed partial class Instance
         await EnsureReportsApi();
         await WaitUrl($"http://127.0.0.1:{Ports.Identity}/realms/cysa", 180);
         await Run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", Path.Combine(Repo, "dotnet", "scripts", "Preparar-Demo.ps1"), "-Directorio", Path.Combine(Repo, "dotnet", "runtime")]);
-        foreach (var (name, port) in new[] { ("Cysa.Evaluaciones.Api", Ports.Evaluation), ("Cysa.Decisiones.Api", Ports.Decision) })
+        const string evaluation = "Cysa.Evaluaciones.Api", decision = "Cysa.Decisiones.Api";
+        var evaluationExe = OwnsRunningService(evaluation) ? null : await EnsureApiExecutable(evaluation);
+        var decisionExe = OwnsRunningService(decision) && evaluationExe is null ? null : await EnsureApiExecutable(decision);
+        await RepairDemoPorts();
+        foreach (var (name, port, executable) in new[] { (evaluation, Ports.Evaluation, evaluationExe), (decision, Ports.Decision, decisionExe) })
         {
-            if (apis.TryGetValue(name, out var existing) && !existing.HasExited) continue;
-            if (!IsFree(port)) throw new InvalidOperationException($"El puerto {port} está ocupado por otra aplicación. Ciérrala y vuelve a iniciar.");
-            var exe = await EnsureApiExecutable(name);
+            if (OwnsRunningService(name)) continue;
+            var exe = executable ?? await EnsureApiExecutable(name);
             apis[name] = Start(exe, ["--urls", $"http://localhost:{port}"], Path.GetDirectoryName(exe), new() {
                 ["ASPNETCORE_ENVIRONMENT"]="Development", ["Security__Mode"]="Demo",
                 ["Storage__Directory"]=Path.Combine(Repo,"dotnet","runtime"), ["Evaluaciones__BaseUrl"]=$"http://localhost:{Ports.Evaluation}",
@@ -307,6 +367,8 @@ internal sealed partial class Instance
         config["webApiBase"]=JsonSerializer.SerializeToElement(WebUrl);
         config["operacionBase"]=JsonSerializer.SerializeToElement(OperationUrl);
         config["panelUrl"]=JsonSerializer.SerializeToElement(PanelUrl+"/");
+        config["conteosRevisionUrl"]=JsonSerializer.SerializeToElement("/runtime/conteos.json");
+        if (!File.Exists(CountRevisionFile)) await PublishCountRevision();
         await File.WriteAllTextAsync(path,JsonSerializer.Serialize(config));
         // Actualizar la configuración pública de Nginx sin tocar secretos ni regenerar cuentas.
         var nginx=Path.Combine(Repo,"infra/runtime/launcher/nginx.conf");
@@ -560,6 +622,18 @@ internal static class SelfTest
             var package=Path.Combine(root,"paquete"); Directory.CreateDirectory(Path.Combine(package,"app","infra"));
             File.WriteAllText(Path.Combine(package,"app","infra","compose.yaml"),"services: {}");
             var instance=new Instance(Path.Combine(root,"usuario"),package); instance.Seed();
+            var oldPorts = instance.Ports;
+            var occupied = new TcpListener(IPAddress.Loopback, oldPorts.Evaluation) { ExclusiveAddressUse = true };
+            occupied.Start();
+            try
+            {
+                instance.RepairDemoPorts().GetAwaiter().GetResult();
+                var updated = instance.Ports;
+                if (updated.Evaluation == oldPorts.Evaluation || (updated with { Evaluation = oldPorts.Evaluation }) != oldPorts ||
+                    !Instance.IsFree(updated.Evaluation) || new Instance(instance.Root, package).Ports != updated)
+                    throw new Exception("La recuperación de un puerto ocupado no conservó el resto de la instalación.");
+            }
+            finally { occupied.Stop(); }
             foreach(var server in SqlServerOptions.Instancias)
                 if(!new SqlServerOptions(server).Cadena().Contains("Database=CYSA_WebIII_Demo;Integrated Security=True;"))throw new Exception("La conexión no conserva base y autenticación Windows");
             foreach(var invalid in new[]{"servidor-remoto", "localhost;Database=otra", "localhost,1433", "localhost;Password=secreto"})

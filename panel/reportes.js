@@ -46,7 +46,7 @@ function render(report, context, intersection) {
 }
 
 export async function loadReports() {
-    if (loading) return;
+    if (loading) return false;
     clearReport();
     const status = $('reportStatus');
     const form = $('reportFilters');
@@ -59,8 +59,10 @@ export async function loadReports() {
         render(report, $('reportContext').value, params.get('interseccion') || '');
         current = report;
         setStatus(status);
+        return true;
     } catch (error) {
         setStatus(status, error.message, true);
+        return false;
     } finally {
         form.disabled = false;
         loading = false;

@@ -17,6 +17,24 @@ internal sealed partial class Instance
             onStandardOutput: onOutput);
     }
 
+    string CountRevisionFile => Path.Combine(Repo, "panel", "runtime", "conteos.json");
+
+    async Task PublishCountRevision()
+    {
+        var path = CountRevisionFile;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { revision = Guid.NewGuid().ToString("N") });
+            await File.WriteAllTextAsync(path + ".tmp", payload);
+            File.Move(path + ".tmp", path, true);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Write("No se pudo avisar al panel. Pulsa Actualizar o Consultar para volver a cargar los conteos.");
+        }
+    }
+
     async Task<int> DeleteVideoRows(string script, params string[] variables)
     {
         EnsureVideoStopped();
@@ -32,6 +50,7 @@ internal sealed partial class Instance
                 deleted = count;
         }, variables);
 
+        await PublishCountRevision();
         return deleted ?? throw new InvalidOperationException("PostgreSQL no confirmó cuántas filas se eliminaron. Actualiza el panel y revisa el registro.");
     }
 
@@ -107,6 +126,7 @@ internal sealed partial class Instance
                 FROM video_importado
                 CROSS JOIN (SELECT now() - max(fin) AS ajuste FROM video_importado) AS d;
                 """);
+            await PublishCountRevision();
             Write("Video importado. En el panel selecciona Validación y DEMO_VIDEO. Los intervalos conservan la duración del video y terminan en la hora de carga.");
         }
         finally
@@ -248,7 +268,7 @@ internal sealed partial class MainForm
                 : "Se eliminaron 0 filas. Si el video aparece como DEMO_INT_01, elige Video anterior (buscar por intervalo).");
         }
 
-        var result = $"Filas de video eliminadas: {deleted}. Pulsa Actualizar en el panel.";
+        var result = $"Filas de video eliminadas: {deleted}. El panel volverá a consultar los conteos.";
         instance.Write(result);
         MessageBox.Show(this, result, "Eliminar datos", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }

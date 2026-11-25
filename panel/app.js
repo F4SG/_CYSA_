@@ -7,6 +7,7 @@ import {initPlans, loadPlans, loadArduino, restoreDecision} from './planes.js';
 import {arduinoGuided} from './arduino.js';
 import {initReports, loadReports} from './reportes.js';
 import {initInventory, inventoryActions} from './inventario.js';
+import {pollCountRevision} from './conteos-sync.js';
 const $=id=>document.getElementById(id);
 let config,data={counts:[],inventory:[],states:[]},offset=0,hasMore=false,loading=false;
 $('panelHome').addEventListener('click',()=>document.querySelector('[data-tab="conteos"]').click());
@@ -39,11 +40,47 @@ function draw(){
 }
 async function api(path){const token=await oidc.accessToken();const r=await fetch(config.apiBase+path,{headers:{Authorization:'Bearer '+token},cache:'no-store'});if(!r.ok)throw new Error('API '+r.status+': '+(r.status===401?'sesión inválida':r.status===403?'rol sin permiso':'no disponible'));return r.json();}
 function range(){const start=new Date($('desde').value),end=new Date($('hasta').value);if(!Number.isFinite(+start)||!Number.isFinite(+end)||start>=end)throw new Error('Selecciona un rango de fechas válido');const params=new URLSearchParams({desde:start.toISOString(),hasta:end.toISOString(),limit:'200',offset:String(offset)});if($('intersectionFilter').value)params.set('interseccion',$('intersectionFilter').value);return params;}
-async function refresh(more=false){
- if(loading)return;loading=true;$('reload').disabled=true;$('loadMore').disabled=true;
- try{if(!more){offset=0;if($('live').checked){$('hasta').value=localDate(new Date(Date.now()+60000));$('desde').value=localDate(new Date(Date.now()-3600000));}}const params=range();const result=await api('/conteos?'+params);const [inventory,states]=more?[null,null]:await Promise.all([api('/inventario'),api('/estados')]);
- data.counts=more?data.counts.concat(result.items):result.items;offset+=result.items.length;hasMore=result.items.length===200;if(inventory)data.inventory=inventory.items;if(states)data.states=states.items;const current=$('intersectionFilter').value;const ids=[...new Set([...data.inventory,...data.states,...data.counts].map(x=>x.interseccion))].sort();$('intersectionFilter').replaceChildren(new Option('Todas',''),...ids.map(id=>new Option(id,id)));if(ids.includes(current))$('intersectionFilter').value=current;draw();$('status').classList.remove('error');$('status').textContent='Última actualización: '+new Date().toLocaleTimeString()+' · Intervalos cargados: '+data.counts.length;
- }catch(error){$('status').classList.add('error');$('status').textContent=error.message+' · Los datos que queden visibles pertenecen a la última consulta correcta.';}finally{loading=false;$('reload').disabled=false;$('loadMore').disabled=false;}
+async function refresh(more = false) {
+ if (loading) return false;
+ loading = true;
+ $('reload').disabled = true;
+ $('loadMore').disabled = true;
+ try {
+  if (!more) {
+   offset = 0;
+   if ($('live').checked) {
+    $('hasta').value = localDate(new Date(Date.now() + 60000));
+    $('desde').value = localDate(new Date(Date.now() - 3600000));
+   }
+  }
+  const result = await api('/conteos?' + range());
+  data.counts = more ? data.counts.concat(result.items) : result.items;
+  offset += result.items.length;
+  hasMore = result.items.length === 200;
+  const ancillary = more ? [] : await Promise.allSettled([api('/inventario'), api('/estados')]);
+  const [inventory, states] = ancillary;
+  if (inventory?.status === 'fulfilled') data.inventory = inventory.value.items;
+  if (states?.status === 'fulfilled') data.states = states.value.items;
+  const current = $('intersectionFilter').value;
+  const ids = [...new Set([...data.inventory, ...data.states, ...data.counts].map(x => x.interseccion))].sort();
+  $('intersectionFilter').replaceChildren(new Option('Todas', ''), ...ids.map(id => new Option(id, id)));
+  if (ids.includes(current)) $('intersectionFilter').value = current;
+  draw();
+  const missingDetails = ancillary.some(result => result.status === 'rejected');
+  $('status').classList.toggle('error', missingDetails);
+  $('status').textContent = 'Última actualización: ' + new Date().toLocaleTimeString()
+   + ' · Intervalos cargados: ' + data.counts.length
+   + (missingDetails ? ' · No se pudo actualizar el inventario o el estado.' : '');
+  return true;
+ } catch (error) {
+  $('status').classList.add('error');
+  $('status').textContent = error.message + ' · Los datos que queden visibles pertenecen a la última consulta correcta.';
+  return false;
+ } finally {
+  loading = false;
+  $('reload').disabled = false;
+  $('loadMore').disabled = false;
+ }
 }
 function localDate(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 $('intersectionFilter').addEventListener('change',()=>refresh());$('live').addEventListener('change',()=>{$('desde').disabled=$('live').checked;$('hasta').disabled=$('live').checked;if($('live').checked)refresh();});$('search').addEventListener('input',draw);$('reload').addEventListener('click',()=>refresh());$('loadMore').addEventListener('click',()=>refresh(true));
@@ -103,6 +140,13 @@ try {
   if(draft?.view==='configuraciones'&&currentView==='configuraciones')restoreConfiguration(draft.data);
   if(draft?.view==='planes'&&currentView==='planes')restoreDecision(draft.data);
   setInterval(()=>{if(!document.hidden&&$('live').checked&&['conteos','inventario','estados'].includes(currentView))refresh();},15000);
+  if (config.conteosRevisionUrl === '/runtime/conteos.json') {
+   const checkCounts = pollCountRevision(config.conteosRevisionUrl, () =>
+    currentView === 'reportes' ? loadReports() : refresh());
+   setInterval(() => {
+    if (!document.hidden && ['conteos', 'inventario', 'estados', 'reportes'].includes(currentView)) checkCounts();
+   }, 2500);
+  }
   setInterval(()=>{
    if(document.hidden||currentView!=='planes')return;
    loadArduino();

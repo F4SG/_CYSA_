@@ -23,6 +23,7 @@ infra/.env.*
 
 # Resultados locales y respaldos (excluidos del repo)
 resultados/
+panel/runtime/
 respaldos/
 mediciones/
 
