@@ -503,7 +503,7 @@ Si PowerShell bloquea los scripts, usa esta alternativa directa con Python:
 
 Para marcar únicamente una línea de dos puntos por carril, agrega `-Linea` al comando de PowerShell. La línea no debe atravesar otros flujos.
 
-Los pesos YOLO `.pt` no vienen en Git. El lanzador usa `deteccion/modelos/yolo26n.pt` para el video y `deteccion/modelos/yolo26s.pt` para la cámara. Prepara el peso correspondiente antes de la presentación; Ultralytics puede descargarlo al primer uso con internet. Si la descarga automática falla, coloca el peso en esa ruta y vuelve a iniciar.
+Los pesos YOLO `.pt` no vienen en Git. El lanzador usa `deteccion/modelos/yolo26s.pt` para video y cámara. En video usa 960 px y el perfil probado para contar motos. Prepara el peso antes de la presentación; Ultralytics puede descargarlo al primer uso con internet. Si la descarga automática falla, coloca el peso en esa ruta y vuelve a iniciar.
 
 #### Dónde queda cada resultado
 

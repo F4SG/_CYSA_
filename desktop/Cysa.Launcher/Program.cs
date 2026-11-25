@@ -411,8 +411,8 @@ internal sealed partial class Instance
 
     public void StartDetector(string source, string device)
     {
-        RequireConfigured();
         if (Detector is { HasExited: false }) throw new InvalidOperationException("Ya hay un detector abierto. Ciérralo con Q antes de iniciar otro.");
+        PrepareDemoSources();
         SaveDevice(device);
         Detector = Start(Venv, ["desktop/runtime.py", "detector", "--source", source,"--device",device]);
         Write("Marca cuatro esquinas, ajusta carriles con 1–8 y pulsa S. D invierte el sentido; Q termina.");

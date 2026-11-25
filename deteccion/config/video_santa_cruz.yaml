@@ -8,7 +8,7 @@
 configuracion_verificada: false        # se vuelve true al guardar carriles con el editor
 interseccion: DEMO_INT_01
 source: 'REEMPLAZAR/ruta/al/video.mp4'
-model: deteccion/modelos/yolo26n.pt
+model: deteccion/modelos/yolo26s.pt
 device: 0                              # GPU; en CPU 960 px no llega a tiempo real
 prueba: true
 intervalo_s: 30

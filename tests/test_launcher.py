@@ -123,8 +123,8 @@ def test_detect_compares_cpu_and_gpu_and_recovers_from_gpu_failure(tmp_path, mon
 
 
 @pytest.mark.parametrize('device,expected', [('cpu', 'cpu'), ('1', 1)])
-@pytest.mark.parametrize('video', [True, False])
-def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, expected, video):
+@pytest.mark.parametrize('video, importacion', [(False, False), (True, False), (True, True)])
+def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, expected, video, importacion):
     import detector
     import yaml
     root = tmp_path / 'usuario'
@@ -140,14 +140,17 @@ def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, e
         def iniciar(self, profile, output, **kwargs):
             captured.update(yaml.safe_load(profile.read_text()))
             captured['source'] = kwargs['fuente']
+            captured['solo_csv'] = kwargs.get('solo_csv', False)
             return 0
     monkeypatch.setattr(runtime, 'ROOT', root)
     monkeypatch.setattr(detector, 'FachadaConteo', Facade)
     monkeypatch.setitem(sys.modules, 'hardware', types.SimpleNamespace(validate_device=lambda _: expected))
     monkeypatch.chdir(tmp_path)
-    assert runtime.detector(source, device) == 0
+    csv_video = tmp_path / 'video.csv' if importacion else None
+    assert runtime.detector(source, device, csv_video) == 0
     assert captured['device'] == expected
     assert captured['imgsz'] == (960 if video else 640)
-    assert captured['model'].endswith('yolo26n.pt' if video else 'yolo26s.pt')
+    assert captured['model'].endswith('yolo26s.pt')
+    assert captured['solo_csv'] is importacion
     assert len(captured['lanes']) == 3
     assert captured['source'] == source
