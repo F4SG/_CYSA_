@@ -43,10 +43,12 @@ def running(state):
                 and not Path(state['done']).exists())
 
 
-def environment():
+def environment(*, mqtt=True):
     env=os.environ.copy()
     env['PYTHONPATH']=os.pathsep.join(str(REPO/p) for p in ['shared','deteccion'])
     env['PYTHONUNBUFFERED']='1'
+    if not mqtt:
+        return env
     credentials=REPO/'infra/runtime/clientes/deteccion.env'
     for line in credentials.read_text(encoding='utf-8-sig').splitlines():
         if line.strip() and not line.lstrip().startswith('#'):
@@ -85,13 +87,13 @@ def mark_lines(config,env,*,cancelar_inicio=False):
     return subprocess.call(command, cwd=REPO, env=env)
 
 
-def foreground(config,output,mark=None):
+def foreground(config,output,mark=None,*,solo_csv=False):
     """El detector libera la cámara antes del editor; después recarga su YAML.
 
     mark='zona' abre primero el editor de vía (4 esquinas, carriles con zona y línea) y mark='linea'
     el de líneas de dos puntos. Cancelar el marcado inicial detiene el arranque.
     """
-    env=environment()
+    env=environment(mqtt=False) if solo_csv else environment()
     if mark:
         editor = mark_lines if mark == 'linea' else edit_lanes
         result = editor(config, env, cancelar_inicio=True)
@@ -99,6 +101,8 @@ def foreground(config,output,mark=None):
             print('Inicio cancelado durante la calibración.')
         if result:
             return result
+    if solo_csv:
+        return subprocess.call([*detector_command(config,output),'--solo-csv'],cwd=REPO,env=env)
     while True:
         result=subprocess.call(detector_command(config,output),cwd=REPO,env=env)
         if result!=20:return result
@@ -268,9 +272,11 @@ def session_config(config,choice,*,base=None):
 class FachadaConteo:
     """Coordina la fuente, el perfil, la calibración y el detector desde una sola entrada."""
 
-    def iniciar(self, config, salida, *, fuente=None, marcar=None, segundo_plano=False):
+    def iniciar(self, config, salida, *, fuente=None, marcar=None, segundo_plano=False, solo_csv=False):
         if running(load_state()):
             raise SystemExit('Ya hay un detector en segundo plano. Usa detener antes de iniciar otro.')
+        if solo_csv and segundo_plano:
+            raise ValueError('La importación de video requiere la sesión del lanzador')
         if marcar and segundo_plano:
             raise SystemExit('--marcar necesita ventana: no usarlo con --segundo-plano')
 
@@ -290,7 +296,7 @@ class FachadaConteo:
 
             if segundo_plano:
                 return iniciar_segundo_plano(config, salida)
-            return foreground(config, salida, marcar)
+            return foreground(config, salida, marcar, solo_csv=True) if solo_csv else foreground(config, salida, marcar)
         except KeyboardInterrupt:
             print('Sesión interrumpida.')
             return 130

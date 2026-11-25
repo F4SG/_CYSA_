@@ -2,7 +2,7 @@
 
 Guía para probar el banco base del Sprint 2 en Windows: placa MMU, controlador, modo local
 seguro (RF-06) y comunicación con Docker y el panel. Tiempo aproximado: 30 minutos.
-El envío de planes, SQL Server, SUMO y prioridades se prueba con [INTEGRACION.md](INTEGRACION.md).
+El envío de planes Webster, SQL Server y la emergencia simulada en SUMO se prueban con [INTEGRACION.md](INTEGRACION.md).
 
 ## 0. Antes de empezar
 

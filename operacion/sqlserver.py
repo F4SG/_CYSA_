@@ -60,7 +60,7 @@ def configuracion_aprobada():
     with pyodbc.connect(cadena(CONFIG_DATABASE)) as db:
         row=db.execute("""
             SELECT TOP 1 c.Id,c.Version,c.VerdeMinSegundos,c.VerdeMaxSegundos,
-                c.AmbarSegundos,c.TodoRojoSegundos,c.ExtensionPrioridadSegundos
+                c.AmbarSegundos,c.TodoRojoSegundos
             FROM ConfigTecnica c
             JOIN Interseccion i ON i.Id=c.InterseccionId
             CROSS APPLY (
@@ -77,5 +77,5 @@ def configuracion_aprobada():
             """).fetchone()
     if row is None:
         return None
-    campos=('verde_min_s','verde_max_s','ambar_s','todo_rojo_s','extension_micro_s')
+    campos=('verde_min_s','verde_max_s','ambar_s','todo_rojo_s')
     return dict(id=row[0],version=row[1],tiempos={k:float(v) for k,v in zip(campos,row[2:])})

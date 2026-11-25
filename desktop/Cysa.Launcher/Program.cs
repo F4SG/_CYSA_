@@ -120,20 +120,33 @@ internal sealed partial class Instance
         Log(text);
     }
 
-    public async Task<int> Run(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool check = true, bool output = true, int timeoutMinutes = 30)
+    public async Task<int> Run(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool check = true, bool output = true, int timeoutMinutes = 30, string? input = null)
     {
-        using var process = Start(file, args, cwd, environment, output);
+        using var process = Start(file, args, cwd, environment, output, redirectInput: input is not null);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
-        try { await process.WaitForExitAsync(timeout.Token); }
+        try
+        {
+            if (input is not null)
+            {
+                await process.StandardInput.WriteAsync(input.AsMemory(), timeout.Token);
+                process.StandardInput.Close();
+            }
+            await process.WaitForExitAsync(timeout.Token);
+        }
         catch (OperationCanceledException) { process.Kill(true); throw new InvalidOperationException("La operación excedió el tiempo de espera. Revisa los registros y vuelve a intentarlo."); }
         process.WaitForExit();
         if (check && process.ExitCode != 0) throw new InvalidOperationException($"{Path.GetFileName(file)} terminó con código {process.ExitCode}. Revisa el registro de la ventana.");
         return process.ExitCode;
     }
 
-    Process Start(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool output = true)
+    Process Start(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool output = true, bool redirectInput = false)
     {
         var info = new ProcessStartInfo(file) { WorkingDirectory = cwd ?? Repo, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
+        if (redirectInput)
+        {
+            info.RedirectStandardInput = true;
+            info.StandardInputEncoding = new UTF8Encoding(false);
+        }
         info.Environment["PYTHONIOENCODING"] = "utf-8";
         info.Environment["PYTHONUTF8"] = "1";
         info.Environment["PYTHONUNBUFFERED"] = "1";

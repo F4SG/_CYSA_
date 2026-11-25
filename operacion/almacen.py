@@ -1,7 +1,7 @@
 """Persistencia transaccional del banco S2 en SQL Server; independiente de Web III."""
 import json,time
 from pathlib import Path
-from .planes import LONGITUDES,huella,minimo_peatonal
+from .planes import huella
 from .sqlserver import connection as sql_connection,crear_base
 
 def Jsonb(value):return json.dumps(value,ensure_ascii=True,allow_nan=False)
@@ -9,7 +9,7 @@ DDL=(Path(__file__).parent/'sql/001_operacion.sql').read_text(encoding='utf-8')
 FUENTE_EJEMPLOS = 'ejemplos-autorizacion'
 
 def firma_ejemplo(plan, origen):
-    return huella(dict(caso=origen.get('caso'), demanda=origen.get('autos_por_acceso'),
+    return huella(dict(caso=origen.get('caso'), demanda=origen.get('autos_por_acceso'), mezcla=origen.get('mezcla'),
                        plan={k: v for k, v in plan.items() if k != 'plan_id'}))
 
 class EstadoInvalido(ValueError):pass
@@ -28,6 +28,53 @@ class Almacen:
         c.execute('INSERT INTO control_planes(id,documento,validacion,origen,estado) VALUES(%s,%s,%s,%s,%s)',
                   (id,Jsonb(documento),Jsonb(validacion),Jsonb(origen),estado))
         self.audit(c,id,usuario,'simular','Comparación SUMO terminada',{},dict(estado=estado,huella=huella(documento)))
+    def eliminar_ejemplos(self):
+        with self.connection() as c:
+            examples = self._ejemplos_actuales(c)
+            if any(plan['estado_envio'] in ('pendiente', 'enviado') for plan in examples):
+                raise EstadoInvalido('Espera el resultado del envío de práctica antes de eliminar los datos.')
+            self._retirar_ejemplos(c, examples)
+
+    @staticmethod
+    def _ejemplos_actuales(c):
+        c.execute("""
+            IF @@TRANCOUNT = 0 BEGIN TRANSACTION;
+            DECLARE @resultado int;
+            EXEC @resultado = sp_getapplock @Resource='CYSA_ejemplos_autorizacion',
+                @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000;
+            IF @resultado < 0 THROW 51000, 'No se pudo bloquear el lote de ejemplos', 1;
+        """)
+        return c.execute("""
+            SELECT p.id, p.documento, p.origen, p.estado, p.creado, d.plan_id AS decidido, e.estado AS estado_envio
+            FROM control_planes p WITH (UPDLOCK,HOLDLOCK)
+            LEFT JOIN control_decisiones d ON d.plan_id=p.id
+            LEFT JOIN control_envios e ON e.solicitud_id=d.solicitud_id
+            WHERE COALESCE(JSON_VALUE(p.origen,'$.archivado'),'0')<>'1'
+              AND (
+                JSON_VALUE(p.origen,'$.fuente')=%s OR (
+                  JSON_VALUE(p.documento,'$.modo')='webster'
+                  AND EXISTS (SELECT 1 FROM OPENJSON(p.origen,'$.mensajes'))
+                  AND NOT EXISTS (
+                    SELECT 1 FROM OPENJSON(p.origen,'$.mensajes') m
+                    LEFT JOIN control_conteos x ON x.mensaje_id=TRY_CONVERT(uniqueidentifier,m.value)
+                      AND x.prueba=1 AND x.interseccion='DEMO_INT_01'
+                      AND (LEFT(x.carril,10)='DEMO_PLAN_' OR LEFT(x.carril,6)='QA_QR_')
+                    WHERE x.mensaje_id IS NULL
+                  )
+                )
+              )
+        """, (FUENTE_EJEMPLOS,)).fetchall()
+
+    @staticmethod
+    def _retirar_ejemplos(c, previous):
+        for old in previous:
+            if old['decidido']:
+                c.execute("UPDATE control_planes SET origen=JSON_MODIFY(origen,'$.archivado',1) WHERE id=%s",
+                          (old['id'],))
+            else:
+                c.execute('DELETE FROM control_auditoria WHERE plan_id=%s', (old['id'],))
+                c.execute('DELETE FROM control_planes WHERE id=%s', (old['id'],))
+
     def reemplazar_ejemplos(self, examples, *, conservar_vigentes=False):
         if len(examples) != 5 or len({example[0] for example in examples}) != 5:
             raise ValueError('El lote debe contener cinco ejemplos distintos.')
@@ -35,32 +82,7 @@ class Almacen:
                or validation['huella_plan'] != huella(plan) for _, plan, validation, _ in examples):
             raise ValueError('Todos los ejemplos deben estar validados por SUMO.')
         with self.connection() as c:
-            c.execute("""
-                IF @@TRANCOUNT = 0 BEGIN TRANSACTION;
-                DECLARE @resultado int;
-                EXEC @resultado = sp_getapplock @Resource='CYSA_ejemplos_autorizacion',
-                    @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=10000;
-                IF @resultado < 0 THROW 51000, 'No se pudo bloquear el lote de ejemplos', 1;
-            """)
-            previous = c.execute("""
-                SELECT p.id, p.documento, p.origen, p.estado, p.creado, d.plan_id AS decidido
-                FROM control_planes p WITH (UPDLOCK,HOLDLOCK)
-                LEFT JOIN control_decisiones d ON d.plan_id=p.id
-                WHERE COALESCE(JSON_VALUE(p.origen,'$.archivado'),'0')<>'1'
-                  AND (
-                    JSON_VALUE(p.origen,'$.fuente')=%s OR (
-                      JSON_VALUE(p.documento,'$.modo')='webster'
-                      AND EXISTS (SELECT 1 FROM OPENJSON(p.origen,'$.mensajes'))
-                      AND NOT EXISTS (
-                        SELECT 1 FROM OPENJSON(p.origen,'$.mensajes') m
-                        LEFT JOIN control_conteos x ON x.mensaje_id=TRY_CONVERT(uniqueidentifier,m.value)
-                          AND x.prueba=1 AND x.interseccion='DEMO_INT_01'
-                          AND (LEFT(x.carril,10)='DEMO_PLAN_' OR LEFT(x.carril,6)='QA_QR_')
-                        WHERE x.mensaje_id IS NULL
-                      )
-                    )
-                  )
-            """, (FUENTE_EJEMPLOS,)).fetchall()
+            previous = self._ejemplos_actuales(c)
             if conservar_vigentes and len(previous) == len(examples):
                 now = time.time()
                 current = {
@@ -71,13 +93,7 @@ class Almacen:
                 requested = {firma_ejemplo(plan, origin) for _, plan, _, origin in examples}
                 if len(current) == len(examples) and current == requested:
                     return False
-            for old in previous:
-                if old['decidido']:
-                    c.execute("UPDATE control_planes SET origen=JSON_MODIFY(origen,'$.archivado',1) WHERE id=%s",
-                              (old['id'],))
-                else:
-                    c.execute('DELETE FROM control_auditoria WHERE plan_id=%s', (old['id'],))
-                    c.execute('DELETE FROM control_planes WHERE id=%s', (old['id'],))
+            self._retirar_ejemplos(c, previous)
             for ident, plan, validation, origin in examples:
                 self.insertar_plan(c,ident,plan,validation,{**origin,'fuente':FUENTE_EJEMPLOS},'lanzador-demo')
         return True
@@ -105,13 +121,9 @@ class Almacen:
             if p['estado']!='validado' or not p['validacion']['aprobada'] or p['validacion']['huella_plan']!=huella(p['documento']):
                 raise EstadoInvalido('Se requiere esta versión validada, vigente y sin decisión')
             if (time.time()-p['creado'].timestamp())>900:raise EstadoInvalido('La evaluación venció; repetir la simulación')
+            if p['documento'].get('modo')!='webster':
+                raise EstadoInvalido('Solo las propuestas Webster admiten decisiones operativas')
             now=time.time()
-            evento=p['documento'].get('evento_utc')
-            if accion=='autorizar' and evento is not None and evento<=now:
-                raise EstadoInvalido('La orden de emergencia debe autorizarse antes del evento')
-            # El receptor limita los 10 s según el despeje realmente activo. La orden
-            # debe seguir vigente hasta que termine ese despeje y se confirme el verde.
-            vence=evento+11+max(map(minimo_peatonal,LONGITUDES)) if evento is not None else now+300
             c.execute('INSERT INTO control_decisiones(solicitud_id,plan_id,usuario,accion,motivo,mfa) VALUES(%s,%s,%s,%s,%s,%s)',
                       (solicitud,id,usuario,accion,motivo,Jsonb(mfa)))
             nuevo='autorizado' if accion=='autorizar' else 'rechazado'
@@ -119,13 +131,13 @@ class Almacen:
             if accion=='autorizar':
                 payload=dict(tipo='plan',solicitud_id=str(solicitud),plan=p['documento'],
                     huella_plan=huella(p['documento']),usuario=usuario,mfa_verificado=True,
-                    emitido=now,vence=vence)
+                    emitido=now,vence=now+300)
                 c.execute('INSERT INTO control_envios(solicitud_id,payload) VALUES(%s,%s)',(solicitud,Jsonb(payload)))
             self.audit(c,id,usuario,'decidir',motivo,dict(estado=p['estado']),dict(estado=nuevo,mfa=mfa))
         return False
     def pendientes(self):
         with self.connection() as c:
-            return c.execute("SELECT * FROM control_envios WHERE estado IN ('pendiente','enviado') ORDER BY actualizado LIMIT 20").fetchall()
+            return c.execute("SELECT * FROM control_envios WHERE estado IN ('pendiente','enviado') AND JSON_VALUE(payload,'$.plan.modo')='webster' ORDER BY actualizado LIMIT 20").fetchall()
     def envio(self,id,estado,detalle=''):
         with self.connection() as c:
             c.execute("UPDATE control_envios SET estado=%s,detalle=%s,intentos=intentos+1,actualizado=now() WHERE solicitud_id=%s AND estado IN ('pendiente','enviado')",(estado,detalle,id))
@@ -149,15 +161,6 @@ class Almacen:
                 (desde,hasta,interseccion,interseccion,carril,carril,prueba,prueba,offset,limit)).fetchall()
     def states(self):
         with self.connection() as c:return c.execute('SELECT * FROM control_estados ORDER BY interseccion').fetchall()
-    def plan_vigente(self):
-        with self.connection() as c:
-            row=c.execute("""SELECT p.documento FROM control_estados s
-                JOIN control_planes p ON JSON_VALUE(p.documento,'$.plan_id')=s.plan_activo
-                WHERE s.interseccion='DEMO_INT_01' AND s.estado_controlador='conectado'
-                    AND s.[timestamp] >= DATEADD(second,-30,SYSUTCDATETIME())
-                    AND JSON_VALUE(p.documento,'$.modo')<>'emergencia'
-                """).fetchone()
-        return row['documento'] if row else None
     def save(self,event):
         from cysa.contracts import Conteo,Estado
         d=event.model_dump()

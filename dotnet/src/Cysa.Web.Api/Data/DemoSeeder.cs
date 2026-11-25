@@ -54,7 +54,7 @@ public static class DemoSeeder
             var lastVersion = await configurations.MaxAsync(c => (int?)c.Version, ct) ?? 0;
             db.Add(new ConfigTecnica { InterseccionId = intersection.Id, Version = lastVersion + 1,
                 VerdeMinSegundos = 10, VerdeMaxSegundos = 90, AmbarSegundos = 3, TodoRojoSegundos = 2,
-                ExtensionPrioridadSegundos = 10, ResponsableTecnico = "Configuración base de laboratorio",
+                ResponsableTecnico = "Configuración base de laboratorio",
                 AprobadaUtc = DateTimeOffset.UtcNow, Estado = "aprobada" });
         }
         await db.SaveChangesAsync(ct);
@@ -81,7 +81,7 @@ public static class DemoSeeder
             var access=new Acceso{InterseccionId=intersection.Id,Identificador="N",Aproximacion="Norte",LongitudCrucePeatonalMetros=18};
             var controller=new ControladorLocal{InterseccionId=intersection.Id,Tipo="PC y MMU emulado",Protocolo="MQTT/TLS",Ubicacion=$"Gabinete de prueba {i:00}",Emulado=true};
             var config=new ConfigTecnica{InterseccionId=intersection.Id,Version=1,VerdeMinSegundos=10,VerdeMaxSegundos=60,AmbarSegundos=3,TodoRojoSegundos=2,
-                ExtensionPrioridadSegundos=10,ResponsableTecnico="Responsable técnico de prueba",AprobadaUtc=now.AddDays(-1),Estado="aprobada"};
+                ResponsableTecnico="Responsable técnico de prueba",AprobadaUtc=now.AddDays(-1),Estado="aprobada"};
             db.AddRange(access,controller,config); await db.SaveChangesAsync(ct);
             var lane=new Carril{AccesoId=access.Id,Numero=1,Sentido="entrada"};
             var camera=new FuenteDeteccion{AccesoId=access.Id,TipoCamara="IP de prueba",Ubicacion=$"Acceso norte de {intersection.Nombre}",Protocolo="RTSP",Activa=true,ModeloIa="modelo-demo",UmbralConfianza=0.5m};
@@ -94,7 +94,7 @@ public static class DemoSeeder
             db.Add(new EstadoControl{ControladorLocalId=controller.Id,PlanId=plan.Id,FaseId=phase.Id,FechaUtc=now,ComunicacionDisponible=true,Modo="central"});
             db.Add(new Medicion{CarrilId=lane.Id,FuenteDeteccionId=camera.Id,MensajeId=$"semilla-{i:00}",InicioUtc=now.AddMinutes(-1),FinUtc=now,
                 ClaseVehiculo=i%3==0?"micro":i%3==1?"auto":"moto",Cantidad=15+i,ColaEstimadaMetros=3+i});
-            db.Add(new EventoPrioridad{InterseccionId=intersection.Id,PlanId=plan.Id,Tipo=i%2==0?"micro":"emergencia",Origen="emulador",DetectadoUtc=now.AddMinutes(-5),
+            db.Add(new EventoPrioridad{InterseccionId=intersection.Id,PlanId=plan.Id,Tipo="emergencia",Origen="sumo",DetectadoUtc=now.AddMinutes(-5),
                 AtendidoUtc=now.AddMinutes(-5).AddSeconds(8),Resultado="atendido",Accion="extension",ExtensionSegundos=8,Ciclo=1});
             db.Add(new Alerta{InterseccionId=intersection.Id,Tipo="comunicacion",FechaUtc=now.AddMinutes(-10),Severidad="informativa",Descripcion="Prueba de comunicación recuperada",Estado="cerrada"});
             db.Add(new Recomendacion{ValidacionSumoId=validation.Id,EmitidaUtc=now,JustificacionTecnica="Ejemplo sintético: demora 40 a 32 s y cruce peatonal de 25 s"});

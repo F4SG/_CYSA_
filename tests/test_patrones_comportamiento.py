@@ -122,20 +122,10 @@ def test_state_emergencia_espera_el_despeje_peatonal():
     c.tick(108); assert c.fase == 'EMERGENCIA_AMBAR'
 
 
-def test_state_micro_una_vez_por_ciclo_y_cede_ante_emergencia():
-    c = ControladorConEstados('DEMO_INT_01')
-    c.micro_detectado('N', 10); assert c.fase == 'PRIORIDAD_MICRO'
-    c.tick(20); assert c.fase == 'NORMAL'
-    c.micro_detectado('N', 25); assert c.fase == 'NORMAL'
-    c.nuevo_ciclo(); c.micro_detectado('E', 30)
-    c.emergencia_detectada('N', 32); assert c.fase.startswith('EMERGENCIA')
-    c.nuevo_ciclo(); c.micro_detectado('E', 33); assert c.fase.startswith('EMERGENCIA')
-
-
 def test_state_local_seguro_no_atiende_prioridades():
     c = ControladorConEstados('DEMO_INT_01')
     c.tick(61)
-    c.micro_detectado('N', 62); c.emergencia_detectada('N', 63)
+    c.emergencia_detectada('N', 63)
     assert c.fase == 'LOCAL_SEGURO'
     assert [(a, b) for _, a, b in c.historial] == [('NORMAL', 'LOCAL_SEGURO')]
 

@@ -26,6 +26,7 @@ def verificar(raw,key,ahora=None):
     UUID(d['solicitud_id'])
     if d.get('tipo')=='plan':
         if d.get('mfa_verificado') is not True or not d.get('usuario'):raise ValueError('Falta autorización MFA')
+        if d['plan'].get('modo')!='webster':raise ValueError('Solo se despachan planes Webster')
         validar(d['plan'])
         if huella(d['plan'])!=d.get('huella_plan'):raise ValueError('El plan cambió después de validarse')
     elif d.get('tipo')!='confirmacion':raise ValueError('Tipo no admitido')

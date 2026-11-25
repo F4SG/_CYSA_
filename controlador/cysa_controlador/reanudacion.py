@@ -18,8 +18,8 @@ def validar_reanudacion(row, plan_id):
         raise ValueError('Solo se puede reanudar un plan autorizado y con aplicación confirmada')
     doc, validation, mfa = row['documento'], row['validacion'], row['mfa']
     payload = row['payload']
-    if doc['plan_id'] != plan_id or doc['modo'] == 'emergencia':
-        raise ValueError('No se reanudan prioridades temporales de emergencia')
+    if doc['plan_id'] != plan_id or doc.get('modo') != 'webster':
+        raise ValueError('Solo se reanudan planes Webster')
     if not validation.get('aprobada') or validation.get('huella_plan') != huella(doc):
         raise ValueError('El plan guardado no coincide con la versión validada')
     if not mfa or not (mfa.get('acr') == '2' or set(mfa.get('amr', [])) & {'otp','mfa','hwk'}):

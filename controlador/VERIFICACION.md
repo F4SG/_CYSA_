@@ -26,10 +26,10 @@ cableado. Al detener el controlador se deja actuar al watchdog del MMU. La
 confirmación serial no certifica visualmente el montaje de cada LED.
 
 La suite también cubre firmas alteradas, órdenes vencidas, espera del primer
-latido, pérdida de centro y retorno a local seguro, emergencias programadas sin
-aplicación anticipada, rechazo si no cabe una transición segura, y micros que
-ceden durante una emergencia. La comparación real de prioridad para micros
-verifica sus límites de mejora y de perjuicio al resto.
+latido, pérdida de centro y retorno a local seguro, la ejecución de escenarios simulados de emergencia.
+
+Este informe conserva los resultados del 20 de noviembre. El piloto vigente
+autoriza y despacha Webster, y evalúa la emergencia en SUMO.
 
 Las emergencias son eventos definidos del banco; esta verificación no acredita
 reconocimiento automático de ambulancias ni precisión YOLO. Para ello hacen falta

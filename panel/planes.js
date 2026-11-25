@@ -15,7 +15,7 @@ let renderedPlans = '';
 let decision;
 let sending = false;
 let redirecting = false;
-const modes = {webster: 'Webster', micros: 'Prioridad para micros', emergencia: 'Emergencia'};
+const modes = {webster: 'Webster', fijo: 'Plan fijo', emergencia: 'Emergencia simulada'};
 const states = {validado: 'Validado', no_aprobado: 'No aprobado', autorizado: 'Autorizado',
     rechazado: 'Rechazado', vencido: 'Vencido'};
 const evaluationLifetime = 15 * 60 * 1000;
@@ -32,10 +32,10 @@ function drawPlans() {
         const doc = plan.documento;
         const gain = plan.validacion.mejora_porcentaje;
         const evaluationExpired = expired(plan, now);
-        const canDecide = plan.estado === 'validado' && !evaluationExpired && !resolved.has(plan.id);
+        const canDecide = doc.modo === 'webster' && plan.estado === 'validado' && !evaluationExpired && !resolved.has(plan.id);
         available ||= canDecide;
         const row = rowCells([
-            doc.plan_id, modes[doc.modo] || doc.modo, `${doc.verdes.NS} / ${doc.verdes.EO}`,
+            plan.origen?.caso ? plan.origen.caso + ' · ' + doc.plan_id : doc.plan_id, modes[doc.modo] || 'Histórico', `${doc.verdes.NS} / ${doc.verdes.EO}`,
             Number.isFinite(gain) ? gain.toFixed(2) + ' %' : null,
             evaluationExpired ? 'Vencido' : states[plan.estado] || plan.estado,
             [plan.estado_envio || 'Sin envío', plan.detalle_envio].filter(Boolean).join(' · '),

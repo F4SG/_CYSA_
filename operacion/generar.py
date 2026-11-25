@@ -12,12 +12,9 @@ log = logging.getLogger('cysa.planificador')
 VENTANA = 300
 
 
-def generar(store, desde, hasta, modo='webster', grupo=None, evento=None, *, identificador=None):
+def generar(store, desde, hasta, *, identificador=None):
     if desde.tzinfo is None or hasta.tzinfo is None or not timedelta(0) < hasta - desde <= timedelta(hours=1):
         raise ValueError('Usa un intervalo con zona horaria de hasta una hora')
-    if modo == 'emergencia' and (evento is None or evento.tzinfo is None or
-            not timedelta(0) < evento-datetime.now(timezone.utc) <= timedelta(minutes=4)):
-        raise ValueError('Define un evento futuro con zona horaria para los próximos cuatro minutos')
     id_plan = identificador or uuid4()
     if identificador and (guardado := store.obtener(id_plan)):
         return guardado
@@ -27,13 +24,10 @@ def generar(store, desde, hasta, modo='webster', grupo=None, evento=None, *, ide
         return None
     if len(filas) >= 1000 or cantidad > 3000:
         raise ValueError('Demanda demasiado grande para el banco; acorta el intervalo')
-    candidato = proponer(filas, modo, grupo, configuracion=configuracion_aprobada())
+    candidato = proponer(filas, configuracion=configuracion_aprobada())
     candidato['plan_id'] = 'OP_' + id_plan.hex
-    if evento is not None:
-        candidato['evento_utc'] = evento.timestamp()
-    from .simular import buscar
-    vigente = store.plan_vigente() if modo == 'emergencia' else None
-    candidato, validacion = buscar(filas, candidato, vigente=vigente)
+    from .simular import evaluar
+    validacion = evaluar(filas, candidato)
     origen = dict(desde=desde.isoformat(), hasta=hasta.isoformat(),
                   mensajes=[str(x['mensaje_id']) for x in filas])
     actor = 'servicio-planificador' if identificador else 'consola-banco'
@@ -65,9 +59,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('desde', type=datetime.fromisoformat)
     parser.add_argument('hasta', type=datetime.fromisoformat)
-    parser.add_argument('--modo', choices=['webster', 'micros', 'emergencia'], default='webster')
-    parser.add_argument('--grupo', choices=['NS', 'EO'])
-    parser.add_argument('--evento', type=datetime.fromisoformat)
     args = parser.parse_args()
     from .entorno import cargar
     from .almacen import Almacen
@@ -75,7 +66,7 @@ def main():
     store = Almacen()
     store.ready()
     try:
-        plan = generar(store, args.desde, args.hasta, args.modo, args.grupo, args.evento)
+        plan = generar(store, args.desde, args.hasta)
     except ValueError as error:
         parser.error(str(error))
     if plan is None:

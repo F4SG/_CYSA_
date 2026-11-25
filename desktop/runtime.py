@@ -196,22 +196,31 @@ def demo_test(args):
     print('PASS: dos APIs HTTP, evaluación, rechazo/aprobación, permisos, MFA simulado e idempotencia.')
 
 
-def detector(source, device='cpu'):
+def detector(source, device='cpu', csv_video=None):
     import yaml
     from detector import FachadaConteo, parse_source
     from hardware import validate_device
     os.chdir(ROOT)
-    profile_name = 'video_santa_cruz.yaml' if parse_source(source)['tipo'] == 'video' else 'carriles_cristhian.yaml'
+    source_type = parse_source(source)['tipo']
+    if csv_video and source_type != 'video':
+        raise ValueError('La carga de datos requiere un archivo de video.')
+    profile_name = 'video_santa_cruz.yaml' if source_type == 'video' else 'carriles_cristhian.yaml'
     profile = yaml.safe_load((ROOT / 'deteccion/config' / profile_name).read_text(encoding='utf-8'))
     selected = validate_device(device)
     if profile_name == 'carriles_cristhian.yaml':
         profile['imgsz'] = 640
     profile.update(device=selected, configuracion_verificada=False)
-    destination = ROOT / f'resultados/launcher-{device}.yaml'
+    if csv_video:
+        profile.update(interseccion='DEMO_VIDEO', ritmo_real=False, prueba=True)
+    destination = ROOT / f'resultados/launcher-{"video-importacion" if csv_video else device}.yaml'
     destination.parent.mkdir(exist_ok=True)
     destination.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding='utf-8')
     print('Modo del detector: ' + ('CPU' if device == 'cpu' else 'GPU CUDA ' + device), flush=True)
-    return FachadaConteo().iniciar(destination, ROOT / ('resultados/conteos_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv'), fuente=source, marcar='zona')
+    salida = csv_video or ROOT / ('resultados/conteos_' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.csv')
+    facade = FachadaConteo()
+    if csv_video:
+        return facade.iniciar(destination, salida, fuente=source, marcar='zona', solo_csv=True)
+    return facade.iniciar(destination, salida, fuente=source, marcar='zona')
 
 
 def main():
@@ -229,6 +238,7 @@ def main():
     command = commands.add_parser('detector')
     command.add_argument('--source', required=True)
     command.add_argument('--device', default='cpu')
+    command.add_argument('--csv-video', type=Path)
     command = commands.add_parser('hardware')
     command.add_argument('--out', type=Path, required=True)
     commands.add_parser('prepare-gpu')
@@ -248,7 +258,7 @@ def main():
         from hardware import prepare_gpu
         prepare_gpu()
     else:
-        return detector(args.source, args.device)
+        return detector(args.source, args.device, args.csv_video)
     return 0
 
 

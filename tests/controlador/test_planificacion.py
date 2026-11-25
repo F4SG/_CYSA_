@@ -20,12 +20,35 @@ def test_tiempos_inseguros_no_se_convierten_en_plan(bad):
     p=proponer(demanda());p['verdes']['NS']=bad
     with pytest.raises(ValueError):validar(p)
 
-def test_no_acepta_conteos_fuera_del_banco_ni_inventa_micros():
-    r=demanda();r[0]['prueba']=False
-    with pytest.raises(ValueError):proponer(r)
-    with pytest.raises(ValueError):proponer(demanda(),'micros','NS')
-    p=proponer(demanda(20,20,True),'micros','NS')
-    assert p['extension_micro_s']<=10
+def test_no_acepta_conteos_fuera_del_banco():
+    filas = demanda()
+    filas[0]['prueba'] = False
+    with pytest.raises(ValueError):proponer(filas)
+
+
+def test_micros_integran_la_demanda_sin_modo_de_prioridad():
+    filas = demanda(20,20,True)
+    plan = proponer(filas)
+    assert plan['modo'] == 'webster' and plan['grupo_prioridad'] is None
+    assert 'extension_micro_s' not in plan
+    with pytest.raises(ValueError, match='Modo inválido'):
+        proponer(filas, 'micros', 'NS')
+    with pytest.raises(ValueError, match='fuera del alcance'):
+        validar({**plan, 'modo': 'micros'})
+
+
+@pytest.mark.parametrize('demora_acceso, aprobada', [(115, True), (115.0005, False)])
+def test_webster_no_exige_mejora_global_y_limita_empeoramiento_por_acceso(monkeypatch, demora_acceso, aprobada):
+    from operacion import simular
+
+    resultados = iter([({'total': 100, 'N': 100}, 240, None),
+                       ({'total': 95, 'N': demora_acceso}, 240, None)])
+    monkeypatch.setattr(simular, '_ejecutar', lambda *args: next(resultados))
+    filas = demanda()
+    evaluacion = simular.evaluar(filas, proponer(filas))
+    assert evaluacion['mejora_porcentaje'] == 5
+    assert evaluacion['aprobada'] is aprobada
+
 
 @pytest.mark.skipif(importlib.util.find_spec('sumolib') is None,reason='SUMO no instalado')
 def test_sumo_real_completa_demanda_y_mide_reduccion_sin_perjudicar_accesos():
@@ -34,14 +57,6 @@ def test_sumo_real_completa_demanda_y_mide_reduccion_sin_perjudicar_accesos():
     assert v['sumo_real'] and v['aprobada'] and v['mejora_porcentaje']>=10
     assert v['vehiculos']==240 and v['huella_plan']==huella(p)
     assert all(v['candidato'][a]<=v['referencia'][a]*1.15+.001 for a in ('N','S','E','W'))
-
-@pytest.mark.skipif(importlib.util.find_spec('sumolib') is None,reason='SUMO no instalado')
-def test_prioridad_micros_elige_extension_condicional_sin_perjudicar_resto():
-    from operacion.simular import buscar
-    r=demanda(40,40,True);p,v=buscar(r,proponer(r,'micros','NS'))
-    assert v['aprobada'] and 0<p['extension_micro_s']<=10
-    assert v['candidato']['micro']<=v['referencia']['micro']*.9
-    assert v['candidato']['resto']<=v['referencia']['resto']*1.1+.001
 
 def test_configuracion_aprobada_viaja_en_el_documento_ejecutable():
     from operacion.planes import TIEMPOS

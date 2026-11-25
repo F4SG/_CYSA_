@@ -122,28 +122,20 @@ Se usa `--solo-validar` para comprobar los casos sin guardar planes. Con
 
 ## Prioridades y límites del banco
 
-Webster debe reducir al menos 10 % la demora global. Todos los candidatos se
-simulan frente al mismo plan fijo, demanda y semilla, y se rechaza un perjuicio
-superior al 15 % por acceso. Micros utiliza una extensión de hasta 10 s una vez por
-ciclo; la búsqueda solo recomienda un candidato si micros mejora al menos 10 %
-y el resto no empeora más de 10 %. La solicitud peatonal inicia un cruce con todos
-los vehículos en rojo. Los 5 s de cruce y el despeje de L/0,9 s se completan antes
-de habilitar tráfico vehicular. SUMO incluye una persona de prueba.
+SUMO compara Webster y el plan fijo con la misma demanda, duración y semilla.
+Se informa la diferencia porcentual y se rechaza un candidato que aumente más
+del 15 % la demora de un acceso. Los micros forman parte de la demanda normal.
+La solicitud peatonal inicia un cruce con todos los vehículos en rojo. Los 5 s
+de cruce y el despeje de L/0,9 s se completan antes de habilitar tráfico
+vehicular. SUMO incluye una persona de prueba.
 
-Para escenarios controlados de micros y emergencias, usar el módulo de consola
-`python -m operacion.generar DESDE HASTA --modo micros --grupo NS`. Para emergencia
-usar `--modo emergencia --grupo EO --evento HORA`. Las tres fechas son ISO 8601 con
-zona horaria. Se usa el mismo entorno de Python y SQL Server que al iniciar S2.
+Para generar Webster desde la consola, usa `python -m operacion.generar DESDE HASTA`
+con fechas ISO 8601 con zona horaria. La emergencia se ejecuta desde
+**Simulación SUMO (demo)**. El archivo `eventos_corredor.csv` registra el aviso
+al segundo cruce, la activación de prioridad y el retorno al plan fijo.
+
 Para solicitar un cruce en la emulación local, pasar `--solicitar-cruce-en N` al
 módulo `cysa_controlador.run`. N son segundos desde el arranque del emulador.
-
-La emergencia del banco es un **evento predefinido** con fecha/hora (hasta cuatro
-minutos por delante), que permite autorizar el plan antes del evento. El plazo
-de diez segundos se mide desde el evento. Si un cruce ya está activo, se mantiene
-la etapa peatonal pendiente antes de cambiar a prioridad. El verde vehicular
-respeta el mínimo, seguido por ámbar y todo rojo. Si el cambio no cabe en el
-plazo aplicable, se rechaza. Al completar la prioridad, el secuenciador retoma
-el plan anterior en la fase siguiente. Micros cede ante una emergencia.
 
 Estos eventos controlados no acreditan detección automática de ambulancias ni
 precisión YOLO de micros/emergencias: esas métricas requieren videos etiquetados

@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from xml.etree.ElementTree import parse,SubElement
 from sumo_base import EscenarioSUMOBuilder,binary,demo_network
 from cysa_controlador.secuenciador import Secuenciador
-from .planes import ACCESOS,huella,minimo_peatonal,referencia,tiempos,validar
+from .planes import ACCESOS,huella,minimo_peatonal,referencia,validar
 
 def _escribir_demanda(filas,path):
     campos=['interseccion','acceso','carril','clase','cantidad','inicio','fin','prueba']
@@ -130,32 +130,11 @@ def evaluar(filas,plan,*,vigente=None):
             _,_,despeje=_ejecutar(filas,plan,Path(temp)/'emergencia-peatonal',transcurrido+1,vigente)
     motivos=[]
     mejora=100*(a['total']-b['total'])/max(a['total'],.001)
-    if plan['modo']=='webster' and mejora<10:motivos.append('No alcanza reducción global de demora del 10 %')
     for acceso in ACCESOS:
-        if acceso in a and b[acceso]>a[acceso]*1.15+.001:motivos.append('Aumento superior al 15 % en '+acceso)
-    if plan['modo']=='micros':
-        if 'micro' not in a or b['micro']>a['micro']*.9:motivos.append('Micros no mejoran al menos 10 %')
-        if b.get('resto',0)>a.get('resto',0)*1.1+.001:motivos.append('El resto aumenta más del 10 %')
+        if acceso in a and b[acceso]-a[acceso]>a[acceso]*.15:motivos.append('Aumento superior al 15 % en '+acceso)
     validar(plan)
     return {'aprobada':not motivos,'motivos':motivos,'referencia':a,'candidato':b,
             'mejora_porcentaje':mejora,'vehiculos':n,'semilla':42,'sumo_real':True,
             'huella_plan':huella(plan),'minimo_peatonal':minimo_peatonal('NS'),
             'cruce_peatonal_sumo':True,
             'prioridad_emergencia':{'plan_previo':vigente['plan_id'],'sin_despeje':transicion,'con_despeje':despeje} if emergencia else None}
-
-def buscar(filas,plan,*,vigente=None):
-    """Extensión condicional 1..10 s; no recomendar la primera que perjudique al resto."""
-    if plan['modo']!='micros':return plan,evaluar(filas,plan,vigente=vigente)
-    from copy import deepcopy
-    grupo=plan['grupo_prioridad'];otro='EO' if grupo=='NS' else 'NS'
-    base=plan['verdes'][grupo]-plan['extension_micro_s'];mejor=None
-    limite=plan['extension_micro_s'];maximo=tiempos(plan)['verde_max_s']
-    for extension in sorted({min(n,limite) for n in (1,4,7,10)}):
-        for ajuste in (0,4,8):
-            candidato=deepcopy(plan);candidato['verdes'][grupo]=base+extension
-            candidato['verdes'][otro]=min(maximo,candidato['verdes'][otro]+ajuste)
-            candidato['extension_micro_s']=extension
-            validacion=evaluar(filas,candidato)
-            if mejor is None or (validacion['aprobada'],validacion['mejora_porcentaje'])>(mejor[1]['aprobada'],mejor[1]['mejora_porcentaje']):
-                mejor=candidato,validacion
-    return mejor

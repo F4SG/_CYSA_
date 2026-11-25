@@ -64,11 +64,6 @@ def test_aplica_al_final_del_todo_rojo_y_no_reaplica_duplicados(tmp_path):
     restarted=ReceptorPlanes(c,KEY,tmp_path/'recibos.json',out.append,reloj=lambda:clock[0],utc=lambda:1032)
     restarted.recibir(raw);assert c.secuenciador.pendiente is None
 
-def test_emergencia_no_interrumpe_despeje_ni_fuerza_plazo_imposible(tmp_path):
-    c,r,clock,out=contexto(tmp_path);p=payload();p['plan']['modo']='emergencia';p['huella_plan']=huella(p['plan']);p['vence']=1030
-    r.recibir(firmar(p,KEY));assert c.plan_id!=p['plan']['plan_id']
-    assert verificar(out[-1],KEY,1028)['estado']=='rechazado'
-
 def test_caida_de_centro_no_cancela_el_cambio_a_local_seguro(tmp_path):
     c,r,clock,out=contexto(tmp_path);p=payload();r.recibir(firmar(p,KEY))
     clock[0]=89;c.tick(89);r.tick()
@@ -95,53 +90,14 @@ def test_orden_sin_latido_caduca_sin_programar_fases(tmp_path):
     assert verificar(out[-1],KEY,1301)['estado']=='rechazado'
 
 
-def test_emergencia_futura_no_aplica_antes_del_evento(tmp_path):
-    c,r,clock,out=contexto(tmp_path);p=payload()
-    p['plan'].update(modo='emergencia',evento_utc=1029);p['vence']=1039;p['huella_plan']=huella(p['plan'])
-    r.recibir(firmar(p,KEY));r.tick()
-    assert r.programada is not None and r.pendiente is None
-    clock[0]=29;r.tick()
-    assert r.programada is None and r.pendiente is not None
-    clock[0]=31;c.tick(31);r.tick();clock[0]=31.5;r.tick()
-    assert verificar(out[-1],KEY,1031.5)['estado']=='aplicado'
-    assert r.emergencia_hasta>clock[0]
-
-
-def test_micros_ceden_durante_atencion_de_emergencia(tmp_path):
-    c,r,clock,out=contexto(tmp_path);r.emergencia_hasta=100;p=payload()
-    p['plan']['modo']='micros';p['huella_plan']=huella(p['plan'])
-    anterior=c.secuenciador.pendiente;r.recibir(firmar(p,KEY))
-    assert c.secuenciador.pendiente is anterior
-    assert verificar(out[-1],KEY,1028)['estado']=='rechazado'
-
-
-def test_emergencia_restaura_el_plan_central_tras_el_todo_rojo(tmp_path):
-    c,r,clock,out=contexto(tmp_path)
-    base=c.plan_centro
-    for instante in (31,64):
-        clock[0]=instante;c.latido(instante);c.tick(instante)
-    p=payload();p['plan'].update(modo='emergencia',evento_utc=1065)
-    p['huella_plan']=huella(p['plan']);p['vence']=1085
-    r.recibir(firmar(p,KEY))
-    for instante in (65,66,66.5):
-        clock[0]=instante;c.tick(instante);r.tick()
-    assert c.plan_id==p['plan']['plan_id'] and c.plan_centro is base
-    for instante in (81,84,86):
-        clock[0]=instante;c.tick(instante);r.tick()
-    assert c.secuenciador.plan is base
-
-
-def test_solicitud_peatonal_se_despeja_antes_de_atender_emergencia(tmp_path):
-    c,r,clock,out=contexto(tmp_path)
-    clock[0]=31;c.tick(31)
-    c.secuenciador.solicitar_cruce()
-    clock[0]=66;c.latido(66);c.tick(66)
-    assert c.secuenciador.fase.peatonal=='cruce'
-    p=payload();p['plan'].update(modo='emergencia',evento_utc=1067)
-    p['huella_plan']=huella(p['plan']);p['vence']=1089
-    r.recibir(firmar(p,KEY))
-    for instante, etapa in ((67,'cruce'),(71,'despeje'),(77,'despeje')):
-        clock[0]=instante;c.tick(instante);r.tick()
-        assert c.secuenciador.fase.peatonal==etapa and c.luces==('R','R')
-    clock[0]=80;c.tick(80);r.tick()
-    assert c.plan_id==p['plan']['plan_id'] and 'G' in c.luces
+@pytest.mark.parametrize('modo', ['micros', 'emergencia'])
+def test_controlador_rechaza_prioridades_fuera_del_banco(tmp_path, modo):
+    controlador, receptor, _, recibos = contexto(tmp_path)
+    anterior = controlador.secuenciador.pendiente
+    orden = payload()
+    orden['plan']['modo'] = modo
+    orden['huella_plan'] = huella(orden['plan'])
+    with pytest.raises(ValueError, match='Solo se despachan planes Webster'):
+        receptor.recibir(firmar(orden, KEY))
+    assert controlador.secuenciador.pendiente is anterior
+    assert not recibos

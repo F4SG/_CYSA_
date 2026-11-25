@@ -6,7 +6,7 @@ ACCESOS={'N':'NS','S':'NS','E':'EO','W':'EO'}
 CONFIG={'interseccion':'DEMO_INT_01','grupos':['NS','EO'],'conflictos':[['NS','EO']],
         'tiempos_min':{'ambar_s':3,'todo_rojo_s':2,'verde_s':10}}
 LONGITUDES={'NS':6.0,'EO':6.0}  # geometría del banco, no la decide quien solicita el plan
-TIEMPOS={'verde_min_s':10,'verde_max_s':90,'ambar_s':3,'todo_rojo_s':2,'extension_micro_s':10}
+TIEMPOS={'verde_min_s':10,'verde_max_s':90,'ambar_s':3,'todo_rojo_s':2}
 CRUCE_PEATONAL_S=5
 
 def huella(value):
@@ -16,11 +16,13 @@ def minimo_peatonal(grupo):return LONGITUDES[grupo]/.9+5
 
 def tiempos(documento):
     valores=documento.get('tiempos',TIEMPOS)
+    # Un plan Webster histórico puede incluir la extensión retirada en su huella.
+    if 'extension_micro_s' in valores:
+        valores={k:v for k,v in valores.items() if k!='extension_micro_s'}
     if set(valores)!=set(TIEMPOS) or any(type(v) not in (int,float) or not math.isfinite(v) for v in valores.values()):
         raise ValueError('Tiempos de configuración inválidos')
     if not (10<=valores['verde_min_s']<=valores['verde_max_s']<=90
-            and 3<=valores['ambar_s']<=10 and 2<=valores['todo_rojo_s']<=10
-            and 0<=valores['extension_micro_s']<=10):
+            and 3<=valores['ambar_s']<=10 and 2<=valores['todo_rojo_s']<=10):
         raise ValueError('La configuración excede los límites del banco')
     return valores
 
@@ -33,6 +35,8 @@ def fases_peatonales(todo_rojo):
     ]
 
 def validar(documento):
+    if documento.get('modo') not in ('fijo','webster','emergencia'):
+        raise ValueError('Modo de plan fuera del alcance del piloto')
     if documento.get('interseccion')!='DEMO_INT_01' or documento.get('prueba') is not True:
         raise ValueError('Solo se admiten planes del banco DEMO_INT_01')
     if set(documento.get('verdes',{}))!={'NS','EO'}:raise ValueError('Se requieren NS y EO')
@@ -58,8 +62,9 @@ def fases(d):
     return result
 
 def proponer(filas,modo='webster',grupo=None,*,configuracion=None):
-    if not filas:raise ValueError('No hay conteos de cámara en el intervalo')
-    vol={g:0.0 for g in ('NS','EO')};micros=dict.fromkeys(vol,0)
+    if modo not in ('webster','emergencia'):raise ValueError('Modo inválido')
+    if not filas:raise ValueError('No hay conteos de prueba en el intervalo')
+    vol={g:0.0 for g in ('NS','EO')}
     inicios=[];fines=[]
     for r in filas:
         if r['interseccion']!='DEMO_INT_01' or r['prueba'] is not True or r['acceso'] not in ACCESOS:
@@ -68,7 +73,6 @@ def proponer(filas,modo='webster',grupo=None,*,configuracion=None):
         if not isinstance(q,int) or isinstance(q,bool) or q<0:raise ValueError('Cantidad inválida')
         if r['clase'] not in ('auto','micro','moto'):raise ValueError('Clase inválida')
         vol[g]+=q*{'auto':1,'micro':2,'moto':.5}[r['clase']]
-        if r['clase']=='micro':micros[g]+=q
         inicios.append(r['inicio']);fines.append(r['fin'])
     segundos=(max(fines)-min(inicios)).total_seconds()
     if segundos<=0 or not sum(vol.values()):raise ValueError('Intervalo vacío o sin vehículos')
@@ -79,17 +83,10 @@ def proponer(filas,modo='webster',grupo=None,*,configuracion=None):
     perdido=2*(limites['ambar_s']+limites['todo_rojo_s'])
     ciclo=max(40,min(120,(1.5*perdido+5)/(1-total)))
     verdes={g:round(max(limites['verde_min_s'],min(limites['verde_max_s'],(ciclo-perdido)*y[g]/total)),3) for g in vol}
-    if modo not in ('webster','micros','emergencia'):raise ValueError('Modo inválido')
-    if modo!='webster' and grupo not in verdes:raise ValueError('Selecciona el grupo de prioridad')
-    extension=0
-    if modo=='micros':
-        if not micros[grupo]:raise ValueError('No hay micros detectados en el grupo solicitado')
-        extension=round(min(limites['extension_micro_s'],limites['verde_max_s']-verdes[grupo]),3)
-        if extension<=0:raise ValueError('La configuración no permite extender la prioridad')
-        verdes[grupo]=round(verdes[grupo]+extension,3)
+    if modo=='emergencia' and grupo not in verdes:raise ValueError('Selecciona el grupo de emergencia')
     d={'plan_id':'OP_'+huella({'y':y,'modo':modo,'grupo':grupo})[:16],
        'interseccion':'DEMO_INT_01','prueba':True,'modo':modo,'primero':grupo if modo=='emergencia' else 'NS',
-       'verdes':verdes,'extension_micro_s':extension,'tiempos':limites,
+       'verdes':verdes,'tiempos':limites,
        'geometria_m':LONGITUDES,'metodo':'Webster','version':2}
     if configuracion:
         d['configuracion_id']=configuracion['id']
@@ -100,4 +97,4 @@ def proponer(filas,modo='webster',grupo=None,*,configuracion=None):
 
 def referencia():
     return {'plan_id':'DEMO_FIJO','interseccion':'DEMO_INT_01','prueba':True,'modo':'fijo',
-            'primero':'NS','verdes':{'NS':30,'EO':30},'extension_micro_s':0,'geometria_m':LONGITUDES,'version':2}
+            'primero':'NS','verdes':{'NS':30,'EO':30},'geometria_m':LONGITUDES,'version':2}

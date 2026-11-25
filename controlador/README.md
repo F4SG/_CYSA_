@@ -10,8 +10,7 @@ laboratorio:
   intermitente** y no vuelve a obedecer hasta presionar RESET.
 
 Incluye plan fijo, MMU y **modo local seguro (RF-06)**. Para calcular planes con conteos,
-validarlos en SUMO, autorizar con MFA y enviarlos al banco con prioridades para micros
-y emergencias, sigue [INTEGRACION.md](INTEGRACION.md). Ese flujo guarda sus datos en
+validar Webster en SUMO, autorizarlo con MFA y enviarlo al banco, sigue [INTEGRACION.md](INTEGRACION.md). Ese flujo guarda sus datos en
 **SQL Server** y requiere iniciar también `iniciar_operacion.ps1`.
 
 **Para probarlo todo con la placa, seguir [PRUEBA_COMPLETA.md](PRUEBA_COMPLETA.md).**

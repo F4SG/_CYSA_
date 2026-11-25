@@ -227,8 +227,6 @@ public class ConfigTecnicaEntrada : IEntrada<ConfigTecnica>
     public decimal AmbarSegundos { get; set; } = 0;
     [Range(typeof(decimal), "1", "60", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
     public decimal TodoRojoSegundos { get; set; } = 0;
-    [Range(typeof(decimal), "0", "10", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
-    public decimal ExtensionPrioridadSegundos { get; set; } = 0;
     [Required, StringLength(120, MinimumLength = 1)]
     public string ResponsableTecnico { get; set; } = "";
     [Required]
@@ -244,7 +242,7 @@ public class ConfigTecnicaEntrada : IEntrada<ConfigTecnica>
         e.VerdeMaxSegundos = VerdeMaxSegundos;
         e.AmbarSegundos = AmbarSegundos;
         e.TodoRojoSegundos = TodoRojoSegundos;
-        e.ExtensionPrioridadSegundos = ExtensionPrioridadSegundos;
+        e.ExtensionPrioridadSegundos = 0;
         e.ResponsableTecnico = ResponsableTecnico;
         e.AprobadaUtc = AprobadaUtc;
         e.Estado = Estado;
@@ -253,6 +251,7 @@ public class ConfigTecnicaEntrada : IEntrada<ConfigTecnica>
 public sealed class ConfigTecnicaSalida : ConfigTecnicaEntrada, ISalida<ConfigTecnica, ConfigTecnicaSalida>
 {
     public int Id { get; set; }
+    public decimal ExtensionPrioridadSegundos { get; set; }
     public static ConfigTecnicaSalida Desde(ConfigTecnica e) => new()
     {
         Id = e.Id, Prueba = e.Prueba,
@@ -464,9 +463,9 @@ public class EventoPrioridadEntrada : IEntrada<EventoPrioridad>
     public int InterseccionId { get; set; } = 0;
     [Range(1, 1000000)]
     public int PlanId { get; set; } = 0;
-    [Required, RegularExpression("^(micro|emergencia)$")]
+    [Required, RegularExpression("^emergencia$")]
     public string Tipo { get; set; } = "";
-    [Required, RegularExpression("^(camara|sumo|emulador)$")]
+    [Required, RegularExpression("^sumo$")]
     public string Origen { get; set; } = "";
     [Required]
     public DateTimeOffset DetectadoUtc { get; set; } = default;

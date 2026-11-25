@@ -11,11 +11,11 @@ const localInput = value => {
 };
 const views = {
     configuraciones: {
-        headings: ['Intersección', 'Versión', 'Verde (s)', 'Ámbar / todo rojo (s)', 'Extensión (s)', 'Aprobación', 'Estado'],
+        headings: ['Intersección', 'Versión', 'Verde (s)', 'Ámbar / todo rojo (s)', 'Aprobación', 'Estado'],
         cells: item => [
             intersections.get(item.interseccionId) || item.interseccionId, item.version,
             `${item.verdeMinSegundos}–${item.verdeMaxSegundos}`, `${item.ambarSegundos} / ${item.todoRojoSegundos}`,
-            item.extensionPrioridadSegundos, `${item.responsableTecnico} · ${date(item.aprobadaUtc)}`, item.estado,
+            `${item.responsableTecnico} · ${date(item.aprobadaUtc)}`, item.estado,
         ],
     },
     bitacoras: {

@@ -5,7 +5,7 @@ Proyecto Gestión Inteligente de Semáforos — Sistema IoT de Gestión Semafór
 | Patrón | Dónde | Estado |
 | --- | --- | --- |
 | Strategy | `deteccion/cysa_detector/asignacion.py`, usado por `CameraSource._loop` | Integrado en el detector |
-| State | `controlador/cysa_controlador/estados.py` (RF-06) y `casos_comportamiento/state.py` (prioridades) | Integrado en el controlador emulado; las prioridades RF-08 y RF-09 siguen como prueba de concepto |
+| State | `controlador/cysa_controlador/estados.py` (RF-06) y `casos_comportamiento/state.py` (emergencia simulada) | RF-06 integrado en el controlador emulado y RF-09 como prueba de concepto |
 | Command | `casos_comportamiento/command.py` | Prueba de concepto para RF-02 (trazabilidad) y RF-16 (reversión) |
 | Template Method | `CreadorDetector.ejecutar()` en `run.py` | Ya existía |
 | Iterator | `FuenteDeteccion.eventos()` | Ya existía |
@@ -27,7 +27,7 @@ La forma de asignar un vehículo a un carril se elige una vez al iniciar (o al r
 ## State y Command
 
 State ya funciona en el controlador emulado para el modo local seguro (RF-06). `state.py` conserva la
-prueba de concepto de las prioridades (RF-08 y RF-09), con estos supuestos: ámbar 3 s y todo rojo 2 s, como
+prueba de concepto de la emergencia simulada (RF-09), con estos supuestos: ámbar 3 s y todo rojo 2 s, como
 el plan DEMO; en modo local seguro no se atienden prioridades. Command (`command.py`) se integra cuando se
 implemente la trazabilidad.
 

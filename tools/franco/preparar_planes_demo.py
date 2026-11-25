@@ -17,7 +17,7 @@ sys.path[:0] = [str(ROOT / part) for part in ('', 'shared', 'backend', 'inventar
 
 from operacion.almacen import Almacen
 from operacion.planes import proponer
-from operacion.simular import buscar
+from operacion.simular import evaluar
 from operacion.sqlserver import configuracion_aprobada
 
 
@@ -28,10 +28,24 @@ def configurar(install):
 
 
 def conteos(profile, start):
-    return [dict(interseccion='DEMO_INT_01', acceso=access, carril=access+'_0', clase='auto',
-                 cantidad=int(profile[access]), inicio=start+timedelta(seconds=30*interval),
-                 fin=start+timedelta(seconds=30*(interval+1)), prueba=True)
-            for interval in range(10) for access in ACCESOS]
+    rows = []
+    for interval in range(10):
+        for access in ACCESOS:
+            autos = int(profile[access])
+            motos = micros = 0
+            if interval in (3, 8):
+                autos -= 1
+                motos = 2
+            if interval == 5:
+                autos -= 2
+                micros = 1
+            for clase, cantidad in (('auto', autos), ('moto', motos), ('micro', micros)):
+                if cantidad:
+                    rows.append(dict(interseccion='DEMO_INT_01', acceso=access, carril=access+'_0',
+                                     clase=clase, cantidad=cantidad, prueba=True,
+                                     inicio=start+timedelta(seconds=30*interval),
+                                     fin=start+timedelta(seconds=30*(interval+1))))
+    return rows
 
 
 def main():
@@ -39,16 +53,25 @@ def main():
     default_install = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'CYSA'
     parser.add_argument('--instalacion', type=Path, default=default_install,
                         help='Carpeta de datos del lanzador que contiene workspace')
-    parser.add_argument('--solo-validar', action='store_true', help='Evalúa en SUMO sin guardar planes')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--eliminar', action='store_true', help='Retira las propuestas de práctica')
+    mode.add_argument('--solo-validar', action='store_true', help='Evalúa en SUMO sin guardar planes')
     parser.add_argument('--conservar-vigentes', action='store_true',
                         help='Conserva un lote idéntico, pendiente y con tiempo para decidir')
     options = parser.parse_args()
     try:
-        configurar(options.instalacion.resolve())
+        if not options.solo_validar:
+            configurar(options.instalacion.resolve())
+        if options.eliminar:
+            store = Almacen()
+            store.ready()
+            store.eliminar_ejemplos()
+            print('Propuestas de práctica retiradas.')
+            return
         with DATOS.open(encoding='utf-8', newline='') as file:
             profiles = list(csv.DictReader(file))
         store = Almacen()
-        settings = configuracion_aprobada()
+        settings = None if options.solo_validar else configuracion_aprobada()
         if len(profiles) != 5:
             raise ValueError('El CSV debe definir cinco casos de ejemplo.')
         start = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(minutes=5)
@@ -59,13 +82,13 @@ def main():
             rows = conteos(profile, start)
             plan = proponer(rows, configuracion=settings)
             plan['plan_id'] = f'EJEMPLO_{number}_{ident.hex}'
-            plan, validation = buscar(rows, plan)
+            validation = evaluar(rows, plan)
             if not validation['aprobada']:
                 raise ValueError(f"{profile['caso']} quedó fuera de los umbrales de SUMO: {validation['motivos']}")
             print(f"{profile['caso']}: mejora simulada {validation['mejora_porcentaje']:.2f} %", flush=True)
             origin = dict(caso=profile['caso'], desde=start.isoformat(), hasta=end.isoformat(),
                           autos_por_acceso={access: int(profile[access]) for access in ACCESOS},
-                          intervalo_s=30, prueba=True)
+                          mezcla='autos, motos y micros', intervalo_s=30, prueba=True)
             prepared.append((ident, plan, validation, origin))
         if options.solo_validar:
             return

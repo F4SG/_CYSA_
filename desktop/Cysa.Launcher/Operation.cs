@@ -113,12 +113,12 @@ internal sealed partial class Instance
 
     public async Task LoadPracticeData()
     {
+        PrepareDemoSources();
         await StartAll();
         var web = await EnsureWebExecutable();
         await Run(web, ["--preparar-practica"], Path.GetDirectoryName(web), WebEnvironment(), timeoutMinutes: 2);
         Write("Cargando el inventario y los conteos de Validación en PostgreSQL…");
-        var sql = await File.ReadAllTextAsync(Path.Combine(Repo, "data", "franco", "ejemplos", "practica.sql"));
-        await Compose("exec", "-T", "db", "psql", "-X", "-U", "cysa", "-d", "cysa", "-v", "ON_ERROR_STOP=1", "-c", sql);
+        await RunDemoSql(await DemoSql("limpiar_conteos_practica.sql") + "\n" + await DemoSql("practica.sql"));
         await PrepararEjemplos(conservarVigentes: true);
         Write("Datos de práctica listos para DEMO_INT_01. En Reportes elige Validación; en Planes autoriza con MFA en el banco de pruebas.");
     }

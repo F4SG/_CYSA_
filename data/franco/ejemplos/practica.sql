@@ -1,5 +1,3 @@
-BEGIN;
-
 INSERT INTO inventario (activo_id, interseccion, acceso, tipo, ubicacion, protocolo, prueba)
 SELECT activo_id, 'DEMO_INT_01', acceso, tipo, ubicacion, protocolo, true
 FROM (VALUES
@@ -13,20 +11,25 @@ FROM (VALUES
 ) AS activos(activo_id, acceso, tipo, ubicacion, protocolo)
 ON CONFLICT (activo_id) DO NOTHING;
 
--- Muestras de 30 segundos cada media hora. Un intervalo repetido conserva su ID.
+-- Muestras sintéticas de los últimos 288 bloques de cinco minutos.
 WITH ventanas AS (
-    SELECT date_bin('30 minutes', now() - interval '30 seconds', TIMESTAMPTZ '2000-01-01 00:00:00+00')
-           - tramo * interval '30 minutes' AS inicio
-    FROM generate_series(0, 47) AS serie(tramo)
+    SELECT date_bin('5 minutes', now(), TIMESTAMPTZ '2000-01-01 00:00:00+00')
+           - tramo * interval '5 minutes' AS inicio, tramo
+    FROM generate_series(1, 288) AS serie(tramo)
+), demanda AS (
+    SELECT ventanas.*, extract(hour FROM inicio AT TIME ZONE 'America/La_Paz')::integer AS hora
+    FROM ventanas
 )
-INSERT INTO conteos (mensaje_id, interseccion, acceso, carril, clase, cantidad, inicio, fin, prueba)
-SELECT md5('cysa-practica-v1:' || extract(epoch FROM inicio)::bigint || ':' || acceso || ':' || clase)::uuid,
-       'DEMO_INT_01', acceso, acceso || '_0', clase,
-       base + ((extract(epoch FROM inicio)::bigint / 1800 + variacion) % amplitud)::integer,
-       inicio, inicio + interval '30 seconds', true
-FROM ventanas
-CROSS JOIN (VALUES ('N', 1), ('S', 3), ('E', 5), ('W', 7)) AS accesos(acceso, variacion)
-CROSS JOIN (VALUES ('auto', 5, 8), ('moto', 1, 5), ('micro', 0, 3)) AS clases(clase, base, amplitud)
+INSERT INTO conteos (mensaje_id, interseccion, acceso, carril, clase, cantidad, inicio, fin, prueba, origen_demo)
+SELECT md5('cysa-practica-v2:' || extract(epoch FROM inicio)::bigint || ':' || carril || ':' || clase)::uuid,
+       'DEMO_INT_01', acceso, carril, clase,
+       greatest(0, base + CASE WHEN hora IN (7, 8, 12, 13, 17, 18, 19) THEN punta
+                              WHEN hora < 6 OR hora >= 22 THEN valle ELSE 0 END
+                       + ((tramo * 7 + variacion) % amplitud) - amplitud / 2),
+       inicio, inicio + interval '30 seconds', true, 'practica'
+FROM demanda
+CROSS JOIN (VALUES ('N','N_0',1), ('N','N_1',3), ('N','N_2',5),
+                   ('S','S_0',7), ('E','E_0',9), ('W','W_0',11)) AS carriles(acceso,carril,variacion)
+CROSS JOIN (VALUES ('auto', 6, 4, -4, 5), ('moto', 3, 2, -2, 5),
+                   ('micro', 1, 1, -1, 3)) AS clases(clase,base,punta,valle,amplitud)
 ON CONFLICT (mensaje_id, inicio) DO NOTHING;
-
-COMMIT;

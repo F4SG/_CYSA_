@@ -132,7 +132,7 @@ try:
     camera=new('fuentes-deteccion',{'accesoId':approach['id'],'tipoCamara':'IP demo','ubicacion':'Norte','protocolo':'RTSP','activa':True,'modeloIa':'demo','umbralConfianza':.5})
     controller=new('controladores',{'interseccionId':intersection['id'],'tipo':'Emulado','protocolo':'MQTT/TLS','ubicacion':'Gabinete demo','emulado':True})
     now='2026-11-18T12:00:00Z'
-    config=new('configuraciones',{'interseccionId':intersection['id'],'version':1,'verdeMinSegundos':10,'verdeMaxSegundos':60,'ambarSegundos':3,'todoRojoSegundos':2,'extensionPrioridadSegundos':10,'responsableTecnico':'Técnico de prueba','aprobadaUtc':now,'estado':'aprobada'})
+    config=new('configuraciones',{'interseccionId':intersection['id'],'version':1,'verdeMinSegundos':10,'verdeMaxSegundos':60,'ambarSegundos':3,'todoRojoSegundos':2,'responsableTecnico':'Técnico de prueba','aprobadaUtc':now,'estado':'aprobada'})
     plan=new('planes',{'interseccionId':intersection['id'],'configTecnicaId':config['id'],'version':1,'tipo':'optimizado','metodoCalculo':'Datos de prueba','cicloSegundos':60,'calculadoUtc':now,'estado':'borrador'})
     validation_body={'planId':plan['id'],'escenario':'Escenario sintético HTTP','semilla':1,'ejecutadaUtc':now,'resultado':'aprobada','motivo':'Prueba sintética','demoraGlobalBaseSegundos':40,'demoraGlobalCandidataSegundos':32,'cumpleMinimoPeatonal':True,'cumpleDespejePeatonal':True}
     call('POST','/api/validaciones-sumo',validation_body,expect=400) # No hay fases todavía.
@@ -151,7 +151,7 @@ try:
     saved_measurement=new('mediciones',measurement)
     measurement['mensajeId']=str(uuid.uuid4());measurement['fuenteDeteccionId']=1
     call('POST','/api/mediciones',measurement,expect=400)
-    saved_event=new('eventos-prioridad',{'interseccionId':intersection['id'],'planId':plan['id'],'tipo':'emergencia','origen':'emulador','detectadoUtc':now,'atendidoUtc':'2026-11-18T12:00:08Z','resultado':'atendido','accion':'extension','extensionSegundos':8,'ciclo':1})
+    saved_event=new('eventos-prioridad',{'interseccionId':intersection['id'],'planId':plan['id'],'tipo':'emergencia','origen':'sumo','detectadoUtc':now,'atendidoUtc':'2026-11-18T12:00:08Z','resultado':'atendido','accion':'extension','extensionSegundos':8,'ciclo':1})
     new('alertas',{'interseccionId':intersection['id'],'tipo':'comunicacion','fechaUtc':now,'severidad':'informativa','descripcion':'Prueba de alerta','estado':'abierta'})
     call('POST','/api/validaciones-sumo',{**validation_body,'demoraGlobalCandidataSegundos':46.0001},expect=400)
     call('POST','/api/validaciones-sumo',{**validation_body,'cumpleMinimoPeatonal':False},expect=400)

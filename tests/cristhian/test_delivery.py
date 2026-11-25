@@ -1,6 +1,33 @@
+from csv import DictReader
+from datetime import datetime, timedelta, timezone
 from threading import Event
+from uuid import uuid4
+
+from cysa.contracts import Conteo
 import pytest
 from cysa_detector.delivery import QueuedPublisher
+
+
+def test_importacion_de_video_guarda_conteos_sin_publicar_mqtt(tmp_path, monkeypatch):
+    from cysa_detector import run
+
+    def sin_broker(*args):
+        pytest.fail('La importación de video no debe usar MQTT')
+
+    monkeypatch.setattr(run, 'Publisher', sin_broker)
+    start = datetime(2026, 11, 24, tzinfo=timezone.utc)
+
+    class Detector:
+        def ejecutar(self, guardar):
+            guardar(Conteo(mensaje_id=uuid4(), interseccion='DEMO_VIDEO',
+                           acceso='N', carril='N_0', clase='micro', cantidad=2,
+                           inicio=start, fin=start + timedelta(seconds=30), prueba=True))
+
+    csv = tmp_path / 'video.csv'
+    assert run.guardar_conteos(Detector(), csv, solo_csv=True) == 0
+    with csv.open(encoding='utf-8', newline='') as file:
+        row, = DictReader(file)
+    assert (row['interseccion'], row['clase'], row['cantidad']) == ('DEMO_VIDEO', 'micro', '2')
 
 
 def test_puback_lento_no_bloquea_captura_y_se_conserva_orden():

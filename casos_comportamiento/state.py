@@ -1,8 +1,7 @@
 """Caso de estudio 2 - State: controlador semafórico emulado (Sprint 2).
 
-Prueba de concepto de las reglas RF-06 (modo local seguro), RF-08 (prioridad
-de micros) y RF-09 (prioridad de emergencias). Cada estado decide qué
-eventos acepta y a qué estado pasa. Devuelve el contrato Estado real.
+Prueba de concepto de RF-06 (modo local seguro) y RF-09 (emergencia simulada).
+Cada estado decide qué eventos acepta y devuelve el contrato Estado real.
 
 Supuestos de la prueba: ámbar 3 s y todo rojo 2 s (plan DEMO); en modo local
 seguro no se atienden prioridades porque no hay coordinación con el centro.
@@ -14,14 +13,12 @@ from cysa.contracts import Estado
 
 SIN_COMUNICACION_S = 60      # RF-06
 AMBAR_S, TODO_ROJO_S = 3, 2  # plan DEMO
-EXTENSION_MICRO_S = 10       # RF-08
 
 
 class EstadoControlador:
     nombre = 'BASE'
     def tick(self, c, ahora): ...
     def emergencia(self, c, acceso, ahora): ...
-    def micro(self, c, acceso, ahora): ...
     def fin_emergencia(self, c, ahora): ...
 
 
@@ -32,10 +29,6 @@ class Normal(EstadoControlador):
             c.cambiar(LocalSeguro(), ahora)
     def emergencia(self, c, acceso, ahora):
         c.cambiar(Emergencia(acceso, ahora), ahora)
-    def micro(self, c, acceso, ahora):
-        if not c.micro_usado_en_ciclo:
-            c.micro_usado_en_ciclo = True
-            c.cambiar(PrioridadMicro(acceso, ahora), ahora)
 
 
 class LocalSeguro(EstadoControlador):
@@ -44,17 +37,6 @@ class LocalSeguro(EstadoControlador):
     def tick(self, c, ahora):
         if ahora - c.ultimo_mensaje <= SIN_COMUNICACION_S:
             c.cambiar(Normal(), ahora)
-
-
-class PrioridadMicro(EstadoControlador):
-    nombre = 'PRIORIDAD_MICRO'
-    def __init__(self, acceso, inicio):
-        self.acceso, self.inicio = acceso, inicio
-    def tick(self, c, ahora):
-        if ahora - self.inicio >= EXTENSION_MICRO_S:
-            c.cambiar(Normal(), ahora)
-    def emergencia(self, c, acceso, ahora):
-        c.cambiar(Emergencia(acceso, ahora), ahora)   # el micro cede
 
 
 class Emergencia(EstadoControlador):
@@ -81,7 +63,6 @@ class ControladorConEstados:
         self.interseccion = interseccion
         self.ultimo_mensaje = ahora
         self.despeje_peatonal_hasta = ahora
-        self.micro_usado_en_ciclo = False
         self.verde_emergencia_en = None
         self.historial = []
         self.estado_actual = Normal()
@@ -97,9 +78,7 @@ class ControladorConEstados:
         self.estado_actual.tick(self, ahora)
     def tick(self, ahora): self.estado_actual.tick(self, ahora)
     def emergencia_detectada(self, acceso, ahora): self.estado_actual.emergencia(self, acceso, ahora)
-    def micro_detectado(self, acceso, ahora): self.estado_actual.micro(self, acceso, ahora)
     def fin_emergencia(self, ahora): self.estado_actual.fin_emergencia(self, ahora)
-    def nuevo_ciclo(self): self.micro_usado_en_ciclo = False
 
     @property
     def fase(self):

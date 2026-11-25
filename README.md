@@ -339,7 +339,7 @@ conectado por COM3.
 | Cálculo y simulación | Conteos de prueba → SQL Server → propuesta Webster → comparación con el plan fijo usando SUMO real. |
 | Decisión y envío | El servidor calcula y valida; el operador autoriza con MFA reciente. La orden viaja firmada por MQTT/TLS y cambia de plan al terminar un todo rojo. |
 | Confirmación y consulta | Vista **Gestionar planes semafóricos** con evidencia, fase y estado reportados; recibo de aplicación y auditoría guardados en SQL Server. |
-| Prioridades del banco | Comparación de prioridad para micros y eventos de emergencia definidos por fecha/hora, conservando los tiempos de seguridad. |
+| Emergencia simulada | SUMO registra el aviso al segundo cruce, la prioridad y el retorno al plan fijo. Los micros se cuentan como tráfico normal. |
 
 Los [pendientes del Sprint 2](#pendientes-del-sprint-2) están al final de este README.
 

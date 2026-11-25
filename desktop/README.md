@@ -14,18 +14,21 @@ Los siguientes arranques reutilizan las APIs mientras no cambien sus fuentes.
 
 ## Datos de práctica de Proyecto de Sistemas
 
-En **2. Pruebas y práctica**, pulsa **2.2 Cargar datos de práctica**. El lanzador
-inicia los servicios necesarios, completa el inventario y la configuración de
-`DEMO_INT_01` e inserta muestras de conteo de las últimas 24 horas. En
-**Consultar reportes de desempeño**, selecciona **Validación** para ver los
-agregados de esos mismos conteos. Si vuelves a cargar el escenario, se conservan
-los registros existentes y se agregan únicamente los nuevos intervalos.
+En **2. Pruebas y práctica**, elige el conjunto de la demostración:
 
-El cargador valida cinco propuestas con SUMO. Si el lote coincide y aún se puede
-practicar con él, conserva sus identificadores. Las decisiones anteriores
-quedan en el historial. El operador autoriza cada plan
-con MFA. El estado de comunicación procede de los mensajes del controlador.
-Abrir el panel por sí solo ya no renueva los ejemplos.
+- **Cargar datos de práctica** repone las últimas 24 horas de muestras sintéticas,
+  con tres carriles en el acceso norte, cambios de demanda por hora y tres clases.
+  Las cinco propuestas de práctica usan autos, motos y micros y se evalúan en SUMO.
+  Busca `DEMO_INT_01` y el contexto **Validación** en los reportes.
+- **Cargar datos con video** abre el archivo que elijas. Marca tres carriles y pulsa
+  **S**. Cuando termine el video, o al pulsar **Q**, el lanzador reemplaza la última
+  importación con los intervalos procesados. Busca `DEMO_VIDEO` y **Validación**.
+  Usa solo conteos agregados, con el ritmo de los intervalos del archivo. Para
+  demostrar la recepción en vivo por MQTT/TLS, usa **Contar con video**.
+- **Eliminar datos** pide elegir y confirmar uno de los dos conjuntos. Conserva
+  el archivo de video, los registros ajenos al lanzador, la configuración del banco
+  y las decisiones ya auditadas. Si queda un envío de práctica pendiente, espera
+  su resultado antes de retirar los datos sintéticos.
 
 SQL Server debe estar instalado y accesible. Después de compilar la API, el lanzador
 aplica las migraciones y carga la semilla si hace falta. El arranque conserva los datos.

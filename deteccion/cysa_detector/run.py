@@ -301,9 +301,16 @@ def validar_calibracion(config):
         raise ValueError('Adaptar y verificar líneas/fuente y marcar configuracion_verificada=true')
 
 
-def guardar_conteos(creador, salida):
+def guardar_conteos(creador, salida, *, solo_csv=False):
     salida.parent.mkdir(parents=True, exist_ok=True)
-    with salida.open('a', encoding='utf-8', newline='') as out, Publisher('cysa-deteccion') as pub, QueuedPublisher(pub) as delivery:
+    from contextlib import ExitStack
+
+    with ExitStack() as resources:
+        out = resources.enter_context(salida.open('a', encoding='utf-8', newline=''))
+        delivery = None
+        if not solo_csv:
+            publisher = resources.enter_context(Publisher('cysa-deteccion'))
+            delivery = resources.enter_context(QueuedPublisher(publisher))
         writer = None
 
         def publicar(evento):
@@ -316,8 +323,10 @@ def guardar_conteos(creador, salida):
             # El CSV permite reintentar con el mismo UUID si el broker no confirma.
             writer.writerow(fila)
             out.flush()
-            delivery.publish(evento)
-            print(f'[{datetime.now():%H:%M:%S}] Conteo registrado y encolado -> '
+            if delivery is not None:
+                delivery.publish(evento)
+            estado = 'registrado para importar' if solo_csv else 'registrado y encolado'
+            print(f'[{datetime.now():%H:%M:%S}] Conteo {estado} -> '
                   f'{evento.clase}: {evento.cantidad} ({evento.acceso}/{evento.carril})')
 
         try:
@@ -334,9 +343,15 @@ def main():
       help='Solo con un archivo de video: hora real de inicio de la grabación con zona (2026-10-31T07:00:00-04:00). '
            'Los intervalos siguen el tiempo del video y no el de la PC.')
     p.add_argument('--stop-file',type=Path,help='Archivo de parada cooperativa para el gestor en segundo plano')
+    p.add_argument('--solo-csv', action='store_true', help='Preparar datos del archivo sin publicar por MQTT')
     p.add_argument('--auto-carriles',action='store_true',help='Aprender carriles de trayectorias antes de contar')
     p.add_argument('--calibracion-s',type=float,default=None,help='Tiempo minimo de observacion antes de estimar carriles')
     a=p.parse_args();config=yaml.safe_load(a.config.read_text(encoding='utf-8'))
+    if a.solo_csv:
+        source = config.get('source')
+        if not isinstance(source, str) or not Path(source).is_file():
+            p.error('--solo-csv requiere un archivo de video local')
+        a.inicio_video = a.inicio_video or datetime.now(timezone.utc)
     if a.stop_file:config['stop_file']=str(a.stop_file.resolve())
     if a.auto_carriles:config['auto_carriles']=True
     if a.calibracion_s is not None:config['calibracion_s']=a.calibracion_s
@@ -345,5 +360,5 @@ def main():
         creador = creador_detector(config, a.inicio_video)
     except ValueError as error:
         p.error(str(error))
-    return guardar_conteos(creador, a.salida_conteos)
+    return guardar_conteos(creador, a.salida_conteos, solo_csv=True) if a.solo_csv else guardar_conteos(creador, a.salida_conteos)
 if __name__=='__main__':raise SystemExit(main())
