@@ -120,9 +120,9 @@ internal sealed partial class Instance
         Log(text);
     }
 
-    public async Task<int> Run(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool check = true, bool output = true, int timeoutMinutes = 30, string? input = null)
+    public async Task<int> Run(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool check = true, bool output = true, int timeoutMinutes = 30, string? input = null, Action<string>? onStandardOutput = null)
     {
-        using var process = Start(file, args, cwd, environment, output, redirectInput: input is not null);
+        using var process = Start(file, args, cwd, environment, output, redirectInput: input is not null, onStandardOutput: onStandardOutput);
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
         try
         {
@@ -139,7 +139,7 @@ internal sealed partial class Instance
         return process.ExitCode;
     }
 
-    Process Start(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool output = true, bool redirectInput = false)
+    Process Start(string file, IEnumerable<string> args, string? cwd = null, Dictionary<string, string>? environment = null, bool output = true, bool redirectInput = false, Action<string>? onStandardOutput = null)
     {
         var info = new ProcessStartInfo(file) { WorkingDirectory = cwd ?? Repo, UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };
         if (redirectInput)
@@ -154,11 +154,15 @@ internal sealed partial class Instance
         foreach (var arg in args) info.ArgumentList.Add(arg);
         if (environment != null) foreach (var pair in environment) info.Environment[pair.Key] = pair.Value;
         var process = new Process { StartInfo = info };
+        if (output || onStandardOutput is not null)
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(e.Data)) return;
+                if (output) Write(e.Data);
+                onStandardOutput?.Invoke(e.Data);
+            };
         if (output)
-        {
-            process.OutputDataReceived += (_, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Write(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Write(e.Data); };
-        }
         process.Start(); process.BeginOutputReadLine(); process.BeginErrorReadLine();
         return process;
     }

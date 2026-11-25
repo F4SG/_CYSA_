@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from cysa_detector.counter import Lane, LineCounter
-from cysa_detector.run import CameraSource
+from cysa_detector.run import CameraSource, creador_detector
 
 CONFIG = {'interseccion': 'DEMO_INT_01', 'prueba': True}
 
@@ -43,6 +43,26 @@ def test_intervalos_con_tiempo_del_video():
         (timedelta(seconds=30), timedelta(seconds=60)),
         (timedelta(seconds=60), timedelta(seconds=75))]
     assert len(ev) == 3 * 3                                # 3 tramos x 3 clases x 1 carril
+
+
+@pytest.mark.parametrize(
+    "tipo, interseccion, prueba, esperada",
+    [
+        ("archivo", "DEMO_INT_01", True, "DEMO_VIDEO"),
+        ("archivo", "DEMO_INT_01", False, "DEMO_INT_01"),
+        ("archivo", "OTRO_CRUCE", True, "OTRO_CRUCE"),
+        ("stream", "DEMO_INT_01", True, "DEMO_INT_01"),
+        ("camara", "DEMO_INT_01", True, "DEMO_INT_01"),
+    ],
+)
+def test_fuente_identifica_video_de_prueba_al_leer_perfiles_anteriores(tmp_path, tipo, interseccion, prueba, esperada):
+    archivo = tmp_path / 'video.mp4'
+    archivo.touch()
+    source = {'archivo': str(archivo), 'stream': 'rtsp://localhost/camara', 'camara': 0}[tipo]
+    config = dict(source=source, interseccion=interseccion, prueba=prueba)
+    fuente = creador_detector(config).crear_fuente()
+    assert fuente.config['interseccion'] == esperada
+    assert config['interseccion'] == interseccion
 
 
 def test_inicio_video_requiere_zona():

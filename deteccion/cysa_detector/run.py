@@ -257,8 +257,11 @@ class FuenteCamara(CameraSource):
 
 class FuenteVideo(CameraSource):
     def __init__(self, config, inicio_video=None):
-        if not isinstance(config.get('source'), str):
+        source = config.get('source')
+        if not isinstance(source, str):
             raise ValueError('La fuente secuencial requiere una ruta o URL')
+        if config.get('prueba') is True and config.get('interseccion') == 'DEMO_INT_01' and Path(source).is_file():
+            config = {**config, 'interseccion': 'DEMO_VIDEO'}
         super().__init__(config, inicio_video)
 
 

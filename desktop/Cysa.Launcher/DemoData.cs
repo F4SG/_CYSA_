@@ -8,12 +8,31 @@ internal sealed partial class Instance
         ALTER TABLE conteos ADD COLUMN IF NOT EXISTS origen_demo text;
         """;
 
-    async Task RunDemoSql(string sql, params string[] variables)
+    async Task RunDemoSql(string sql, Action<string>? onOutput = null, params string[] variables)
     {
         var bindings = variables.SelectMany(value => new[] { "-v", value });
-        var args = ComposeArgs(["exec", "-T", "db", "psql", "-X", "-U", "cysa", "-d", "cysa",
+        var args = ComposeArgs(["exec", "-T", "db", "psql", "-XqAt", "-U", "cysa", "-d", "cysa",
             "-v", "ON_ERROR_STOP=1", .. bindings, "-f", "-"]);
-        await Run(Docker, args, timeoutMinutes: 2, input: PrepareDemoCounts + "\n" + sql + "\nCOMMIT;\n");
+        await Run(Docker, args, timeoutMinutes: 2, input: PrepareDemoCounts + "\n" + sql + "\nCOMMIT;\n",
+            onStandardOutput: onOutput);
+    }
+
+    async Task<int> DeleteVideoRows(string script, params string[] variables)
+    {
+        EnsureVideoStopped();
+        PrepareDemoSources();
+        await StartDemoDatabase();
+
+        const string prefix = "CYSA_VIDEO_ELIMINADAS=";
+        int? deleted = null;
+        await RunDemoSql(await DemoSql(script), line =>
+        {
+            if (line.StartsWith(prefix, StringComparison.Ordinal) &&
+                int.TryParse(line.AsSpan(prefix.Length), out var count) && count >= 0)
+                deleted = count;
+        }, variables);
+
+        return deleted ?? throw new InvalidOperationException("PostgreSQL no confirmó cuántas filas se eliminaron. Actualiza el panel y revisa el registro.");
     }
 
     Task<string> DemoSql(string name) => File.ReadAllTextAsync(Path.Combine(Repo, "data", "franco", "ejemplos", name));
@@ -102,27 +121,20 @@ internal sealed partial class Instance
             throw new InvalidOperationException("Cierra el detector con Q y espera a que termine antes de eliminar los conteos.");
     }
 
-    public async Task DeletePreviousVideo(DateTimeOffset from, DateTimeOffset to)
+    public Task<int> DeletePreviousVideo(DateTimeOffset from, DateTimeOffset to)
     {
-        EnsureVideoStopped();
         if (to <= from || to - from > TimeSpan.FromSeconds(31))
             throw new ArgumentException("Indica el inicio y el fin de un intervalo del panel, de hasta 31 segundos.");
-        PrepareDemoSources();
-        await StartDemoDatabase();
-        await RunDemoSql(await DemoSql("limpiar_video_anterior.sql"),
+        return DeleteVideoRows("limpiar_video_anterior.sql",
             "video_desde=" + from.ToString("O"), "video_hasta=" + to.ToString("O"));
     }
 
-    public async Task DeleteDemoData(bool video)
+    public Task<int> DeleteVideoData() => DeleteVideoRows("limpiar_conteos_video.sql");
+
+    public async Task DeletePracticeData()
     {
-        if (video) EnsureVideoStopped();
         PrepareDemoSources();
         await StartDemoDatabase();
-        if (video)
-        {
-            await RunDemoSql(await DemoSql("limpiar_conteos_video.sql"));
-            return;
-        }
 
         await Run(Venv, ["tools/franco/preparar_planes_demo.py", "--instalacion", Root, "--eliminar"],
             environment: OperationEnvironment(), timeoutMinutes: 2);
@@ -217,15 +229,27 @@ internal sealed partial class MainForm
         dialog.CancelButton = cancel;
         ApplyControlTheme(dialog);
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        if (choices.SelectedIndex == 2)
+        if (choices.SelectedIndex == 1)
         {
-            DateTimeOffset ToSecond(DateTime value) =>
-                new(value.AddTicks(-(value.Ticks % TimeSpan.TicksPerSecond)));
-            await instance.DeletePreviousVideo(ToSecond(from.Value), ToSecond(to.Value));
+            await instance.DeletePracticeData();
+            return;
         }
-        else
+
+        var previous = choices.SelectedIndex == 2;
+        static DateTimeOffset ToSecond(DateTime value) =>
+            new(value.AddTicks(-(value.Ticks % TimeSpan.TicksPerSecond)));
+        var deleted = previous
+            ? await instance.DeletePreviousVideo(ToSecond(from.Value), ToSecond(to.Value))
+            : await instance.DeleteVideoData();
+        if (deleted == 0)
         {
-            await instance.DeleteDemoData(video: choices.SelectedIndex == 0);
+            throw new InvalidOperationException(previous
+                ? "Se eliminaron 0 filas. No se encontró un lote único de tres carriles con esas horas. Revisa el período exacto en DEMO_INT_01."
+                : "Se eliminaron 0 filas. Si el video aparece como DEMO_INT_01, elige Video anterior (buscar por intervalo).");
         }
+
+        var result = $"Filas de video eliminadas: {deleted}. Pulsa Actualizar en el panel.";
+        instance.Write(result);
+        MessageBox.Show(this, result, "Eliminar datos", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 }

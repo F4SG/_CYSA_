@@ -29,7 +29,8 @@ En **2. Pruebas y práctica**, elige el conjunto de la demostración:
 - **Eliminar datos** permite quitar los conteos de video en vivo e importados o
   los datos sintéticos de práctica. Para una corrida anterior que aparece en
   `DEMO_INT_01`, elige **Video anterior (buscar por intervalo)** y copia la
-  fecha, la hora de inicio y la de fin del período mostrado. Conserva
+  fecha, la hora de inicio y la de fin del período mostrado. El lanzador muestra
+  cuántas filas confirmó PostgreSQL. Conserva
   el archivo de video, los registros ajenos al lanzador, la configuración del banco
   y las decisiones ya auditadas. Si queda un envío de práctica pendiente, espera
   su resultado antes de retirar los datos sintéticos.

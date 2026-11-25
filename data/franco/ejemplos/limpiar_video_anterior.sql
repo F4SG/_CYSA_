@@ -23,7 +23,5 @@ WITH candidatos AS (
       AND (c.mensaje_id, c.inicio) = (x.mensaje_id, x.inicio)
     RETURNING 1
 )
-SELECT CASE WHEN count(*) = 9 THEN 'Se eliminaron las 9 filas del intervalo.'
-            ELSE 'No se eliminó ninguna fila. Comprueba las horas exactas del intervalo de video.'
-       END AS resultado
+SELECT 'CYSA_VIDEO_ELIMINADAS=' || count(*) AS resultado
 FROM eliminados;
