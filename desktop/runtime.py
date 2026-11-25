@@ -210,8 +210,10 @@ def detector(source, device='cpu', csv_video=None):
     if profile_name == 'carriles_cristhian.yaml':
         profile['imgsz'] = 640
     profile.update(device=selected, configuracion_verificada=False)
+    if source_type == 'video':
+        profile.update(interseccion='DEMO_VIDEO', prueba=True)
     if csv_video:
-        profile.update(interseccion='DEMO_VIDEO', ritmo_real=False, prueba=True)
+        profile['ritmo_real'] = False
     destination = ROOT / f'resultados/launcher-{"video-importacion" if csv_video else device}.yaml'
     destination.parent.mkdir(exist_ok=True)
     destination.write_text(yaml.safe_dump(profile, allow_unicode=True), encoding='utf-8')

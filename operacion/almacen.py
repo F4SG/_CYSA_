@@ -163,6 +163,8 @@ class Almacen:
         with self.connection() as c:return c.execute('SELECT * FROM control_estados ORDER BY interseccion').fetchall()
     def save(self,event):
         from cysa.contracts import Conteo,Estado
+        if isinstance(event, Conteo) and event.interseccion == 'DEMO_VIDEO' and event.prueba:
+            return  # La demostración con video pertenece al monitoreo, no al banco.
         d=event.model_dump()
         with self.connection() as c:
             if isinstance(event,Conteo):

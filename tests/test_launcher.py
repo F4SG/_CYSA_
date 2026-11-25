@@ -152,5 +152,6 @@ def test_selected_mode_reaches_detector_profile(tmp_path, monkeypatch, device, e
     assert captured['imgsz'] == (960 if video else 640)
     assert captured['model'].endswith('yolo26s.pt')
     assert captured['solo_csv'] is importacion
+    assert captured['interseccion'] == ('DEMO_VIDEO' if video else 'DEMO_INT_01')
     assert len(captured['lanes']) == 3
     assert captured['source'] == source

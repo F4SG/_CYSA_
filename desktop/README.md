@@ -24,8 +24,12 @@ En **2. Pruebas y práctica**, elige el conjunto de la demostración:
   **S**. Cuando termine el video, o al pulsar **Q**, el lanzador reemplaza la última
   importación con los intervalos procesados. Busca `DEMO_VIDEO` y **Validación**.
   Usa solo conteos agregados, con el ritmo de los intervalos del archivo. Para
-  demostrar la recepción en vivo por MQTT/TLS, usa **Contar con video**.
-- **Eliminar datos** pide elegir y confirmar uno de los dos conjuntos. Conserva
+  demostrar la recepción en vivo por MQTT/TLS, usa **Contar con video**. Los
+  dos botones identifican sus conteos como `DEMO_VIDEO`.
+- **Eliminar datos** permite quitar los conteos de video en vivo e importados o
+  los datos sintéticos de práctica. Para una corrida anterior que aparece en
+  `DEMO_INT_01`, elige **Video anterior (buscar por intervalo)** y copia la
+  fecha, la hora de inicio y la de fin del período mostrado. Conserva
   el archivo de video, los registros ajenos al lanzador, la configuración del banco
   y las decisiones ya auditadas. Si queda un envío de práctica pendiente, espera
   su resultado antes de retirar los datos sintéticos.
